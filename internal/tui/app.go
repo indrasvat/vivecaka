@@ -100,6 +100,11 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case key.Matches(msg, a.keys.ThemeCycle):
+		a.theme = NextTheme(a.theme.Name)
+		a.styles = NewStyles(a.theme)
+		return a, nil
+
 	case key.Matches(msg, a.keys.RepoSwitch):
 		if a.view != ViewRepoSwitch {
 			a.prevView = a.view

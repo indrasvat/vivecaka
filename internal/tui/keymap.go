@@ -46,8 +46,8 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("?", "help"),
 		),
 		RepoSwitch: key.NewBinding(
-			key.WithKeys("S"),
-			key.WithHelp("S", "switch repo"),
+			key.WithKeys("ctrl+r"),
+			key.WithHelp("C-r", "switch repo"),
 		),
 		Refresh: key.NewBinding(
 			key.WithKeys("R"),

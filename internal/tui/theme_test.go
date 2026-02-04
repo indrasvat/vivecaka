@@ -26,6 +26,26 @@ func TestThemeNamesReturnsAll(t *testing.T) {
 	}
 }
 
+func TestNextThemeCycles(t *testing.T) {
+	// Should cycle through all themes in order.
+	current := "catppuccin-mocha"
+	expected := []string{"catppuccin-frappe", "tokyo-night", "dracula", "default-dark", "catppuccin-mocha"}
+	for _, want := range expected {
+		next := NextTheme(current)
+		if next.Name != want {
+			t.Errorf("NextTheme(%q) = %q, want %q", current, next.Name, want)
+		}
+		current = next.Name
+	}
+}
+
+func TestNextThemeUnknownFallsToFirst(t *testing.T) {
+	theme := NextTheme("nonexistent")
+	if theme.Name != "catppuccin-mocha" {
+		t.Errorf("NextTheme(unknown) = %q, want catppuccin-mocha", theme.Name)
+	}
+}
+
 func TestThemeColorsNotEmpty(t *testing.T) {
 	for _, name := range ThemeNames() {
 		theme := ThemeByName(name)

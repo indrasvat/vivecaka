@@ -124,3 +124,23 @@ func ThemeNames() []string {
 	}
 	return names
 }
+
+// themeOrder defines the cycling order for themes.
+var themeOrder = []string{
+	"catppuccin-mocha",
+	"catppuccin-frappe",
+	"tokyo-night",
+	"dracula",
+	"default-dark",
+}
+
+// NextTheme returns the next theme in the cycle after the given theme name.
+func NextTheme(current string) Theme {
+	for i, name := range themeOrder {
+		if name == current {
+			next := themeOrder[(i+1)%len(themeOrder)]
+			return themes[next]
+		}
+	}
+	return themes[themeOrder[0]]
+}

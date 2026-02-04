@@ -19,3 +19,7 @@ Thumbs.db
 
 # Debug
 firebase-debug.log
+
+# Local-only
+.claude/
+screenshots/

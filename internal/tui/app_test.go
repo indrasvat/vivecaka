@@ -155,7 +155,7 @@ func TestAppRepoSwitch(t *testing.T) {
 	app.ready = true
 	app.view = ViewPRList
 
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'S'}}
+	msg := tea.KeyMsg{Type: tea.KeyCtrlR}
 	updated, _ := app.Update(msg)
 	a := updated.(*App)
 
@@ -166,7 +166,7 @@ func TestAppRepoSwitch(t *testing.T) {
 		t.Errorf("prevView = %d, want ViewPRList", a.prevView)
 	}
 
-	// Pressing S again shouldn't change anything (already in switcher).
+	// Pressing Ctrl+R again shouldn't change anything (already in switcher).
 	updated, _ = a.Update(msg)
 	a = updated.(*App)
 	if a.view != ViewRepoSwitch {
