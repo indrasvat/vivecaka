@@ -1,5 +1,26 @@
 # CLAUDE.md — Agent Conventions for vivecaka
 
+## Continuous Task Loop
+
+While Phase 14 tasks remain incomplete, keep executing tasks back-to-back. Auto-compactions will occur naturally — that's fine. After each compaction or at session start, re-orient:
+
+### Re-orient (after compaction or session start)
+1. Run `git log --oneline -5` — what just changed
+2. Read `docs/PROGRESS.md` — find the next `TODO` task in Phase 14
+3. Read the task file at `docs/tasks/NNN-task-name.md` — full context
+4. Read this file (`CLAUDE.md`) for conventions
+
+### Per-task loop
+1. Read the relevant `docs/PRD.md` sections listed in the task file
+2. Execute the task
+3. **Verify** — run `make ci`, then run iterm2-driver visual QA (every task, no exceptions)
+4. Update `docs/PROGRESS.md` — mark the task as DONE with notes
+5. Commit the changes (atomic, conventional commit)
+6. Immediately pick up the next TODO task — do not wait for user input
+
+Do NOT skip verification. Do NOT mark tasks done without functional + visual confirmation.
+The source of truth is always on disk: `PROGRESS.md`, task files, and git history.
+
 ## Project Overview
 
 vivecaka (विवेचक) is a plugin-based GitHub PR TUI built with Go + BubbleTea.
@@ -44,7 +65,8 @@ make run       # Quick run with go run
 | TUI root model | `internal/tui/app.go` |
 | View models | `internal/tui/views/*.go` |
 | UI components | `internal/tui/components/*.go` |
-| Theme/keymap | `internal/tui/theme.go`, `internal/tui/keymap.go` |
+| Shared TUI types | `internal/tui/core/*.go` (theme, styles, keymap, viewstate) |
+| Task files | `docs/tasks/NNN-task-name.md` |
 | Config | `internal/config/*.go` |
 | Test fixtures | `internal/adapter/ghcli/testdata/*.json` |
 
