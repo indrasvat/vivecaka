@@ -105,6 +105,7 @@ func (m *PRDetailModel) Update(msg tea.Msg) tea.Cmd {
 		return m.handleKey(msg)
 	case PRDetailLoadedMsg:
 		m.SetDetail(msg.Detail)
+		return nil
 	case spinner.TickMsg:
 		if !m.loading {
 			return nil
@@ -198,7 +199,9 @@ func (m *PRDetailModel) selectedCheckURL() string {
 
 // View renders the PR detail view.
 func (m *PRDetailModel) View() string {
-	if m.loading || m.detail == nil {
+	// Show loading state while loading OR if detail hasn't arrived yet
+	// Note: Use m.loading for spinner control, m.detail for content check
+	if m.loading {
 		msg := "Loading PR detail..."
 		if m.pendingNum > 0 {
 			msg = fmt.Sprintf("%s Loading PR #%d...", m.spinner.View(), m.pendingNum)
@@ -208,6 +211,15 @@ func (m *PRDetailModel) View() string {
 			Align(lipgloss.Center, lipgloss.Center).
 			Foreground(m.styles.Theme.Muted).
 			Render(msg)
+	}
+
+	// Handle case where loading finished but detail is nil (error case)
+	if m.detail == nil {
+		return lipgloss.NewStyle().
+			Width(m.width).Height(m.height).
+			Align(lipgloss.Center, lipgloss.Center).
+			Foreground(m.styles.Theme.Muted).
+			Render("No PR detail available")
 	}
 
 	t := m.styles.Theme

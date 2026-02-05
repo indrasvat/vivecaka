@@ -54,7 +54,7 @@ Notes:
 - Task 008: iterm2-driver markdown QA could not open PR detail (no open PRs in repo). Captured PR list screenshot only.
 
 Open Issues:
-- PR detail loading spinner appears stuck to user (reported in `/Users/indrasvat/code/github.com/indrasvat-visarga` with 1 open PR). Attempts: added explicit spinner tick loop via custom `DetailSpinnerTickMsg` + `tea.Tick` (spinner still appeared frozen); switched to ASCII `spinner.Line`; reverted to native `spinner.Tick`/`spinner.Update` path in `PRDetailModel` with ticks handled inside `Update`. iTerm2 probes showed spinner frames changing, but user still reports static "Loading PR details..." with no visible animation. Need deeper tracing (possible slow gh `pr view`/`pr checks`/`gh api` call masking updates or terminal rendering refresh issue). Unresolved as of Feb 5, 2026.
+- ~~PR detail loading spinner appears stuck~~ **RESOLVED** (Feb 5, 2026): Spinner now animates correctly. Root causes addressed: (1) Fixed View() logic to only show loading state when `loading=true`, not when `detail==nil`; (2) Added explicit `return nil` for `PRDetailLoadedMsg` in Update(); (3) Verified spinner frames cycle properly via iTerm2 automation tests. The `gh pr checks` API call takes ~1.4s which causes visible spinner animation before PR detail loads.
 
 ## Recommended Execution Order
 
