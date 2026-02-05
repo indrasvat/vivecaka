@@ -105,6 +105,7 @@ func TestAppBackNavigation(t *testing.T) {
 		{core.ViewReview, core.ViewPRDetail},
 		{core.ViewRepoSwitch, core.ViewPRList},
 		{core.ViewInbox, core.ViewPRList},
+		{core.ViewFilter, core.ViewPRList},
 	}
 
 	for _, tt := range tests {
@@ -189,6 +190,7 @@ func TestAppAllViewsRender(t *testing.T) {
 		core.ViewHelp,
 		core.ViewRepoSwitch,
 		core.ViewInbox,
+		core.ViewFilter,
 	}
 
 	for _, v := range allViews {
@@ -218,6 +220,7 @@ func TestAppViewNames(t *testing.T) {
 		{core.ViewHelp, "Help"},
 		{core.ViewRepoSwitch, "Repo Switch"},
 		{core.ViewInbox, "Inbox"},
+		{core.ViewFilter, "Filter"},
 	}
 
 	app := newTestApp()

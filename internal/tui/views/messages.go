@@ -19,6 +19,17 @@ type PRListFilterMsg struct {
 	Label string
 }
 
+// OpenFilterMsg is sent when the filter panel is requested.
+type OpenFilterMsg struct{}
+
+// ApplyFilterMsg is sent when filters should be applied.
+type ApplyFilterMsg struct {
+	Opts domain.ListOpts
+}
+
+// CloseFilterMsg is sent when the filter panel is dismissed.
+type CloseFilterMsg struct{}
+
 // CheckoutDoneMsg is sent after a PR checkout completes.
 type CheckoutDoneMsg struct {
 	Branch string

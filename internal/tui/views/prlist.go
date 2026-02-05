@@ -33,6 +33,7 @@ type PRListModel struct {
 	filter        domain.ListOpts
 	username      string
 	quickFilter   quickFilter
+	panelLabel    string
 }
 
 // NewPRListModel creates a new PR list view.
@@ -57,6 +58,15 @@ func (m *PRListModel) SetSize(w, h int) {
 func (m *PRListModel) SetPRs(prs []domain.PR) {
 	m.prs = prs
 	m.loading = false
+	m.applyFilter()
+}
+
+// SetFilter updates the active filter options.
+func (m *PRListModel) SetFilter(opts domain.ListOpts) {
+	m.filter = opts
+	m.panelLabel = filterLabelFromOpts(opts)
+	m.cursor = 0
+	m.offset = 0
 	m.applyFilter()
 }
 
@@ -110,14 +120,6 @@ func (m *PRListModel) Update(msg tea.Msg) tea.Cmd {
 
 func (m *PRListModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	listLen := len(m.filtered)
-	if listLen == 0 {
-		if key.Matches(msg, m.keys.Search) {
-			m.searching = true
-			m.searchQuery = ""
-		}
-		return nil
-	}
-
 	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
 		switch msg.Runes[0] {
 		case 'm':
@@ -125,6 +127,17 @@ func (m *PRListModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		case 'n':
 			return m.toggleQuickFilter(quickFilterNeedsReview)
 		}
+	}
+
+	if listLen == 0 {
+		switch {
+		case key.Matches(msg, m.keys.Search):
+			m.searching = true
+			m.searchQuery = ""
+		case key.Matches(msg, m.keys.Filter):
+			return func() tea.Msg { return OpenFilterMsg{} }
+		}
+		return nil
 	}
 
 	switch {
@@ -177,6 +190,8 @@ func (m *PRListModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, m.keys.Search):
 		m.searching = true
 		m.searchQuery = ""
+	case key.Matches(msg, m.keys.Filter):
+		return func() tea.Msg { return OpenFilterMsg{} }
 	case key.Matches(msg, m.keys.Sort):
 		m.cycleSort()
 	}
@@ -234,6 +249,9 @@ func (m *PRListModel) applyFilter() {
 
 	for _, pr := range m.prs {
 		if !m.matchesQuickFilter(pr) {
+			continue
+		}
+		if !m.matchesPanelFilter(pr) {
 			continue
 		}
 		if query != "" {
@@ -463,7 +481,7 @@ func (m *PRListModel) FilterLabel() string {
 	case quickFilterNeedsReview:
 		return "Needs Review"
 	default:
-		return ""
+		return m.panelLabel
 	}
 }
 
@@ -491,6 +509,58 @@ func (m *PRListModel) matchesQuickFilter(pr domain.PR) bool {
 	default:
 		return true
 	}
+}
+
+func (m *PRListModel) matchesPanelFilter(pr domain.PR) bool {
+	if m.filter.State != "" && m.filter.State != "all" && pr.State != m.filter.State {
+		return false
+	}
+	if m.filter.Author != "" && !strings.Contains(strings.ToLower(pr.Author), strings.ToLower(m.filter.Author)) {
+		return false
+	}
+	if len(m.filter.Labels) > 0 {
+		for _, label := range m.filter.Labels {
+			if !hasLabel(pr.Labels, label) {
+				return false
+			}
+		}
+	}
+	if m.filter.CI != "" && pr.CI != m.filter.CI {
+		return false
+	}
+	if m.filter.Review != "" && pr.Review.State != m.filter.Review {
+		return false
+	}
+	if m.filter.Draft == domain.DraftExclude && pr.Draft {
+		return false
+	}
+	if m.filter.Draft == domain.DraftOnly && !pr.Draft {
+		return false
+	}
+	return true
+}
+
+func hasLabel(labels []string, want string) bool {
+	for _, label := range labels {
+		if strings.EqualFold(label, want) {
+			return true
+		}
+	}
+	return false
+}
+
+func filterLabelFromOpts(opts domain.ListOpts) string {
+	active := (opts.State != "" && opts.State != domain.PRStateOpen && opts.State != "all") ||
+		strings.TrimSpace(opts.Author) != "" ||
+		len(opts.Labels) > 0 ||
+		opts.CI != "" ||
+		opts.Review != "" ||
+		(opts.Draft != "" && opts.Draft != domain.DraftInclude)
+
+	if active {
+		return "Filtered"
+	}
+	return ""
 }
 
 func (m *PRListModel) sortLabel(field, label string) string {

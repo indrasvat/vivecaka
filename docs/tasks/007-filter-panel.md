@@ -1,6 +1,6 @@
 # Task 007: Filter Panel View
 
-## Status: TODO
+## Status: DONE
 
 ## Depends On: 006 (quick filters establish username detection)
 

@@ -26,6 +26,7 @@ func testPRs() []domain.PR {
 			Number:    142,
 			Title:     "Add plugin architecture",
 			Author:    "indrasvat",
+			State:     domain.PRStateOpen,
 			CI:        domain.CIPass,
 			Review:    domain.ReviewStatus{State: domain.ReviewApproved, Approved: 2, Total: 2},
 			UpdatedAt: now.Add(-2 * time.Hour),
@@ -36,6 +37,7 @@ func testPRs() []domain.PR {
 			Number:    141,
 			Title:     "Fix diff viewer alignment",
 			Author:    "alice",
+			State:     domain.PRStateOpen,
 			CI:        domain.CIFail,
 			Review:    domain.ReviewStatus{State: domain.ReviewPending, Approved: 0, Total: 1},
 			UpdatedAt: now.Add(-5 * time.Hour),
@@ -45,6 +47,7 @@ func testPRs() []domain.PR {
 			Number:    140,
 			Title:     "Update CI pipeline",
 			Author:    "bob",
+			State:     domain.PRStateOpen,
 			CI:        domain.CIPending,
 			UpdatedAt: now.Add(-24 * time.Hour),
 			CreatedAt: now.Add(-24 * time.Hour),
@@ -53,6 +56,7 @@ func testPRs() []domain.PR {
 			Number:    139,
 			Title:     "New theme engine",
 			Author:    "indrasvat",
+			State:     domain.PRStateOpen,
 			Draft:     true,
 			UpdatedAt: now.Add(-48 * time.Hour),
 			CreatedAt: now.Add(-60 * time.Hour),
@@ -61,6 +65,7 @@ func testPRs() []domain.PR {
 			Number:    138,
 			Title:     "Refactor config loader",
 			Author:    "carol",
+			State:     domain.PRStateOpen,
 			CI:        domain.CIPass,
 			Review:    domain.ReviewStatus{State: domain.ReviewChangesRequested, Approved: 1, Total: 2},
 			UpdatedAt: now.Add(-72 * time.Hour),
@@ -72,11 +77,11 @@ func testPRs() []domain.PR {
 func testPRsForSort() []domain.PR {
 	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	return []domain.PR{
-		{Number: 3, Title: "Zulu", Author: "zoe", UpdatedAt: base.Add(5 * time.Hour), CreatedAt: base.Add(-1 * time.Hour)},
-		{Number: 1, Title: "Alpha", Author: "alice", UpdatedAt: base.Add(1 * time.Hour), CreatedAt: base.Add(-5 * time.Hour)},
-		{Number: 5, Title: "Echo", Author: "mike", UpdatedAt: base.Add(3 * time.Hour), CreatedAt: base.Add(-2 * time.Hour)},
-		{Number: 2, Title: "Bravo", Author: "bob", UpdatedAt: base.Add(2 * time.Hour), CreatedAt: base.Add(-4 * time.Hour)},
-		{Number: 4, Title: "Delta", Author: "carol", UpdatedAt: base.Add(4 * time.Hour), CreatedAt: base.Add(-3 * time.Hour)},
+		{Number: 3, Title: "Zulu", Author: "zoe", State: domain.PRStateOpen, UpdatedAt: base.Add(5 * time.Hour), CreatedAt: base.Add(-1 * time.Hour)},
+		{Number: 1, Title: "Alpha", Author: "alice", State: domain.PRStateOpen, UpdatedAt: base.Add(1 * time.Hour), CreatedAt: base.Add(-5 * time.Hour)},
+		{Number: 5, Title: "Echo", Author: "mike", State: domain.PRStateOpen, UpdatedAt: base.Add(3 * time.Hour), CreatedAt: base.Add(-2 * time.Hour)},
+		{Number: 2, Title: "Bravo", Author: "bob", State: domain.PRStateOpen, UpdatedAt: base.Add(2 * time.Hour), CreatedAt: base.Add(-4 * time.Hour)},
+		{Number: 4, Title: "Delta", Author: "carol", State: domain.PRStateOpen, UpdatedAt: base.Add(4 * time.Hour), CreatedAt: base.Add(-3 * time.Hour)},
 	}
 }
 
@@ -388,6 +393,20 @@ func TestPRListQuickFilterNeedsReview(t *testing.T) {
 		t.Errorf("expected PRListFilterMsg, got %T", msg)
 	} else if msg.Label != "Needs Review" {
 		t.Errorf("filter label = %q, want Needs Review", msg.Label)
+	}
+}
+
+func TestPRListOpenFilterKey(t *testing.T) {
+	m := NewPRListModel(testStyles(), testKeys())
+	m.SetSize(120, 30)
+	m.SetPRs(testPRs())
+
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	if cmd == nil {
+		t.Fatal("expected command for filter key")
+	}
+	if _, ok := cmd().(OpenFilterMsg); !ok {
+		t.Fatalf("expected OpenFilterMsg, got %T", cmd())
 	}
 }
 

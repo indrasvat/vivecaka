@@ -127,6 +127,8 @@ func (m *HelpModel) contextName() string {
 		return "Review"
 	case core.ViewInbox:
 		return "Inbox"
+	case core.ViewFilter:
+		return "Filters"
 	default:
 		return "General"
 	}
@@ -160,6 +162,9 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 				bindings: []helpBinding{
 					{"/", "Search PRs"},
 					{"Esc", "Clear search"},
+					{"f", "Filter panel"},
+					{"m", "My PRs"},
+					{"n", "Needs review"},
 					{"s", "Cycle sort"},
 				},
 			},
@@ -262,6 +267,30 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 			global,
 		}
 
+	case core.ViewFilter:
+		left = []helpSection{
+			{
+				title: "Navigation",
+				bindings: []helpBinding{
+					{"Tab", "Next field"},
+					{"Shift+Tab", "Previous field"},
+					{"j/k", "Move up/down"},
+				},
+			},
+		}
+		right = []helpSection{
+			{
+				title: "Actions",
+				bindings: []helpBinding{
+					{"Space", "Toggle option"},
+					{"Enter", "Apply"},
+					{"r", "Reset filters"},
+					{"Esc", "Cancel"},
+				},
+			},
+			global,
+		}
+
 	default:
 		left = []helpSection{
 			{
@@ -284,7 +313,7 @@ func StatusHints(view core.ViewState, width int) string {
 	var hints string
 	switch view {
 	case core.ViewPRList:
-		hints = "j/k navigate  Enter open  c checkout  / search  ? help  q quit"
+		hints = "j/k navigate  Enter open  c checkout  / search  f filter  ? help  q quit"
 	case core.ViewPRDetail:
 		hints = "j/k scroll  Tab pane  d diff  c checkout  r review  o open  Esc back  ? help"
 	case core.ViewDiff:
@@ -297,6 +326,8 @@ func StatusHints(view core.ViewState, width int) string {
 		hints = "j/k navigate  Enter switch  Esc cancel"
 	case core.ViewHelp:
 		hints = "? or Esc to close"
+	case core.ViewFilter:
+		hints = "Tab next  Space toggle  Enter apply  r reset  Esc cancel"
 	default:
 		hints = "? help  q quit"
 	}

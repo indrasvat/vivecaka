@@ -27,7 +27,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 004 | `docs/tasks/004-fix-diff-search.md` | Make diff search actually highlight + n/N navigation | DONE | — |
 | 005 | `docs/tasks/005-diff-navigation.md` | Hunk jump [/], file jump {/}, gg/G, collapse za | DONE | — |
 | 006 | `docs/tasks/006-quick-filters.md` | Quick filters: m (My PRs), n (Needs Review) | DONE | — |
-| 007 | `docs/tasks/007-filter-panel.md` | Full filter panel overlay with f key | TODO | 006 |
+| 007 | `docs/tasks/007-filter-panel.md` | Full filter panel overlay with f key | DONE | 006 |
 | 008 | `docs/tasks/008-markdown-rendering.md` | Render PR body/comments as markdown via Glamour | TODO | — |
 | 009 | `docs/tasks/009-syntax-highlighting.md` | Syntax highlighting in diff via Chroma | TODO | 008 |
 | 010 | `docs/tasks/010-comments-enhancement.md` | Comment collapse/expand, reply, resolve | TODO | 008 |
@@ -48,6 +48,9 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 025 | `docs/tasks/025-persistence.md` | Per-repo filter memory, unread indicators | TODO | 001, 007, 023 |
 | 026 | `docs/tasks/026-testing-foundation.md` | testify migration, adapter fixtures, 80%+ coverage | TODO | — |
 | 027 | `docs/tasks/027-integration-tests.md` | teatest integration tests, TUI test quality | TODO | 026 |
+
+Notes:
+- Task 007: filter panel matches mock (static label options: enhancement/bug/docs; CI filter options: All/Passing/Failing; Review filter options: All/Approved/Pending). Pending CI + changes-requested review filters not exposed yet.
 
 ## Recommended Execution Order
 

@@ -163,6 +163,7 @@ func TestStatusHints(t *testing.T) {
 		core.ViewInbox,
 		core.ViewRepoSwitch,
 		core.ViewHelp,
+		core.ViewFilter,
 		core.ViewLoading,
 	}
 

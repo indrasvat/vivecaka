@@ -82,6 +82,10 @@ type App struct {
 	helpOverlay  views.HelpModel
 	inbox        views.InboxModel
 	tutorial     views.TutorialModel
+	filterPanel  views.FilterModel
+
+	// Filters
+	filterOpts domain.ListOpts
 
 	// Components
 	header *components.Header
@@ -111,16 +115,21 @@ func New(cfg *config.Config, opts ...Option) *App {
 		helpOverlay:  views.NewHelpModel(styles),
 		inbox:        views.NewInboxModel(styles, keys),
 		tutorial:     views.NewTutorialModel(styles),
+		filterPanel:  views.NewFilterModel(styles, keys),
 
 		// Components
 		header: components.NewHeader(styles),
 		status: components.NewStatusBar(styles),
 		toasts: components.NewToastManager(styles),
+
+		filterOpts: domain.ListOpts{State: domain.PRStateOpen, Draft: domain.DraftInclude},
 	}
 
 	for _, opt := range opts {
 		opt(a)
 	}
+
+	a.prList.SetFilter(a.filterOpts)
 
 	// Wire use cases from injected adapters.
 	if a.reader != nil {
@@ -143,7 +152,7 @@ func (a *App) Init() tea.Cmd {
 	if a.repo.Owner != "" {
 		a.header.SetRepo(a.repo)
 		if a.listPRs != nil {
-			cmds = append(cmds, loadPRsCmd(a.listPRs, a.repo, domain.ListOpts{State: domain.PRStateOpen}))
+			cmds = append(cmds, loadPRsCmd(a.listPRs, a.repo, a.filterOpts))
 			return tea.Batch(cmds...)
 		}
 		cmds = append(cmds, func() tea.Msg { return viewReadyMsg{} })
@@ -187,6 +196,26 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case views.OpenDiffMsg:
 		return a.handleOpenDiff(msg)
+
+	case views.OpenFilterMsg:
+		a.prevView = a.view
+		a.view = core.ViewFilter
+		a.filterPanel.SetOpts(a.filterOpts)
+		return a, nil
+
+	case views.ApplyFilterMsg:
+		a.filterOpts = msg.Opts
+		a.prList.SetFilter(msg.Opts)
+		a.header.SetFilter(a.prList.FilterLabel())
+		a.view = a.prevView
+		if a.listPRs != nil && a.repo.Owner != "" {
+			return a, loadPRsCmd(a.listPRs, a.repo, msg.Opts)
+		}
+		return a, nil
+
+	case views.CloseFilterMsg:
+		a.view = a.prevView
+		return a, nil
 
 	case views.DiffLoadedMsg:
 		cmd := a.diffView.Update(msg)
@@ -292,6 +321,7 @@ func (a *App) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	a.helpOverlay.SetSize(a.width, contentHeight)
 	a.inbox.SetSize(a.width, contentHeight)
 	a.tutorial.SetSize(a.width, contentHeight)
+	a.filterPanel.SetSize(a.width, contentHeight)
 
 	// Components.
 	a.header.SetWidth(a.width)
@@ -338,7 +368,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, a.keys.Refresh):
 		if a.view == core.ViewPRList && a.listPRs != nil && a.repo.Owner != "" {
-			return a, loadPRsCmd(a.listPRs, a.repo, domain.ListOpts{State: domain.PRStateOpen})
+			return a, loadPRsCmd(a.listPRs, a.repo, a.filterOpts)
 		}
 		return a, nil
 
@@ -365,6 +395,8 @@ func (a *App) handleBack() (tea.Model, tea.Cmd) {
 		a.view = core.ViewPRDetail
 	case core.ViewInbox:
 		a.view = core.ViewPRList
+	case core.ViewFilter:
+		a.view = a.prevView
 	}
 	return a, nil
 }
@@ -382,7 +414,7 @@ func (a *App) handleRepoDetected(msg views.RepoDetectedMsg) (tea.Model, tea.Cmd)
 	a.header.SetRepo(a.repo)
 
 	if a.listPRs != nil {
-		return a, loadPRsCmd(a.listPRs, a.repo, domain.ListOpts{State: domain.PRStateOpen})
+		return a, loadPRsCmd(a.listPRs, a.repo, a.filterOpts)
 	}
 	a.view = core.ViewPRList
 	return a, nil
@@ -496,7 +528,7 @@ func (a *App) handleSwitchRepo(msg views.SwitchRepoMsg) (tea.Model, tea.Cmd) {
 	a.view = core.ViewPRList
 
 	if a.listPRs != nil {
-		return a, loadPRsCmd(a.listPRs, a.repo, domain.ListOpts{State: domain.PRStateOpen})
+		return a, loadPRsCmd(a.listPRs, a.repo, a.filterOpts)
 	}
 	return a, nil
 }
@@ -517,6 +549,8 @@ func (a *App) dispatchKeyToView(msg tea.KeyMsg) tea.Cmd {
 		return a.helpOverlay.Update(msg)
 	case core.ViewInbox:
 		return a.inbox.Update(msg)
+	case core.ViewFilter:
+		return a.filterPanel.Update(msg)
 	}
 	return nil
 }
@@ -537,6 +571,8 @@ func (a *App) updateActiveView(msg tea.Msg) tea.Cmd {
 		return a.helpOverlay.Update(msg)
 	case core.ViewInbox:
 		return a.inbox.Update(msg)
+	case core.ViewFilter:
+		return a.filterPanel.Update(msg)
 	}
 	return nil
 }
@@ -554,6 +590,7 @@ func (a *App) rebuildStyles() {
 	a.helpOverlay = views.NewHelpModel(s)
 	a.inbox = views.NewInboxModel(s, k)
 	a.tutorial = views.NewTutorialModel(s)
+	a.filterPanel = views.NewFilterModel(s, k)
 
 	a.header = components.NewHeader(s)
 	a.status = components.NewStatusBar(s)
@@ -572,6 +609,7 @@ func (a *App) rebuildStyles() {
 	a.helpOverlay.SetSize(a.width, ch)
 	a.inbox.SetSize(a.width, ch)
 	a.tutorial.SetSize(a.width, ch)
+	a.filterPanel.SetSize(a.width, ch)
 	a.header.SetWidth(a.width)
 	a.status.SetWidth(a.width)
 	a.toasts.SetWidth(a.width)
@@ -641,6 +679,8 @@ func (a *App) renderContent(height int) string {
 
 	case core.ViewInbox:
 		return a.inbox.View()
+	case core.ViewFilter:
+		return a.filterPanel.View()
 
 	default:
 		return ""
@@ -665,6 +705,8 @@ func (a *App) viewName() string {
 		return "Repo Switch"
 	case core.ViewInbox:
 		return "Inbox"
+	case core.ViewFilter:
+		return "Filter"
 	default:
 		return ""
 	}
