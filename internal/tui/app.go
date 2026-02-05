@@ -205,6 +205,27 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.CheckoutDoneMsg:
 		return a.handleCheckoutDone(msg)
 
+	case views.CopyURLMsg:
+		if err := copyToClipboard(msg.URL); err != nil {
+			cmd := a.toasts.Add(
+				fmt.Sprintf("Copy failed: %v", err),
+				domain.ToastError, 5*time.Second,
+			)
+			return a, cmd
+		}
+		cmd := a.toasts.Add("Copied PR URL", domain.ToastSuccess, 3*time.Second)
+		return a, cmd
+
+	case views.OpenBrowserMsg:
+		if err := openBrowser(msg.URL); err != nil {
+			cmd := a.toasts.Add(
+				fmt.Sprintf("Open browser failed: %v", err),
+				domain.ToastError, 5*time.Second,
+			)
+			return a, cmd
+		}
+		return a, nil
+
 	case views.SwitchRepoMsg:
 		return a.handleSwitchRepo(msg)
 

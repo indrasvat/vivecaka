@@ -97,6 +97,10 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 				return func() tea.Msg { return OpenDiffMsg{Number: num} }
 			}
 		}
+	case key.Matches(msg, m.keys.Open):
+		if url := m.openURL(); url != "" {
+			return func() tea.Msg { return OpenBrowserMsg{URL: url} }
+		}
 	}
 	// 'r' key for review.
 	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == 'r' {
@@ -105,6 +109,20 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+func (m *PRDetailModel) openURL() string {
+	if m.detail == nil {
+		return ""
+	}
+	if m.pane == PaneChecks {
+		for _, c := range m.detail.Checks {
+			if c.URL != "" {
+				return c.URL
+			}
+		}
+	}
+	return m.detail.URL
 }
 
 // View renders the PR detail view.
