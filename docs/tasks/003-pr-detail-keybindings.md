@@ -1,6 +1,6 @@
 # Task 003: PR Detail Key Bindings and CI Summary
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 

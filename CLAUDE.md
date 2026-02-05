@@ -14,10 +14,11 @@ While Phase 14 tasks remain incomplete, keep executing tasks back-to-back. Auto-
 1. Read the relevant `docs/PRD.md` sections listed in the task file
 2. Execute the task
 3. **Verify** — run `make ci`, then run iterm2-driver visual QA (every task, no exceptions)
-4. Update `docs/PROGRESS.md` — mark the task as DONE with notes
-5. Update the task file `docs/tasks/NNN-*.md` — set `Status: DONE`
-6. Commit the changes (atomic, conventional commit)
-7. Immediately pick up the next TODO task — do not wait for user input
+4. **Mock check** — use `npm exec agent-browser --` to open `docs/mocks.html` and the relevant `screenshots/mock_*.png`, confirm TUI matches the mock
+5. Update `docs/PROGRESS.md` — mark the task as DONE with notes
+6. Update the task file `docs/tasks/NNN-*.md` — set `Status: DONE`
+7. Commit the changes (atomic, conventional commit)
+8. Immediately pick up the next TODO task — do not wait for user input
 
 Do NOT skip verification. Do NOT mark tasks done without functional + visual confirmation.
 The source of truth is always on disk: `PROGRESS.md`, task files, and git history.

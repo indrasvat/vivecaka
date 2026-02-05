@@ -17,6 +17,7 @@ func testDetail() *domain.PRDetail {
 			State:  domain.PRStateOpen,
 			Branch: domain.BranchInfo{Head: "feat/plugins", Base: "main"},
 			Labels: []string{"enhancement", "v1"},
+			URL:    "https://example.com/pr/42",
 		},
 		Body:      "This PR adds plugin support.",
 		Assignees: []string{"indrasvat"},
@@ -29,8 +30,8 @@ func testDetail() *domain.PRDetail {
 			{Path: "registry.go", Additions: 80, Deletions: 0},
 		},
 		Checks: []domain.Check{
-			{Name: "ci/build", Status: domain.CIPass, Duration: 45 * time.Second},
-			{Name: "ci/lint", Status: domain.CIFail, Duration: 12 * time.Second},
+			{Name: "ci/build", Status: domain.CIPass, Duration: 45 * time.Second, URL: "https://example.com/checks/build"},
+			{Name: "ci/lint", Status: domain.CIFail, Duration: 12 * time.Second, URL: "https://example.com/checks/lint"},
 			{Name: "ci/test", Status: domain.CIPending},
 		},
 		Comments: []domain.CommentThread{
@@ -203,6 +204,89 @@ func TestDetailEnterOnInfoPane(t *testing.T) {
 	}
 }
 
+func TestPRDetailDiffKey(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDetail(testDetail())
+
+	d := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}
+	cmd := m.Update(d)
+	if cmd == nil {
+		t.Fatal("'d' key should produce a command")
+	}
+
+	msg := cmd()
+	if diff, ok := msg.(OpenDiffMsg); !ok {
+		t.Errorf("expected OpenDiffMsg, got %T", msg)
+	} else if diff.Number != 42 {
+		t.Errorf("OpenDiffMsg.Number = %d, want 42", diff.Number)
+	}
+}
+
+func TestPRDetailCheckoutKey(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDetail(testDetail())
+
+	c := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+	cmd := m.Update(c)
+	if cmd == nil {
+		t.Fatal("'c' key should produce a command")
+	}
+
+	msg := cmd()
+	if checkout, ok := msg.(CheckoutPRMsg); !ok {
+		t.Errorf("expected CheckoutPRMsg, got %T", msg)
+	} else if checkout.Number != 42 {
+		t.Errorf("CheckoutPRMsg.Number = %d, want 42", checkout.Number)
+	}
+}
+
+func TestPRDetailOpenKeyChecksPane(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDetail(testDetail())
+	m.pane = PaneChecks
+	m.scrollY = 1
+
+	o := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}}
+	cmd := m.Update(o)
+	if cmd == nil {
+		t.Fatal("'o' key should produce a command on checks pane")
+	}
+
+	msg := cmd()
+	open, ok := msg.(OpenBrowserMsg)
+	if !ok {
+		t.Fatalf("expected OpenBrowserMsg, got %T", msg)
+	}
+	if open.URL != "https://example.com/checks/lint" {
+		t.Errorf("OpenBrowserMsg.URL = %q, want lint URL", open.URL)
+	}
+}
+
+func TestPRDetailOpenKeyInfoPane(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDetail(testDetail())
+	m.pane = PaneInfo
+
+	o := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}}
+	cmd := m.Update(o)
+	if cmd == nil {
+		t.Fatal("'o' key should produce a command on info pane")
+	}
+
+	msg := cmd()
+	open, ok := msg.(OpenBrowserMsg)
+	if !ok {
+		t.Fatalf("expected OpenBrowserMsg, got %T", msg)
+	}
+	if open.URL != "https://example.com/pr/42" {
+		t.Errorf("OpenBrowserMsg.URL = %q, want PR URL", open.URL)
+	}
+}
+
 func TestDetailReviewKey(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
@@ -220,6 +304,15 @@ func TestDetailReviewKey(t *testing.T) {
 		t.Errorf("expected StartReviewMsg, got %T", msg)
 	} else if rev.Number != 42 {
 		t.Errorf("StartReviewMsg.Number = %d, want 42", rev.Number)
+	}
+}
+
+func TestPRDetailFormatCheckSummary(t *testing.T) {
+	detail := testDetail()
+	got := formatCheckSummary(detail.Checks)
+	want := "1/3 passing, 1 failing, 1 pending"
+	if got != want {
+		t.Errorf("summary = %q, want %q", got, want)
 	}
 }
 

@@ -101,11 +101,22 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		if url := m.openURL(); url != "" {
 			return func() tea.Msg { return OpenBrowserMsg{URL: url} }
 		}
+	case key.Matches(msg, m.keys.Checkout):
+		if m.detail != nil {
+			return func() tea.Msg { return CheckoutPRMsg{Number: m.detail.Number} }
+		}
 	}
 	// 'r' key for review.
-	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == 'r' {
-		if m.detail != nil {
-			return func() tea.Msg { return StartReviewMsg{Number: m.detail.Number} }
+	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
+		switch msg.Runes[0] {
+		case 'r':
+			if m.detail != nil {
+				return func() tea.Msg { return StartReviewMsg{Number: m.detail.Number} }
+			}
+		case 'd':
+			if m.detail != nil {
+				return func() tea.Msg { return OpenDiffMsg{Number: m.detail.Number} }
+			}
 		}
 	}
 	return nil
@@ -116,13 +127,33 @@ func (m *PRDetailModel) openURL() string {
 		return ""
 	}
 	if m.pane == PaneChecks {
-		for _, c := range m.detail.Checks {
-			if c.URL != "" {
-				return c.URL
-			}
+		if url := m.selectedCheckURL(); url != "" {
+			return url
 		}
 	}
 	return m.detail.URL
+}
+
+func (m *PRDetailModel) selectedCheckURL() string {
+	if m.detail == nil || len(m.detail.Checks) == 0 {
+		return ""
+	}
+	idx := m.scrollY
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(m.detail.Checks) {
+		idx = len(m.detail.Checks) - 1
+	}
+	if url := m.detail.Checks[idx].URL; url != "" {
+		return url
+	}
+	for _, c := range m.detail.Checks {
+		if c.URL != "" {
+			return c.URL
+		}
+	}
+	return ""
 }
 
 // View renders the PR detail view.
@@ -254,6 +285,12 @@ func (m *PRDetailModel) renderChecksPane(height int) string {
 	}
 
 	var lines []string
+	summary := formatCheckSummary(d.Checks)
+	if summary != "" {
+		lines = append(lines, "  "+summary)
+		lines = append(lines, "")
+	}
+
 	for _, c := range d.Checks {
 		icon := ciIcon(c.Status)
 		dur := ""
@@ -293,4 +330,42 @@ func (m *PRDetailModel) renderCommentsPane(height int) string {
 
 	return lipgloss.NewStyle().Width(m.width).Height(height).
 		Render(strings.Join(lines, "\n"))
+}
+
+func formatCheckSummary(checks []domain.Check) string {
+	if len(checks) == 0 {
+		return ""
+	}
+
+	var pass, fail, pending, skipped, none int
+	for _, c := range checks {
+		switch c.Status {
+		case domain.CIPass:
+			pass++
+		case domain.CIFail:
+			fail++
+		case domain.CIPending:
+			pending++
+		case domain.CISkipped:
+			skipped++
+		default:
+			none++
+		}
+	}
+
+	total := len(checks)
+	parts := []string{fmt.Sprintf("%d/%d passing", pass, total)}
+	if fail > 0 {
+		parts = append(parts, fmt.Sprintf("%d failing", fail))
+	}
+	if pending > 0 {
+		parts = append(parts, fmt.Sprintf("%d pending", pending))
+	}
+	if skipped > 0 {
+		parts = append(parts, fmt.Sprintf("%d skipped", skipped))
+	}
+	if none > 0 {
+		parts = append(parts, fmt.Sprintf("%d no status", none))
+	}
+	return strings.Join(parts, ", ")
 }
