@@ -1,14 +1,75 @@
 # vivecaka — Progress Tracker
 
 > Updated after each task completion. See `docs/PRD.md` for full task definitions.
+> Task files: `docs/tasks/NNN-task-name.md`
 
-## Current Phase
+## Current Status
 
-**Phase 13: Integration & Polish — COMPLETE**
+**Phase 14: Feature Completion & Quality — IN PROGRESS**
 
-## Task Status
+Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features are missing or non-functional despite being marked "Done". Phase 14 addresses all gaps identified in the audit.
 
-### Phase 0: Project Bootstrap
+## How to Resume
+
+1. Read this file — find the next `TODO` task below
+2. Read the task file at `docs/tasks/NNN-task-name.md` — full context and steps
+3. Read `CLAUDE.md` for conventions
+4. Read relevant `docs/PRD.md` sections (listed in each task file)
+5. Execute, verify (functional + visual via iterm2-driver), update this file, commit
+
+## Phase 14: Feature Completion (Remaining Tasks)
+
+| # | Task File | Description | Status | Depends On |
+|---|-----------|-------------|--------|------------|
+| 001 | `docs/tasks/001-fix-pr-list-sort.md` | Fix sort to actually reorder data + direction indicator | TODO | — |
+| 002 | `docs/tasks/002-clipboard-and-browser.md` | Wire y (copy URL) and o (open browser) keys | TODO | — |
+| 003 | `docs/tasks/003-pr-detail-keybindings.md` | Add d/c/o keys to PR detail + CI summary line | TODO | 002 |
+| 004 | `docs/tasks/004-fix-diff-search.md` | Make diff search actually highlight + n/N navigation | TODO | — |
+| 005 | `docs/tasks/005-diff-navigation.md` | Hunk jump [/], file jump {/}, gg/G, collapse za | TODO | — |
+| 006 | `docs/tasks/006-quick-filters.md` | Quick filters: m (My PRs), n (Needs Review) | TODO | — |
+| 007 | `docs/tasks/007-filter-panel.md` | Full filter panel overlay with f key | TODO | 006 |
+| 008 | `docs/tasks/008-markdown-rendering.md` | Render PR body/comments as markdown via Glamour | TODO | — |
+| 009 | `docs/tasks/009-syntax-highlighting.md` | Syntax highlighting in diff via Chroma | TODO | 008 |
+| 010 | `docs/tasks/010-comments-enhancement.md` | Comment collapse/expand, reply, resolve | TODO | 008 |
+| 011 | `docs/tasks/011-review-form-huh.md` | Rewrite review form using huh library | TODO | — |
+| 012 | `docs/tasks/012-confirmation-dialogs.md` | Add confirmation before checkout and review submit | TODO | — |
+| 013 | `docs/tasks/013-repo-switcher-wiring.md` | Load favorites from config into repo switcher | TODO | — |
+| 014 | `docs/tasks/014-inbox-wiring.md` | Wire inbox: I key, multi-repo fetch, priority sort | TODO | 006, 013 |
+| 015 | `docs/tasks/015-auto-refresh.md` | Background polling with countdown, pause, toasts | TODO | — |
+| 016 | `docs/tasks/016-startup-experience.md` | Wire tutorial, startup banner, branch detection | TODO | — |
+| 017 | `docs/tasks/017-external-diff-tool.md` | e key to launch external diff tool | TODO | — |
+| 018 | `docs/tasks/018-inline-comments.md` | Inline comments in diff view (c/r/x keys) | TODO | 010 |
+| 019 | `docs/tasks/019-diff-two-pane-layout.md` | File tree + content split layout for diff | TODO | — |
+| 020 | `docs/tasks/020-diff-side-by-side.md` | Side-by-side diff mode with t toggle | TODO | 019 |
+| 021 | `docs/tasks/021-visual-selection-mode.md` | v key for multi-select, batch operations | TODO | — |
+| 022 | `docs/tasks/022-pagination.md` | Paginated PR loading with infinite scroll | TODO | — |
+| 023 | `docs/tasks/023-caching.md` | PR list caching for instant startup | TODO | — |
+| 024 | `docs/tasks/024-config-enhancements.md` | Keybinding overrides, adaptive colors, notifications | TODO | — |
+| 025 | `docs/tasks/025-persistence.md` | Per-repo filter memory, unread indicators | TODO | 001, 007, 023 |
+| 026 | `docs/tasks/026-testing-foundation.md` | testify migration, adapter fixtures, 80%+ coverage | TODO | — |
+| 027 | `docs/tasks/027-integration-tests.md` | teatest integration tests, TUI test quality | TODO | 026 |
+
+## Recommended Execution Order
+
+Independent tasks (can be done in any order): 001, 002, 004, 005, 006, 008, 011, 012, 013, 015, 016, 017, 019, 021, 022, 023, 024, 026
+
+Dependency chains:
+- 002 → 003 (browser integration needed before detail key bindings use it)
+- 006 → 007 (username detection before filter panel)
+- 006 + 013 → 014 (username + favorites before inbox)
+- 008 → 009 (glamour before chroma)
+- 008 → 010 → 018 (markdown → comments → inline comments)
+- 019 → 020 (two-pane before side-by-side)
+- 001 + 007 + 023 → 025 (sort + filter + cache before persistence)
+- 026 → 027 (testify + fixtures before integration tests)
+
+---
+
+## Phases 0-13: Original Scaffolding (Complete)
+
+> These phases built the project structure, domain layer, adapters, use cases, and TUI scaffolding. An audit found that while the architecture is sound, many features were only partially implemented (views built as rendering shells, messages emitted but not handled, config fields defined but not read).
+
+### Phase 0: Project Bootstrap — COMPLETE
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
@@ -21,7 +82,7 @@
 | T0.7 | Setup GoReleaser | ✅ Done | v2 format, clean check |
 | T0.8 | LICENSE + README | ✅ Done | |
 
-### Phase 1: Domain Layer
+### Phase 1: Domain Layer — COMPLETE
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
@@ -29,7 +90,7 @@
 | T1.2 | Define domain interfaces | ✅ Done | PRReader, PRReviewer, PRWriter |
 | T1.3 | Define domain errors | ✅ Done | errors.Is/As tests pass |
 
-### Phase 2: Plugin Infrastructure
+### Phase 2: Plugin Infrastructure — COMPLETE
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
@@ -37,7 +98,7 @@
 | T2.2 | Plugin registry | ✅ Done | 95.2% coverage, race-safe |
 | T2.3 | Hook system | ✅ Done | On/Emit, error chain, race-safe |
 
-### Phase 3: Configuration
+### Phase 3: Configuration — COMPLETE
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
@@ -45,17 +106,17 @@
 | T3.2 | XDG path helpers | ✅ Done | Env var override tests |
 | T3.3 | Default config generation | ✅ Done | Auto-create on first run |
 
-### Phase 4: GH CLI Adapter
+### Phase 4: GH CLI Adapter — COMPLETE (coverage gap: 25.3%)
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
-| T4.1 | GH CLI plugin wrapper | ✅ Done | Auth detection, go-gh v2 |
+| T4.1 | GH CLI plugin wrapper | ✅ Done | Auth detection |
 | T4.2 | PRReader (GH CLI) | ✅ Done | ListPRs, GetPR, GetDiff, GetChecks, GetComments |
 | T4.3 | PRReviewer (GH CLI) | ✅ Done | SubmitReview, AddComment, ResolveThread |
 | T4.4 | PRWriter (GH CLI) | ✅ Done | Checkout, Merge, UpdateLabels |
 | T4.5 | Diff parser | ✅ Done | Unified diff, renames, line numbers |
 
-### Phase 5: Use Cases
+### Phase 5: Use Cases — COMPLETE
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
@@ -65,98 +126,95 @@
 | T5.4 | CheckoutPR use case | ✅ Done | |
 | T5.5 | Comment use cases | ✅ Done | AddComment + ResolveThread |
 
-### Phase 6: TUI Foundation
+### Phase 6: TUI Foundation — COMPLETE
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
 | T6.1 | Theme system | ✅ Done | 5 themes, Catppuccin Mocha default |
 | T6.2 | Keymap system | ✅ Done | Global + per-view, help.KeyMap |
-| T6.3 | Root app model | ✅ Done | View routing, 95% coverage |
-| T6.4 | Header component | ✅ Done | Repo + count + filter + refresh |
+| T6.3 | Root app model | ✅ Done | View routing, message handling |
+| T6.4 | Header component | ✅ Done | Repo + count |
 | T6.5 | Status bar | ✅ Done | Context-aware key hints |
 | T6.6 | Toast notifications | ✅ Done | Stacked, auto-dismiss, 4 levels |
 
-### Phase 7: PR List View
+### Phase 7: PR List View — PARTIAL (sort broken, clipboard/browser stubbed)
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
-| T7.1 | PR list table | ✅ Done | Columns: #, Title, Author, CI, Review, Age |
-| T7.2 | Search/filter | ✅ Done | Fuzzy search by title/author |
-| T7.3 | Sort cycling | ✅ Done | updated/created/number/title/author |
-| T7.4 | Branch highlight | ✅ Done | Current branch indicator (◉) |
+| T7.1 | PR list table | ✅ Done | Columns render correctly |
+| T7.2 | Search/filter | ⚠️ Partial | Substring match only, not fuzzy. No filter panel. |
+| T7.3 | Sort cycling | ⚠️ Broken | Cycles field name but NEVER RE-SORTS data → Task 001 |
+| T7.4 | Branch highlight | ⚠️ Partial | Only after checkout, no startup detection → Task 016 |
 | T7.5 | Draft dimming | ✅ Done | [DRAFT] prefix, muted style |
-| T7.6 | Clipboard/browser | ✅ Done | y=copy URL, o=open browser |
+| T7.6 | Clipboard/browser | ⚠️ Stubbed | Messages emitted but silently dropped → Task 002 |
 
-### Phase 8: PR Detail View
+### Phase 8: PR Detail View — PARTIAL (missing keys, no markdown)
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
 | T8.1 | Detail model | ✅ Done | 4-pane tabbed layout |
-| T8.2 | Info pane | ✅ Done | Author, branch, state, labels, body |
-| T8.3 | Files pane | ✅ Done | File list with +/- counts |
-| T8.4 | Checks pane | ✅ Done | CI status with duration |
-| T8.5 | Comments pane | ✅ Done | Threaded, resolved badges |
+| T8.2 | Info pane | ⚠️ Partial | Raw text body, no markdown → Task 008 |
+| T8.3 | Files pane | ✅ Done | |
+| T8.4 | Checks pane | ⚠️ Partial | No CI summary line, no o key → Task 003 |
+| T8.5 | Comments pane | ⚠️ Partial | Read-only, no collapse/reply/resolve → Task 010 |
 
-### Phase 9: Diff Viewer
-
-| Task | Description | Status | Notes |
-|------|-------------|--------|-------|
-| T9.1 | Diff model | ✅ Done | File tabs, scroll, search |
-| T9.2 | Line rendering | ✅ Done | Line numbers, add/delete coloring |
-| T9.3 | File navigation | ✅ Done | Tab/Shift-Tab between files |
-| T9.4 | Search in diff | ✅ Done | / to search, Esc to clear |
-
-### Phase 10: Review Forms
+### Phase 9: Diff Viewer — PARTIAL (search broken, many features missing)
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
-| T10.1 | Review model | ✅ Done | Action cycle, body edit, submit |
-| T10.2 | Action selector | ✅ Done | Comment/Approve/RequestChanges |
-| T10.3 | Body editor | ✅ Done | Inline text editing with cursor |
+| T9.1 | Diff model | ⚠️ Partial | No two-pane layout → Task 019 |
+| T9.2 | Line rendering | ⚠️ Partial | No syntax highlighting → Task 009 |
+| T9.3 | File navigation | ⚠️ Partial | Tab only, no {/} or hunk nav → Task 005 |
+| T9.4 | Search in diff | ⚠️ Broken | Accepts input but zero effect → Task 004 |
 
-### Phase 11: Repo Switching
-
-| Task | Description | Status | Notes |
-|------|-------------|--------|-------|
-| T11.1 | Repo switcher overlay | ✅ Done | Fuzzy search, favorites, current highlight |
-| T11.2 | Unified PR Inbox (S4) | ✅ Done | 4 tabs, priority sort, multi-repo |
-| T11.3 | Repo auto-detection | ✅ Done | SSH + HTTPS GitHub URL parsing |
-
-### Phase 12: Help System
+### Phase 10: Review Forms — PARTIAL (no huh, single-line editor)
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
-| T12.1 | Help overlay | ✅ Done | Context-aware per-view bindings |
-| T12.2 | First-launch tutorial | ✅ Done | 5-step walkthrough, XDG flag |
-| T12.3 | Status bar hints | ✅ Done | Per-view, truncation-safe |
+| T10.1 | Review model | ⚠️ Partial | No huh library, bare-bones → Task 011 |
+| T10.2 | Action selector | ✅ Done | |
+| T10.3 | Body editor | ⚠️ Partial | Single-line append-only → Task 011 |
 
-### Phase 13: Integration & Polish
+### Phase 11: Repo Switching — PARTIAL (empty switcher, dead inbox)
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
-| T13.1 | App tests + coverage | ✅ Done | 95% tui, 90.8% views |
-| T13.2 | Progress tracking | ✅ Done | This file |
+| T11.1 | Repo switcher overlay | ⚠️ Stubbed | Opens but empty — favorites never loaded → Task 013 |
+| T11.2 | Unified PR Inbox (S4) | ⚠️ Stubbed | UI built, no data pipeline, no key binding → Task 014 |
+| T11.3 | Repo auto-detection | ✅ Done | SSH + HTTPS parsing works |
+
+### Phase 12: Help System — PARTIAL (tutorial dead code)
+
+| Task | Description | Status | Notes |
+|------|-------------|--------|-------|
+| T12.1 | Help overlay | ✅ Done | Context-aware per-view |
+| T12.2 | First-launch tutorial | ⚠️ Dead code | Code exists, Show() never called → Task 016 |
+| T12.3 | Status bar hints | ✅ Done | |
+
+### Phase 13: Integration & Polish — PARTIAL (shallow tests, no integration)
+
+| Task | Description | Status | Notes |
+|------|-------------|--------|-------|
+| T13.1 | App tests + coverage | ⚠️ Partial | Tests shallow, no integration tests → Tasks 026, 027 |
+| T13.2 | Progress tracking | ✅ Done | This file (now corrected) |
 
 ## Coverage Summary
 
-| Package | Coverage |
-|---------|----------|
-| domain | 100% |
-| usecase | 100% |
-| plugin | 95.2% |
-| tui | 95.0% |
-| config | 94.0% |
-| views | 90.8% |
-| ghcli | 25.3% (parser only; reader/reviewer/writer need live gh) |
-
-## Blocked
-
-_None_
+| Package | Coverage | Target | Notes |
+|---------|----------|--------|-------|
+| domain | 100% | 100% | ✅ Met |
+| usecase | 100% | 90%+ | ✅ Met |
+| plugin | 95.2% | — | ✅ Good |
+| tui | 95.0% | — | ⚠️ Tests are shallow |
+| config | 94.0% | — | ✅ Good |
+| views | 90.8% | — | ⚠️ Tests mostly check "doesn't panic" |
+| ghcli | 25.3% | 80%+ | ❌ Only parser tested → Task 026 |
 
 ## Notes
 
 - Go 1.25.7 on darwin/arm64
 - BubbleTea v1.3.10, LipGloss v1.1.1, Bubbles v0.21.1
 - go-gh v2.13.0
-- All 14 phases (0-13) complete
+- testify listed as dep but never imported → Task 026
+- huh listed as dep but never imported → Task 011
 - 0 lint issues, all tests pass with -race
