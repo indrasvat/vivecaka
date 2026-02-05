@@ -422,7 +422,7 @@ func formatCheckSummary(checks []domain.Check) string {
 
 func newDetailSpinner(styles core.Styles) spinner.Model {
 	sp := spinner.New()
-	sp.Spinner = spinner.Dot
+	sp.Spinner = spinner.Line
 	sp.Style = lipgloss.NewStyle().Foreground(styles.Theme.Info)
 	return sp
 }
