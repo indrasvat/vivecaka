@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -13,24 +14,27 @@ import (
 
 // DiffViewModel implements the diff viewer.
 type DiffViewModel struct {
-	diff        *domain.Diff
-	width       int
-	height      int
-	styles      core.Styles
-	keys        core.KeyMap
-	fileIdx     int
-	scrollY     int
-	loading     bool
-	searchQuery string
-	searching   bool
+	diff          *domain.Diff
+	width         int
+	height        int
+	styles        core.Styles
+	keys          core.KeyMap
+	fileIdx       int
+	scrollY       int
+	loading       bool
+	searchQuery   string
+	searching     bool
+	searchMatches []searchMatch
+	currentMatch  int
 }
 
 // NewDiffViewModel creates a new diff viewer.
 func NewDiffViewModel(styles core.Styles, keys core.KeyMap) DiffViewModel {
 	return DiffViewModel{
-		styles:  styles,
-		keys:    keys,
-		loading: true,
+		styles:       styles,
+		keys:         keys,
+		loading:      true,
+		currentMatch: -1,
 	}
 }
 
@@ -46,6 +50,9 @@ func (m *DiffViewModel) SetDiff(d *domain.Diff) {
 	m.loading = false
 	m.fileIdx = 0
 	m.scrollY = 0
+	if m.searchQuery != "" {
+		m.updateSearchMatches()
+	}
 }
 
 // Message types.
@@ -68,6 +75,17 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 func (m *DiffViewModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	if m.searching {
 		return m.handleSearchKey(msg)
+	}
+
+	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
+		switch msg.Runes[0] {
+		case 'n':
+			m.nextMatch()
+			return nil
+		case 'N':
+			m.prevMatch()
+			return nil
+		}
 	}
 
 	switch {
@@ -99,6 +117,7 @@ func (m *DiffViewModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, m.keys.Search):
 		m.searching = true
 		m.searchQuery = ""
+		m.updateSearchMatches()
 	}
 	return nil
 }
@@ -108,14 +127,21 @@ func (m *DiffViewModel) handleSearchKey(msg tea.KeyMsg) tea.Cmd {
 	case tea.KeyEscape:
 		m.searching = false
 		m.searchQuery = ""
+		m.searchMatches = nil
+		m.currentMatch = -1
 	case tea.KeyEnter:
 		m.searching = false
+		if m.currentMatch >= 0 {
+			m.jumpToMatch(m.currentMatch)
+		}
 	case tea.KeyBackspace:
 		if len(m.searchQuery) > 0 {
 			m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+			m.updateSearchMatches()
 		}
 	case tea.KeyRunes:
 		m.searchQuery += string(msg.Runes)
+		m.updateSearchMatches()
 	}
 	return nil
 }
@@ -139,6 +165,8 @@ func (m *DiffViewModel) View() string {
 	}
 
 	t := m.styles.Theme
+	matchStyle := lipgloss.NewStyle().Background(t.Info).Foreground(t.Bg).Bold(true)
+	lineMatches := m.matchesByLine(m.fileIdx)
 
 	// File tab bar.
 	fileBar := m.renderFileBar()
@@ -151,28 +179,38 @@ func (m *DiffViewModel) View() string {
 
 	file := m.diff.Files[m.fileIdx]
 	var lines []string
+	lineIdx := 0
 
 	for _, hunk := range file.Hunks {
 		// Hunk header.
 		hunkStyle := lipgloss.NewStyle().Foreground(t.Info)
-		lines = append(lines, hunkStyle.Render(hunk.Header))
+		header := hunk.Header
+		if matches := lineMatches[lineIdx]; len(matches) > 0 {
+			header = applyHighlights(header, matches, hunkStyle, matchStyle)
+			lines = append(lines, header)
+		} else {
+			lines = append(lines, hunkStyle.Render(header))
+		}
+		lineIdx++
 
 		for _, dl := range hunk.Lines {
+			matches := lineMatches[lineIdx]
 			lineNum := ""
 			switch dl.Type {
 			case domain.DiffAdd:
 				lineNum = fmt.Sprintf("%4s %4d ", "", dl.NewNum)
-				line := m.styles.DiffAdd.Render(lineNum + "+" + dl.Content)
+				line := renderDiffLine(lineNum, "+", dl.Content, m.styles.DiffAdd, matchStyle, matches)
 				lines = append(lines, line)
 			case domain.DiffDelete:
 				lineNum = fmt.Sprintf("%4d %4s ", dl.OldNum, "")
-				line := m.styles.DiffDelete.Render(lineNum + "-" + dl.Content)
+				line := renderDiffLine(lineNum, "-", dl.Content, m.styles.DiffDelete, matchStyle, matches)
 				lines = append(lines, line)
 			default:
 				lineNum = fmt.Sprintf("%4d %4d ", dl.OldNum, dl.NewNum)
-				line := lipgloss.NewStyle().Foreground(t.Fg).Render(lineNum + " " + dl.Content)
+				line := renderDiffLine(lineNum, " ", dl.Content, lipgloss.NewStyle().Foreground(t.Fg), matchStyle, matches)
 				lines = append(lines, line)
 			}
+			lineIdx++
 		}
 	}
 
@@ -190,7 +228,7 @@ func (m *DiffViewModel) View() string {
 
 	// Search bar.
 	if m.searching {
-		search := lipgloss.NewStyle().Foreground(t.Info).Render(fmt.Sprintf("/ %s▎", m.searchQuery))
+		search := lipgloss.NewStyle().Foreground(t.Info).Render(m.searchBarText())
 		content += "\n" + search
 	}
 
@@ -216,4 +254,218 @@ func (m *DiffViewModel) renderFileBar() string {
 		}
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
+}
+
+type searchMatch struct {
+	fileIdx  int
+	lineIdx  int
+	colStart int
+	colEnd   int
+}
+
+type matchSpan struct {
+	start int
+	end   int
+}
+
+func (m *DiffViewModel) updateSearchMatches() {
+	m.searchMatches = nil
+	m.currentMatch = -1
+
+	query := strings.TrimSpace(m.searchQuery)
+	if m.diff == nil || query == "" {
+		return
+	}
+
+	lowerQuery := strings.ToLower(query)
+	for fi, file := range m.diff.Files {
+		lineIdx := 0
+		for _, hunk := range file.Hunks {
+			for _, span := range findMatchSpans(hunk.Header, lowerQuery) {
+				m.searchMatches = append(m.searchMatches, searchMatch{
+					fileIdx: fi, lineIdx: lineIdx, colStart: span.start, colEnd: span.end,
+				})
+			}
+			lineIdx++
+			for _, dl := range hunk.Lines {
+				for _, span := range findMatchSpans(dl.Content, lowerQuery) {
+					m.searchMatches = append(m.searchMatches, searchMatch{
+						fileIdx: fi, lineIdx: lineIdx, colStart: span.start, colEnd: span.end,
+					})
+				}
+				lineIdx++
+			}
+		}
+	}
+
+	if len(m.searchMatches) == 0 {
+		return
+	}
+
+	m.currentMatch = 0
+	if idx := m.firstMatchInFile(m.fileIdx); idx >= 0 {
+		m.currentMatch = idx
+	}
+}
+
+func (m *DiffViewModel) firstMatchInFile(fileIdx int) int {
+	for i, match := range m.searchMatches {
+		if match.fileIdx == fileIdx {
+			return i
+		}
+	}
+	return -1
+}
+
+func (m *DiffViewModel) nextMatch() {
+	if len(m.searchMatches) == 0 {
+		return
+	}
+	next := m.currentMatch + 1
+	if next >= len(m.searchMatches) {
+		next = 0
+	}
+	m.jumpToMatch(next)
+}
+
+func (m *DiffViewModel) prevMatch() {
+	if len(m.searchMatches) == 0 {
+		return
+	}
+	prev := m.currentMatch - 1
+	if prev < 0 {
+		prev = len(m.searchMatches) - 1
+	}
+	m.jumpToMatch(prev)
+}
+
+func (m *DiffViewModel) jumpToMatch(idx int) {
+	if len(m.searchMatches) == 0 {
+		return
+	}
+	if idx < 0 || idx >= len(m.searchMatches) {
+		idx = 0
+	}
+
+	match := m.searchMatches[idx]
+	m.currentMatch = idx
+	if match.fileIdx != m.fileIdx {
+		m.fileIdx = match.fileIdx
+		m.scrollY = 0
+	}
+
+	lineCount := m.fileLineCount(m.fileIdx)
+	target := match.lineIdx
+	if target < 0 {
+		target = 0
+	}
+	if target >= lineCount {
+		target = lineCount - 1
+	}
+
+	visible := max(1, m.height-2)
+	scroll := target - visible/2
+	if scroll < 0 {
+		scroll = 0
+	}
+	if scroll > lineCount-visible {
+		scroll = max(0, lineCount-visible)
+	}
+	m.scrollY = scroll
+}
+
+func (m *DiffViewModel) fileLineCount(fileIdx int) int {
+	if m.diff == nil || fileIdx < 0 || fileIdx >= len(m.diff.Files) {
+		return 0
+	}
+	count := 0
+	for _, hunk := range m.diff.Files[fileIdx].Hunks {
+		count++ // header
+		count += len(hunk.Lines)
+	}
+	return count
+}
+
+func (m *DiffViewModel) matchesByLine(fileIdx int) map[int][]searchMatch {
+	lineMatches := make(map[int][]searchMatch)
+	for _, match := range m.searchMatches {
+		if match.fileIdx != fileIdx {
+			continue
+		}
+		lineMatches[match.lineIdx] = append(lineMatches[match.lineIdx], match)
+	}
+	for lineIdx, matches := range lineMatches {
+		sort.Slice(matches, func(i, j int) bool {
+			return matches[i].colStart < matches[j].colStart
+		})
+		lineMatches[lineIdx] = matches
+	}
+	return lineMatches
+}
+
+func (m *DiffViewModel) searchBarText() string {
+	count := len(m.searchMatches)
+	current := 0
+	if m.currentMatch >= 0 {
+		current = m.currentMatch + 1
+	}
+	if m.searchQuery == "" {
+		return "/ ▎"
+	}
+	return fmt.Sprintf("/ %s [%d/%d]▎", m.searchQuery, current, count)
+}
+
+func findMatchSpans(text, lowerQuery string) []matchSpan {
+	if lowerQuery == "" {
+		return nil
+	}
+	lowerText := strings.ToLower(text)
+	var spans []matchSpan
+	offset := 0
+	for {
+		idx := strings.Index(lowerText[offset:], lowerQuery)
+		if idx == -1 {
+			break
+		}
+		start := offset + idx
+		end := start + len(lowerQuery)
+		spans = append(spans, matchSpan{start: start, end: end})
+		offset = end
+	}
+	return spans
+}
+
+func renderDiffLine(prefix, marker, content string, baseStyle, matchStyle lipgloss.Style, matches []searchMatch) string {
+	prefixRendered := baseStyle.Render(prefix + marker)
+	if len(matches) == 0 {
+		return prefixRendered + baseStyle.Render(content)
+	}
+	return prefixRendered + applyHighlights(content, matches, baseStyle, matchStyle)
+}
+
+func applyHighlights(text string, matches []searchMatch, baseStyle, matchStyle lipgloss.Style) string {
+	if len(matches) == 0 {
+		return baseStyle.Render(text)
+	}
+
+	var b strings.Builder
+	last := 0
+	for _, match := range matches {
+		if match.colStart < last || match.colStart >= len(text) {
+			continue
+		}
+		end := match.colEnd
+		if end > len(text) {
+			end = len(text)
+		}
+		if match.colStart > last {
+			b.WriteString(baseStyle.Render(text[last:match.colStart]))
+		}
+		b.WriteString(matchStyle.Render(text[match.colStart:end]))
+		last = end
+	}
+	if last < len(text) {
+		b.WriteString(baseStyle.Render(text[last:]))
+	}
+	return b.String()
 }

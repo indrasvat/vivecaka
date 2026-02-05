@@ -1,10 +1,13 @@
 package views
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/muesli/termenv"
 )
 
 func testDiff() *domain.Diff {
@@ -226,6 +229,12 @@ func TestDiffSearch(t *testing.T) {
 	if m.searchQuery != "sync" {
 		t.Errorf("searchQuery = %q, want %q", m.searchQuery, "sync")
 	}
+	if len(m.searchMatches) != 2 {
+		t.Errorf("searchMatches = %d, want 2", len(m.searchMatches))
+	}
+	if m.currentMatch < 0 {
+		t.Error("currentMatch should be set when matches exist")
+	}
 
 	// Backspace.
 	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
@@ -260,6 +269,12 @@ func TestDiffSearchEscape(t *testing.T) {
 	if m.searchQuery != "" {
 		t.Errorf("query should be cleared on Escape, got %q", m.searchQuery)
 	}
+	if len(m.searchMatches) != 0 {
+		t.Errorf("searchMatches should be cleared on Escape, got %d", len(m.searchMatches))
+	}
+	if m.currentMatch != -1 {
+		t.Errorf("currentMatch should reset on Escape, got %d", m.currentMatch)
+	}
 }
 
 func TestDiffSearchBackspaceEmpty(t *testing.T) {
@@ -274,6 +289,52 @@ func TestDiffSearchBackspaceEmpty(t *testing.T) {
 	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 	if m.searchQuery != "" {
 		t.Errorf("backspace on empty should stay empty, got %q", m.searchQuery)
+	}
+}
+
+func TestDiffSearchNavigation(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	m.searchQuery = "sync"
+	m.updateSearchMatches()
+	if len(m.searchMatches) == 0 {
+		t.Fatal("expected matches for sync")
+	}
+
+	first := m.currentMatch
+	m.nextMatch()
+	if m.currentMatch == first {
+		t.Error("nextMatch should advance currentMatch")
+	}
+	m.prevMatch()
+	if m.currentMatch != first {
+		t.Errorf("prevMatch should return to first, got %d", m.currentMatch)
+	}
+}
+
+func TestDiffApplyHighlights(t *testing.T) {
+	origProfile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() {
+		lipgloss.SetColorProfile(origProfile)
+	})
+
+	base := lipgloss.NewStyle()
+	match := lipgloss.NewStyle().Background(lipgloss.Color("1"))
+	text := "sync sync"
+	matches := []searchMatch{
+		{colStart: 0, colEnd: 4},
+		{colStart: 5, colEnd: 9},
+	}
+
+	got := applyHighlights(text, matches, base, match)
+	if !strings.Contains(got, "\x1b[") {
+		t.Error("expected highlight ANSI sequence in output")
+	}
+	if !strings.Contains(got, "sync") {
+		t.Error("expected highlighted text to contain sync")
 	}
 }
 

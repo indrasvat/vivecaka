@@ -1,6 +1,6 @@
 # Task 004: Fix Diff Search
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 
