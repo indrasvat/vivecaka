@@ -1,24 +1,23 @@
 package views
 
 import (
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
-// ReviewModel implements the review submission form.
+// ReviewModel implements the review submission form using huh library.
 type ReviewModel struct {
 	prNumber int
 	width    int
 	height   int
 	styles   core.Styles
 	keys     core.KeyMap
+	form     *huh.Form
 	action   domain.ReviewAction
 	body     string
-	cursor   int // 0=action, 1=body, 2=submit
-	editing  bool
 }
 
 // NewReviewModel creates a new review form.
@@ -34,14 +33,81 @@ func NewReviewModel(styles core.Styles, keys core.KeyMap) ReviewModel {
 func (m *ReviewModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
+	if m.form != nil {
+		m.form.WithHeight(h - 4) // Account for title and padding
+	}
 }
 
-// SetPRNumber sets the PR being reviewed.
+// SetPRNumber sets the PR being reviewed and initializes the form.
 func (m *ReviewModel) SetPRNumber(n int) {
 	m.prNumber = n
 	m.action = domain.ReviewActionComment
 	m.body = ""
-	m.cursor = 0
+	m.initForm()
+}
+
+// initForm creates the huh form with Select and Text fields.
+func (m *ReviewModel) initForm() {
+	// Action options
+	actionOptions := []huh.Option[domain.ReviewAction]{
+		huh.NewOption("Comment", domain.ReviewActionComment),
+		huh.NewOption("Approve ✓", domain.ReviewActionApprove),
+		huh.NewOption("Request Changes !", domain.ReviewActionRequestChanges),
+	}
+
+	m.form = huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[domain.ReviewAction]().
+				Title("Review Action").
+				Description("Select the type of review to submit").
+				Options(actionOptions...).
+				Value(&m.action).
+				Key("action"),
+			huh.NewText().
+				Title("Review Body").
+				Description("Enter your review comments (optional)").
+				Placeholder("Add your review comments here...").
+				Value(&m.body).
+				Lines(8).
+				CharLimit(4000).
+				Key("body"),
+			huh.NewConfirm().
+				Title("Submit Review?").
+				Description("This will submit your review").
+				Affirmative("Submit").
+				Negative("Cancel").
+				Key("confirm"),
+		),
+	)
+
+	// Apply custom styling
+	m.form.WithTheme(m.createTheme())
+	if m.height > 4 {
+		m.form.WithHeight(m.height - 4)
+	}
+}
+
+// createTheme returns a huh theme based on the app's styles.
+func (m *ReviewModel) createTheme() *huh.Theme {
+	t := m.styles.Theme
+	theme := huh.ThemeDracula()
+
+	// Customize to match vivecaka theme
+	theme.Focused.Title = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(t.Primary)).
+		Bold(true)
+	theme.Focused.Description = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(t.Muted))
+	theme.Focused.Base = lipgloss.NewStyle().
+		BorderForeground(lipgloss.Color(t.Primary)).
+		BorderStyle(lipgloss.RoundedBorder())
+	theme.Focused.SelectedOption = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(t.Primary)).
+		Bold(true)
+	theme.Focused.TextInput.Cursor = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(t.Primary))
+
+	return theme
 }
 
 // SubmitReviewMsg is sent when the user submits a review.
@@ -50,38 +116,42 @@ type SubmitReviewMsg struct {
 	Review domain.Review
 }
 
-// Update handles messages for the review form.
-func (m *ReviewModel) Update(msg tea.Msg) tea.Cmd {
-	if msg, ok := msg.(tea.KeyMsg); ok {
-		return m.handleKey(msg)
+// CloseReviewMsg is sent when the user cancels the review form.
+type CloseReviewMsg struct{}
+
+// Init returns the initial command for the form.
+func (m *ReviewModel) Init() tea.Cmd {
+	if m.form != nil {
+		return m.form.Init()
 	}
 	return nil
 }
 
-func (m *ReviewModel) handleKey(msg tea.KeyMsg) tea.Cmd {
-	if m.editing {
-		return m.handleEditKey(msg)
+// Update handles messages for the review form.
+func (m *ReviewModel) Update(msg tea.Msg) tea.Cmd {
+	if m.form == nil {
+		return nil
 	}
 
-	switch {
-	case key.Matches(msg, m.keys.Down):
-		if m.cursor < 2 {
-			m.cursor++
+	// Check for Escape key to cancel
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		if keyMsg.Type == tea.KeyEscape {
+			return func() tea.Msg { return CloseReviewMsg{} }
 		}
-	case key.Matches(msg, m.keys.Up):
-		if m.cursor > 0 {
-			m.cursor--
-		}
-	case key.Matches(msg, m.keys.Enter):
-		switch m.cursor {
-		case 0:
-			// Cycle action.
-			m.cycleAction()
-		case 1:
-			// Start editing body.
-			m.editing = true
-		case 2:
-			// Submit.
+	}
+
+	// Update the form
+	model, cmd := m.form.Update(msg)
+	if f, ok := model.(*huh.Form); ok {
+		m.form = f
+	}
+
+	// Check form state after update
+	switch m.form.State {
+	case huh.StateCompleted:
+		// User confirmed - check if they pressed Submit or Cancel
+		confirm := m.form.GetBool("confirm")
+		if confirm {
 			return func() tea.Msg {
 				return SubmitReviewMsg{
 					Number: m.prNumber,
@@ -89,93 +159,57 @@ func (m *ReviewModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 				}
 			}
 		}
+		// User pressed Cancel on confirm
+		return func() tea.Msg { return CloseReviewMsg{} }
+	case huh.StateAborted:
+		return func() tea.Msg { return CloseReviewMsg{} }
 	}
-	return nil
-}
 
-func (m *ReviewModel) handleEditKey(msg tea.KeyMsg) tea.Cmd {
-	switch msg.Type {
-	case tea.KeyEscape:
-		m.editing = false
-	case tea.KeyBackspace:
-		if len(m.body) > 0 {
-			m.body = m.body[:len(m.body)-1]
-		}
-	case tea.KeyEnter:
-		m.body += "\n"
-	case tea.KeyRunes:
-		m.body += string(msg.Runes)
-	}
-	return nil
-}
-
-func (m *ReviewModel) cycleAction() {
-	switch m.action {
-	case domain.ReviewActionComment:
-		m.action = domain.ReviewActionApprove
-	case domain.ReviewActionApprove:
-		m.action = domain.ReviewActionRequestChanges
-	case domain.ReviewActionRequestChanges:
-		m.action = domain.ReviewActionComment
-	}
+	return cmd
 }
 
 // View renders the review form.
 func (m *ReviewModel) View() string {
 	t := m.styles.Theme
-	titleStyle := lipgloss.NewStyle().Foreground(t.Primary).Bold(true)
-	labelStyle := lipgloss.NewStyle().Foreground(t.Muted)
-	selectedStyle := lipgloss.NewStyle().Foreground(t.Fg).Bold(true)
-	normalStyle := lipgloss.NewStyle().Foreground(t.Subtext)
+	titleStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(t.Primary)).
+		Bold(true).
+		MarginBottom(1)
 
-	var lines []string
-	lines = append(lines, titleStyle.Render("Submit Review"))
-	lines = append(lines, "")
-
-	// Action selector.
-	actionLabel := "  Action: "
-	actionValue := actionDisplay(m.action)
-	if m.cursor == 0 {
-		lines = append(lines, selectedStyle.Render("▸ "+actionLabel+actionValue+" (Enter to cycle)"))
+	var content string
+	if m.form != nil {
+		content = m.form.View()
 	} else {
-		lines = append(lines, normalStyle.Render("  "+actionLabel+actionValue))
+		content = "Loading form..."
 	}
 
-	// Body editor.
-	bodyLabel := "  Body:   "
-	bodyPreview := m.body
-	if bodyPreview == "" {
-		bodyPreview = "(empty)"
-	}
-	switch {
-	case m.editing:
-		lines = append(lines, selectedStyle.Render("▸ "+bodyLabel+bodyPreview+"▎"))
-	case m.cursor == 1:
-		lines = append(lines, selectedStyle.Render("▸ "+bodyLabel+bodyPreview+" (Enter to edit)"))
-	default:
-		lines = append(lines, normalStyle.Render("  "+bodyLabel+bodyPreview))
-	}
-
-	lines = append(lines, "")
-
-	// Submit button.
-	if m.cursor == 2 {
-		lines = append(lines, selectedStyle.Render("▸ [ Submit ]"))
-	} else {
-		lines = append(lines, labelStyle.Render("  [ Submit ]"))
-	}
-
-	return lipgloss.NewStyle().Width(m.width).Height(m.height).Padding(1).
-		Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return lipgloss.NewStyle().
+		Width(m.width).
+		Height(m.height).
+		Padding(1).
+		Render(lipgloss.JoinVertical(
+			lipgloss.Left,
+			titleStyle.Render("Submit Review for PR #"+itoa(m.prNumber)),
+			content,
+		))
 }
 
-func actionDisplay(a domain.ReviewAction) string {
-	switch a {
-	case domain.ReviewActionApprove:
-		return "Approve ✓"
-	case domain.ReviewActionRequestChanges:
-		return "Request Changes !"
-	default:
-		return "Comment"
+// itoa converts int to string (simple helper).
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
 	}
+	var digits []byte
+	neg := n < 0
+	if neg {
+		n = -n
+	}
+	for n > 0 {
+		digits = append([]byte{byte('0' + n%10)}, digits...)
+		n /= 10
+	}
+	if neg {
+		digits = append([]byte{'-'}, digits...)
+	}
+	return string(digits)
 }

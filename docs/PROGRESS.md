@@ -31,7 +31,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 008 | `docs/tasks/008-markdown-rendering.md` | Render PR body/comments as markdown via Glamour | DONE | — |
 | 009 | `docs/tasks/009-syntax-highlighting.md` | Syntax highlighting in diff via Chroma | DONE | 008 |
 | 010 | `docs/tasks/010-comments-enhancement.md` | Comment collapse/expand, reply, resolve | DONE | 008 |
-| 011 | `docs/tasks/011-review-form-huh.md` | Rewrite review form using huh library | TODO | — |
+| 011 | `docs/tasks/011-review-form-huh.md` | Rewrite review form using huh library | DONE | — |
 | 012 | `docs/tasks/012-confirmation-dialogs.md` | Add confirmation before checkout and review submit | TODO | — |
 | 013 | `docs/tasks/013-repo-switcher-wiring.md` | Load favorites from config into repo switcher | TODO | — |
 | 014 | `docs/tasks/014-inbox-wiring.md` | Wire inbox: I key, multi-repo fetch, priority sort | TODO | 006, 013 |

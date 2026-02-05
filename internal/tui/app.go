@@ -245,6 +245,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.ReviewSubmittedMsg:
 		return a.handleReviewSubmitted(msg)
 
+	case views.CloseReviewMsg:
+		a.view = core.ViewPRDetail
+		return a, nil
+
 	case views.CheckoutPRMsg:
 		return a.handleCheckoutPR(msg)
 
