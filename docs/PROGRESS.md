@@ -26,7 +26,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 003 | `docs/tasks/003-pr-detail-keybindings.md` | Add d/c/o keys to PR detail + CI summary line | DONE | 002 |
 | 004 | `docs/tasks/004-fix-diff-search.md` | Make diff search actually highlight + n/N navigation | DONE | — |
 | 005 | `docs/tasks/005-diff-navigation.md` | Hunk jump [/], file jump {/}, gg/G, collapse za | DONE | — |
-| 006 | `docs/tasks/006-quick-filters.md` | Quick filters: m (My PRs), n (Needs Review) | TODO | — |
+| 006 | `docs/tasks/006-quick-filters.md` | Quick filters: m (My PRs), n (Needs Review) | DONE | — |
 | 007 | `docs/tasks/007-filter-panel.md` | Full filter panel overlay with f key | TODO | 006 |
 | 008 | `docs/tasks/008-markdown-rendering.md` | Render PR body/comments as markdown via Glamour | TODO | — |
 | 009 | `docs/tasks/009-syntax-highlighting.md` | Syntax highlighting in diff via Chroma | TODO | 008 |
@@ -224,3 +224,4 @@ Dependency chains:
 - Task 003: PR detail d/c/o keys wired; checks summary line rendered; live GH checks in peek-it returned empty ("No CI checks"), summary covered by unit test; mock_prdetail verified via agent-browser.
 - Task 004: diff search now scans/highlights matches with n/N navigation and count; mock_diff verified via agent-browser.
 - Task 005: diff navigation adds hunk/file jumps, gg/G, and collapse/expand; mock_diff verified via agent-browser.
+- Task 006: quick filters added (m/n) with user detection via gh; filter label shows in header; mock_prlist verified via agent-browser.

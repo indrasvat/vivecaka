@@ -1,6 +1,6 @@
 # Task 006: Quick Filters (m/n keys)
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 

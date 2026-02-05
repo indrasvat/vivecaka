@@ -31,6 +31,8 @@ type PRListModel struct {
 	sortPending   bool
 	currentBranch string
 	filter        domain.ListOpts
+	username      string
+	quickFilter   quickFilter
 }
 
 // NewPRListModel creates a new PR list view.
@@ -84,6 +86,14 @@ type (
 	OpenBrowserMsg struct{ URL string }
 )
 
+type quickFilter string
+
+const (
+	quickFilterNone        quickFilter = ""
+	quickFilterMyPRs       quickFilter = "my_prs"
+	quickFilterNeedsReview quickFilter = "needs_review"
+)
+
 // Update handles messages for the PR list view.
 func (m *PRListModel) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
@@ -106,6 +116,15 @@ func (m *PRListModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 			m.searchQuery = ""
 		}
 		return nil
+	}
+
+	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
+		switch msg.Runes[0] {
+		case 'm':
+			return m.toggleQuickFilter(quickFilterMyPRs)
+		case 'n':
+			return m.toggleQuickFilter(quickFilterNeedsReview)
+		}
 	}
 
 	switch {
@@ -214,6 +233,9 @@ func (m *PRListModel) applyFilter() {
 	query := strings.ToLower(m.searchQuery)
 
 	for _, pr := range m.prs {
+		if !m.matchesQuickFilter(pr) {
+			continue
+		}
 		if query != "" {
 			titleMatch := strings.Contains(strings.ToLower(pr.Title), query)
 			authorMatch := strings.Contains(strings.ToLower(pr.Author), query)
@@ -426,6 +448,49 @@ func (m *PRListModel) renderSearchBar() string {
 	t := m.styles.Theme
 	style := lipgloss.NewStyle().Foreground(t.Info)
 	return style.Render(fmt.Sprintf("/ %s▎", m.searchQuery))
+}
+
+// SetUsername sets the current GitHub username for quick filters.
+func (m *PRListModel) SetUsername(username string) {
+	m.username = username
+}
+
+// FilterLabel returns the label for the active quick filter.
+func (m *PRListModel) FilterLabel() string {
+	switch m.quickFilter {
+	case quickFilterMyPRs:
+		return "My PRs"
+	case quickFilterNeedsReview:
+		return "Needs Review"
+	default:
+		return ""
+	}
+}
+
+func (m *PRListModel) toggleQuickFilter(filter quickFilter) tea.Cmd {
+	if m.quickFilter == filter {
+		m.quickFilter = quickFilterNone
+	} else {
+		m.quickFilter = filter
+	}
+	m.cursor = 0
+	m.offset = 0
+	m.applyFilter()
+	return func() tea.Msg { return PRListFilterMsg{Label: m.FilterLabel()} }
+}
+
+func (m *PRListModel) matchesQuickFilter(pr domain.PR) bool {
+	switch m.quickFilter {
+	case quickFilterMyPRs:
+		return m.username != "" && strings.EqualFold(pr.Author, m.username)
+	case quickFilterNeedsReview:
+		if m.username == "" {
+			return false
+		}
+		return pr.Review.State == domain.ReviewPending && !strings.EqualFold(pr.Author, m.username)
+	default:
+		return true
+	}
 }
 
 func (m *PRListModel) sortLabel(field, label string) string {

@@ -55,6 +55,7 @@ type App struct {
 	height   int
 	ready    bool
 	repo     domain.RepoRef
+	username string
 
 	// Shared
 	keys   core.KeyMap
@@ -137,16 +138,20 @@ func New(cfg *config.Config, opts ...Option) *App {
 }
 
 func (a *App) Init() tea.Cmd {
+	cmds := []tea.Cmd{detectUserCmd()}
 	// If repo was provided via WithRepo, skip detection and load PRs directly.
 	if a.repo.Owner != "" {
 		a.header.SetRepo(a.repo)
 		if a.listPRs != nil {
-			return loadPRsCmd(a.listPRs, a.repo, domain.ListOpts{State: domain.PRStateOpen})
+			cmds = append(cmds, loadPRsCmd(a.listPRs, a.repo, domain.ListOpts{State: domain.PRStateOpen}))
+			return tea.Batch(cmds...)
 		}
-		return func() tea.Msg { return viewReadyMsg{} }
+		cmds = append(cmds, func() tea.Msg { return viewReadyMsg{} })
+		return tea.Batch(cmds...)
 	}
 	// Otherwise, detect repo from git remote.
-	return detectRepoCmd()
+	cmds = append(cmds, detectRepoCmd())
+	return tea.Batch(cmds...)
 }
 
 type viewReadyMsg struct{}
@@ -167,6 +172,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case views.RepoDetectedMsg:
 		return a.handleRepoDetected(msg)
+
+	case views.UserDetectedMsg:
+		return a.handleUserDetected(msg)
 
 	case views.PRsLoadedMsg:
 		return a.handlePRsLoaded(msg)
@@ -224,6 +232,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			)
 			return a, cmd
 		}
+		return a, nil
+
+	case views.PRListFilterMsg:
+		a.header.SetFilter(msg.Label)
 		return a, nil
 
 	case views.SwitchRepoMsg:
@@ -376,6 +388,20 @@ func (a *App) handleRepoDetected(msg views.RepoDetectedMsg) (tea.Model, tea.Cmd)
 	return a, nil
 }
 
+func (a *App) handleUserDetected(msg views.UserDetectedMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		cmd := a.toasts.Add(
+			fmt.Sprintf("Could not detect user: %v", msg.Err),
+			domain.ToastWarning, 5*time.Second,
+		)
+		return a, cmd
+	}
+	a.username = msg.Username
+	a.prList.SetUsername(msg.Username)
+	a.inbox.SetUsername(msg.Username)
+	return a, nil
+}
+
 func (a *App) handlePRsLoaded(msg views.PRsLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
 		cmd := a.toasts.Add(
@@ -389,6 +415,7 @@ func (a *App) handlePRsLoaded(msg views.PRsLoadedMsg) (tea.Model, tea.Cmd) {
 	a.view = core.ViewPRList
 	a.prList.SetPRs(msg.PRs)
 	a.header.SetPRCount(len(msg.PRs))
+	a.header.SetFilter(a.prList.FilterLabel())
 	return a, nil
 }
 

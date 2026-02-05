@@ -18,6 +18,14 @@ func detectRepoCmd() tea.Cmd {
 	}
 }
 
+// detectUserCmd detects the current GitHub user via gh CLI.
+func detectUserCmd() tea.Cmd {
+	return func() tea.Msg {
+		username, err := ghcli.DetectUser(context.Background())
+		return views.UserDetectedMsg{Username: username, Err: err}
+	}
+}
+
 // loadPRsCmd fetches PRs for the given repo.
 func loadPRsCmd(uc *usecase.ListPRs, repo domain.RepoRef, opts domain.ListOpts) tea.Cmd {
 	return func() tea.Msg {

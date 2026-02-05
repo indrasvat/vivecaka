@@ -337,6 +337,60 @@ func TestCurrentBranch(t *testing.T) {
 	}
 }
 
+func TestPRListQuickFilterMyPRs(t *testing.T) {
+	m := NewPRListModel(testStyles(), testKeys())
+	m.SetSize(120, 30)
+	m.SetUsername("indrasvat")
+	m.SetPRs(testPRs())
+
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	if len(m.filtered) != 2 {
+		t.Errorf("filtered len = %d, want 2", len(m.filtered))
+	}
+	for _, pr := range m.filtered {
+		if pr.Author != "indrasvat" {
+			t.Errorf("unexpected author %q in My PRs filter", pr.Author)
+		}
+	}
+	if cmd == nil {
+		t.Fatal("expected filter change command")
+	}
+	if msg, ok := cmd().(PRListFilterMsg); !ok {
+		t.Errorf("expected PRListFilterMsg, got %T", msg)
+	} else if msg.Label != "My PRs" {
+		t.Errorf("filter label = %q, want My PRs", msg.Label)
+	}
+
+	// Toggle off.
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	if len(m.filtered) != 5 {
+		t.Errorf("filtered len after toggle off = %d, want 5", len(m.filtered))
+	}
+}
+
+func TestPRListQuickFilterNeedsReview(t *testing.T) {
+	m := NewPRListModel(testStyles(), testKeys())
+	m.SetSize(120, 30)
+	m.SetUsername("indrasvat")
+	m.SetPRs(testPRs())
+
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if len(m.filtered) != 1 {
+		t.Errorf("filtered len = %d, want 1", len(m.filtered))
+	}
+	if len(m.filtered) == 1 && m.filtered[0].Author == "indrasvat" {
+		t.Error("needs review filter should exclude user's own PRs")
+	}
+	if cmd == nil {
+		t.Fatal("expected filter change command")
+	}
+	if msg, ok := cmd().(PRListFilterMsg); !ok {
+		t.Errorf("expected PRListFilterMsg, got %T", msg)
+	} else if msg.Label != "Needs Review" {
+		t.Errorf("filter label = %q, want Needs Review", msg.Label)
+	}
+}
+
 func TestViewLoading(t *testing.T) {
 	m := NewPRListModel(testStyles(), testKeys())
 	m.SetSize(80, 24)

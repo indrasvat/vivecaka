@@ -8,6 +8,17 @@ type RepoDetectedMsg struct {
 	Err  error
 }
 
+// UserDetectedMsg is sent when the current GitHub user is identified.
+type UserDetectedMsg struct {
+	Username string
+	Err      error
+}
+
+// PRListFilterMsg is sent when the PR list quick filter changes.
+type PRListFilterMsg struct {
+	Label string
+}
+
 // CheckoutDoneMsg is sent after a PR checkout completes.
 type CheckoutDoneMsg struct {
 	Branch string
