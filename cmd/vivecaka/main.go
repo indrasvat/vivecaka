@@ -5,6 +5,8 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/muesli/termenv"
+
 	"github.com/indrasvat/vivecaka/internal/adapter/ghcli"
 	"github.com/indrasvat/vivecaka/internal/config"
 	"github.com/indrasvat/vivecaka/internal/tui"
@@ -38,9 +40,19 @@ func main() {
 		tui.WithWriter(adapter),
 	)
 
+	// Set terminal background color to match theme (Catppuccin Mocha base)
+	// This fills ALL cells including empty ones, preventing background bleeding
+	output := termenv.NewOutput(os.Stdout)
+	output.SetBackgroundColor(output.Color("#1E1E2E"))
+
 	p := tea.NewProgram(app, tea.WithAltScreen(), tea.WithMouseCellMotion())
-	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	_, runErr := p.Run()
+
+	// Reset terminal colors BEFORE os.Exit (defer won't run after os.Exit)
+	output.Reset()
+
+	if runErr != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", runErr)
 		os.Exit(1)
 	}
 }

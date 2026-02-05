@@ -22,8 +22,8 @@ func TestNewAppDefaults(t *testing.T) {
 	if app.version != "test" {
 		t.Errorf("version = %q, want %q", app.version, "test")
 	}
-	if app.view != core.ViewLoading {
-		t.Errorf("initial view = %d, want ViewLoading", app.view)
+	if app.view != core.ViewBanner {
+		t.Errorf("initial view = %d, want ViewBanner", app.view)
 	}
 }
 
@@ -56,6 +56,8 @@ func TestAppWindowSizeMsg(t *testing.T) {
 func TestAppQuitKey(t *testing.T) {
 	app := newTestApp()
 	app.ready = true
+	app.view = core.ViewPRList // Ensure we're past the banner
+	app.banner.Hide()          // Ensure banner is not visible
 
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
 	_, cmd := app.Update(msg)

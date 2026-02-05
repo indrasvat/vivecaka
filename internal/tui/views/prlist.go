@@ -332,10 +332,7 @@ func (m *PRListModel) View() string {
 
 	// PR rows.
 	visible := m.visibleRows()
-	end := m.offset + visible
-	if end > len(m.filtered) {
-		end = len(m.filtered)
-	}
+	end := min(m.offset+visible, len(m.filtered))
 
 	for i := m.offset; i < end; i++ {
 		rows = append(rows, m.renderPRRow(i, m.filtered[i]))
@@ -351,7 +348,7 @@ func (m *PRListModel) View() string {
 
 func (m *PRListModel) renderHeaderRow() string {
 	t := m.styles.Theme
-	header := lipgloss.NewStyle().Foreground(t.Muted).Bold(true)
+	header := lipgloss.NewStyle().Foreground(t.Muted)
 
 	cols := m.columns()
 	ageLabel := "Age"
@@ -362,13 +359,13 @@ func (m *PRListModel) renderHeaderRow() string {
 		ageLabel = m.sortLabel("created", "Age")
 	}
 
-	return header.Render(fmt.Sprintf("  %-*s %-*s %-*s %-*s %-*s %-*s",
+	return header.Render(fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %s",
 		cols.num, m.sortLabel("number", "#"),
 		cols.title, m.sortLabel("title", "Title"),
 		cols.author, m.sortLabel("author", "Author"),
 		cols.ci, "CI",
 		cols.review, "Review",
-		cols.age, ageLabel,
+		ageLabel,
 	))
 }
 
@@ -383,10 +380,7 @@ type colWidths struct {
 
 func (m *PRListModel) columns() colWidths {
 	fixed := 4 + 10 + 4 + 7 + 5 + 6 // padding between columns
-	titleWidth := m.width - fixed
-	if titleWidth < 15 {
-		titleWidth = 15
-	}
+	titleWidth := max(15, m.width-fixed)
 	return colWidths{
 		num:    4,
 		title:  titleWidth,
@@ -405,14 +399,6 @@ func (m *PRListModel) renderPRRow(idx int, pr domain.PR) string {
 	isBranch := m.currentBranch != "" && pr.Branch.Head == m.currentBranch
 	isDraft := pr.Draft
 
-	// Selection indicator.
-	prefix := "  "
-	if selected {
-		prefix = "▸ "
-	} else if isBranch {
-		prefix = "◉ "
-	}
-
 	// Title with draft prefix.
 	title := pr.Title
 	if isDraft {
@@ -422,44 +408,96 @@ func (m *PRListModel) renderPRRow(idx int, pr domain.PR) string {
 		title = title[:cols.title-1] + "…"
 	}
 
-	// Author.
+	// Author - style in teal/secondary
 	author := pr.Author
 	if len(author) > cols.author {
 		author = author[:cols.author-1] + "…"
 	}
+	authorStyle := lipgloss.NewStyle().Foreground(t.Secondary)
 
-	// CI icon.
-	ci := ciIcon(pr.CI)
+	// CI icon with proper color
+	ci := m.renderCIIcon(pr.CI)
 
-	// Review.
-	review := reviewText(pr.Review)
+	// Review with proper color
+	review := m.renderReviewText(pr.Review)
 
-	// Age.
+	// Age
 	age := relativeTime(pr.UpdatedAt)
 
-	row := fmt.Sprintf("%s%-*d %-*s %-*s %-*s %-*s %-*s",
-		prefix,
-		cols.num, pr.Number,
-		cols.title, title,
-		cols.author, author,
-		cols.ci, ci,
-		cols.review, review,
-		cols.age, age,
-	)
+	// Build row with proper styling
+	var rowStyle lipgloss.Style
+	var numStyle lipgloss.Style
+	var titleStyle lipgloss.Style
+	leftBorder := " "
 
-	style := lipgloss.NewStyle()
 	switch {
 	case selected:
-		style = style.Background(t.Border).Foreground(t.Fg)
+		// Selected row: mauve left border, highlighted background
+		leftBorder = lipgloss.NewStyle().Foreground(t.Primary).Render("│")
+		rowStyle = lipgloss.NewStyle().Background(t.Border)
+		numStyle = lipgloss.NewStyle().Foreground(t.Primary).Bold(true)
+		titleStyle = lipgloss.NewStyle().Foreground(t.Fg)
 	case isDraft:
-		style = style.Foreground(t.Muted)
+		// Draft: dimmed
+		numStyle = lipgloss.NewStyle().Foreground(t.Muted)
+		titleStyle = lipgloss.NewStyle().Foreground(t.Muted)
+		authorStyle = lipgloss.NewStyle().Foreground(t.Muted)
 	case isBranch:
-		style = style.Foreground(t.Primary)
+		// Current branch: highlighted
+		numStyle = lipgloss.NewStyle().Foreground(t.Primary)
+		titleStyle = lipgloss.NewStyle().Foreground(t.Fg)
 	default:
-		style = style.Foreground(t.Fg)
+		numStyle = lipgloss.NewStyle().Foreground(t.Fg)
+		titleStyle = lipgloss.NewStyle().Foreground(t.Fg)
 	}
 
-	return style.Width(m.width).Render(row)
+	// Build row parts
+	num := numStyle.Render(fmt.Sprintf("%-*d", cols.num, pr.Number))
+	titleText := titleStyle.Render(fmt.Sprintf("%-*s", cols.title, title))
+	authorText := authorStyle.Render(fmt.Sprintf("%-*s", cols.author, author))
+	ageText := lipgloss.NewStyle().Foreground(t.Subtext).Render(fmt.Sprintf("%-*s", cols.age, age))
+
+	row := fmt.Sprintf("%s %s  %s  %s  %s  %s  %s",
+		leftBorder, num, titleText, authorText, ci, review, ageText)
+
+	// Apply row-level background if selected
+	if selected {
+		return rowStyle.Width(m.width).Render(row)
+	}
+	return lipgloss.NewStyle().Width(m.width).Render(row)
+}
+
+// renderCIIcon returns the colored CI status icon.
+func (m *PRListModel) renderCIIcon(status domain.CIStatus) string {
+	t := m.styles.Theme
+	switch status {
+	case domain.CIPass:
+		return lipgloss.NewStyle().Foreground(t.Success).Render("✓")
+	case domain.CIFail:
+		return lipgloss.NewStyle().Foreground(t.Error).Render("✗")
+	case domain.CIPending:
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("◐")
+	case domain.CISkipped:
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
+	default:
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("—")
+	}
+}
+
+// renderReviewText returns the colored review status text.
+func (m *PRListModel) renderReviewText(r domain.ReviewStatus) string {
+	t := m.styles.Theme
+	switch r.State {
+	case domain.ReviewApproved:
+		return lipgloss.NewStyle().Foreground(t.Success).Render(fmt.Sprintf("✓ %d/%d", r.Approved, r.Total))
+	case domain.ReviewChangesRequested:
+		// Use warning/peach color for changes requested
+		return lipgloss.NewStyle().Foreground(t.Warning).Render(fmt.Sprintf("! %d/%d", r.Approved, r.Total))
+	case domain.ReviewPending:
+		return lipgloss.NewStyle().Foreground(t.Warning).Render(fmt.Sprintf("● %d/%d", r.Approved, r.Total))
+	default:
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("—")
+	}
 }
 
 func (m *PRListModel) renderSearchBar() string {

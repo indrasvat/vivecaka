@@ -42,32 +42,42 @@ func (h *Header) SetWidth(w int) { h.width = w }
 func (h *Header) View() string {
 	t := h.styles.Theme
 
-	repoStyle := lipgloss.NewStyle().Foreground(t.Primary).Bold(true)
-	countStyle := lipgloss.NewStyle().Foreground(t.Success)
+	// Brand name in mauve, bold
+	brandStyle := lipgloss.NewStyle().Foreground(t.Primary).Bold(true)
+	// Repo name in teal/secondary
+	repoStyle := lipgloss.NewStyle().Foreground(t.Secondary)
+	// PR count in subtext
+	countStyle := lipgloss.NewStyle().Foreground(t.Subtext)
+	// Filter in info/blue
 	filterStyle := lipgloss.NewStyle().Foreground(t.Info)
+	// Refresh timer in muted
 	refreshStyle := lipgloss.NewStyle().Foreground(t.Muted)
 
-	repo := repoStyle.Render("◉ " + h.repo.String())
+	brand := brandStyle.Render(" vivecaka")
+	repo := repoStyle.Render(h.repo.String())
 	count := countStyle.Render(fmt.Sprintf("%d open", h.prCount))
 
-	left := repo + "  " + count
-
-	if h.filter != "" && h.filter != "all" {
-		left += "  " + filterStyle.Render("⊘ "+h.filter)
+	// Determine filter label
+	filterLabel := "All PRs"
+	if h.filter != "" && h.filter != "all" && h.filter != "All PRs" {
+		filterLabel = h.filter
 	}
+	filter := filterStyle.Render(filterLabel)
 
+	// Build left side: brand  repo  count  filter
+	left := brand + "  " + repo + "  " + count + "  " + filter
+
+	// Build right side: refresh timer
 	right := ""
 	if h.refreshSecs > 0 {
-		right = refreshStyle.Render(fmt.Sprintf("↻ %ds", h.refreshSecs))
+		right = refreshStyle.Render(fmt.Sprintf("%ds", h.refreshSecs))
 	}
 
-	// Pad between left and right.
-	gap := h.width - lipgloss.Width(left) - lipgloss.Width(right) - 2
-	if gap < 1 {
-		gap = 1
-	}
+	// Pad between left and right
+	gap := max(1, h.width-lipgloss.Width(left)-lipgloss.Width(right))
 
-	bar := h.styles.Header.Width(h.width).Render(
+	// Use inline to prevent any background styling issues
+	bar := lipgloss.NewStyle().Width(h.width).Render(
 		left + lipgloss.NewStyle().Width(gap).Render("") + right,
 	)
 	return bar

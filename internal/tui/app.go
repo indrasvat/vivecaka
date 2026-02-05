@@ -88,6 +88,7 @@ type App struct {
 	filterOpts domain.ListOpts
 
 	// Components
+	banner *components.Banner
 	header *components.Header
 	status *components.StatusBar
 	toasts *components.ToastManager
@@ -101,7 +102,7 @@ func New(cfg *config.Config, opts ...Option) *App {
 
 	a := &App{
 		cfg:    cfg,
-		view:   core.ViewLoading,
+		view:   core.ViewBanner,
 		keys:   keys,
 		theme:  theme,
 		styles: styles,
@@ -118,6 +119,7 @@ func New(cfg *config.Config, opts ...Option) *App {
 		filterPanel:  views.NewFilterModel(styles, keys),
 
 		// Components
+		banner: nil, // initialized after options apply
 		header: components.NewHeader(styles),
 		status: components.NewStatusBar(styles),
 		toasts: components.NewToastManager(styles),
@@ -129,6 +131,8 @@ func New(cfg *config.Config, opts ...Option) *App {
 		opt(a)
 	}
 
+	// Initialize banner with version
+	a.banner = components.NewBanner(styles, a.version)
 	a.prList.SetFilter(a.filterOpts)
 
 	// Wire use cases from injected adapters.
@@ -147,7 +151,10 @@ func New(cfg *config.Config, opts ...Option) *App {
 }
 
 func (a *App) Init() tea.Cmd {
-	cmds := []tea.Cmd{detectUserCmd()}
+	cmds := []tea.Cmd{
+		detectUserCmd(),
+		a.banner.StartAutoDismiss(2 * time.Second), // Show banner for 2 seconds
+	}
 	// If repo was provided via WithRepo, skip detection and load PRs directly.
 	if a.repo.Owner != "" {
 		a.header.SetRepo(a.repo)
@@ -295,6 +302,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case components.DismissToastMsg:
 		a.toasts.Update(msg)
 		return a, nil
+
+	case components.BannerDismissMsg:
+		a.banner.Update(msg)
+		if a.view == core.ViewBanner {
+			a.view = core.ViewLoading
+		}
+		return a, nil
 	}
 
 	// Dispatch to active view model for unhandled messages.
@@ -311,6 +325,9 @@ func (a *App) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	a.ready = true
 
 	contentHeight := a.contentHeight()
+
+	// Banner gets full screen.
+	a.banner.SetSize(a.width, a.height)
 
 	// Propagate to all view models.
 	a.prList.SetSize(a.width, contentHeight)
@@ -332,6 +349,13 @@ func (a *App) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Banner intercepts all keys when visible.
+	if a.view == core.ViewBanner && a.banner.Visible() {
+		a.banner.Update(msg)
+		a.view = core.ViewLoading
+		return a, nil
+	}
+
 	// Tutorial intercepts all keys when visible.
 	if a.tutorial.Visible() {
 		cmd := a.tutorial.Update(msg)
@@ -594,6 +618,7 @@ func (a *App) rebuildStyles() {
 	a.tutorial = views.NewTutorialModel(s)
 	a.filterPanel = views.NewFilterModel(s, k)
 
+	a.banner = components.NewBanner(s, a.version)
 	a.header = components.NewHeader(s)
 	a.status = components.NewStatusBar(s)
 	a.toasts = components.NewToastManager(s)
@@ -603,6 +628,7 @@ func (a *App) rebuildStyles() {
 
 	// Re-set sizes.
 	ch := a.contentHeight()
+	a.banner.SetSize(a.width, a.height)
 	a.prList.SetSize(a.width, ch)
 	a.prDetail.SetSize(a.width, ch)
 	a.diffView.SetSize(a.width, ch)
@@ -624,6 +650,11 @@ func (a *App) contentHeight() int {
 func (a *App) View() string {
 	if !a.ready {
 		return ""
+	}
+
+	// Banner supersedes everything when visible.
+	if a.view == core.ViewBanner && a.banner.Visible() {
+		return a.banner.View()
 	}
 
 	// Tutorial overlay supersedes everything.

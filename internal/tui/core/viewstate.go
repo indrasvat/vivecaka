@@ -4,7 +4,8 @@ package core
 type ViewState int
 
 const (
-	ViewLoading ViewState = iota
+	ViewBanner ViewState = iota
+	ViewLoading
 	ViewPRList
 	ViewPRDetail
 	ViewDiff
