@@ -322,7 +322,7 @@ func TestPRListSortIndicator(t *testing.T) {
 
 	m.sortField = "title"
 	m.sortAsc = true
-	header := m.renderHeaderRow()
+	header := m.renderColumnHeaders()
 
 	if !strings.Contains(header, "Title▲") {
 		t.Errorf("header missing sort indicator for title: %q", header)

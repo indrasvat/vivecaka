@@ -64,8 +64,9 @@ func (h *Header) View() string {
 	}
 	filter := filterStyle.Render(filterLabel)
 
-	// Build left side: brand  repo  count  filter
-	left := brand + "  " + repo + "  " + count + "  " + filter
+	// Build left side: brand      repo      count      filter
+	// Use 6 spaces between each element for visual separation (matches mock's flexbox gaps)
+	left := brand + "      " + repo + "      " + count + "      " + filter
 
 	// Build right side: refresh timer
 	right := ""

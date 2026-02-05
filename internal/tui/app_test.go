@@ -284,6 +284,8 @@ func TestAppRepoDetectedError(t *testing.T) {
 func TestAppPRsLoaded(t *testing.T) {
 	app := newTestApp()
 	app.ready = true
+	app.view = core.ViewLoading // PRs load after banner dismisses
+	app.banner.Hide()
 
 	msg := views.PRsLoadedMsg{
 		PRs: []domain.PR{{Number: 1, Title: "test"}},
@@ -293,6 +295,23 @@ func TestAppPRsLoaded(t *testing.T) {
 
 	if a.view != core.ViewPRList {
 		t.Errorf("view = %d, want ViewPRList", a.view)
+	}
+}
+
+func TestAppPRsLoadedWhileBannerVisible(t *testing.T) {
+	app := newTestApp()
+	app.ready = true
+	// Keep view as ViewBanner (default)
+
+	msg := views.PRsLoadedMsg{
+		PRs: []domain.PR{{Number: 1, Title: "test"}},
+	}
+	updated, _ := app.Update(msg)
+	a := updated.(*App)
+
+	// View should stay as banner while banner is visible
+	if a.view != core.ViewBanner {
+		t.Errorf("view = %d, want ViewBanner (PRs loaded while banner visible)", a.view)
 	}
 }
 

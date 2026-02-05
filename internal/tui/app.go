@@ -306,9 +306,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case components.BannerDismissMsg:
 		a.banner.Update(msg)
 		if a.view == core.ViewBanner {
-			a.view = core.ViewLoading
+			// If PRs already loaded, go directly to PR list; otherwise loading
+			if a.prList.HasPRs() {
+				a.view = core.ViewPRList
+			} else {
+				a.view = core.ViewLoading
+			}
 		}
-		return a, nil
+		// Force a full screen redraw to clear banner remnants
+		// The tea.ClearScreen command clears the alt screen buffer
+		return a, tea.ClearScreen
 	}
 
 	// Dispatch to active view model for unhandled messages.
@@ -464,14 +471,21 @@ func (a *App) handlePRsLoaded(msg views.PRsLoadedMsg) (tea.Model, tea.Cmd) {
 			fmt.Sprintf("Error loading PRs: %v", msg.Err),
 			domain.ToastError, 5*time.Second,
 		)
-		a.view = core.ViewPRList
+		// Don't switch to PR list while banner is still visible
+		if a.view != core.ViewBanner {
+			a.view = core.ViewPRList
+		}
 		a.prList.SetPRs(nil)
 		return a, cmd
 	}
-	a.view = core.ViewPRList
+	// Store PRs but don't switch view while banner is visible
+	// The banner dismiss handler will transition to the PR list
 	a.prList.SetPRs(msg.PRs)
 	a.header.SetPRCount(len(msg.PRs))
 	a.header.SetFilter(a.prList.FilterLabel())
+	if a.view != core.ViewBanner {
+		a.view = core.ViewPRList
+	}
 	return a, nil
 }
 

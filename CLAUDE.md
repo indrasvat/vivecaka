@@ -106,3 +106,70 @@ After each phase, use the `iterm2-driver` skill to:
 2. Screenshot each view state
 3. Compare against `docs/mocks.html`
 4. Verify: borders, colors, truncation, keyboard nav
+
+## BubbleTea/LipGloss Learnings
+
+Critical patterns learned from yukti project for terminal UI rendering:
+
+### Terminal Background Color (CRITICAL)
+```go
+// Set BEFORE starting BubbleTea program in main.go
+output := termenv.NewOutput(os.Stdout)
+output.SetBackgroundColor(output.Color("#1E1E2E"))  // Catppuccin Mocha base
+// ... run program ...
+output.Reset()  // Reset BEFORE os.Exit
+```
+- `lipgloss.Background()` only works on styled characters
+- Empty cells use terminal's default background
+- `termenv.SetBackgroundColor()` via OSC 11 sets ALL cells
+
+### Screen Clearing on View Transitions
+- When transitioning from full-screen views (like banner), use `tea.ClearScreen`
+- Return it as a command from Update(): `return a, tea.ClearScreen`
+- Otherwise previous content bleeds through unwritten areas
+
+### Full-Width Padding Lines (CRITICAL)
+```go
+// Padding lines MUST be full-width spaces, NOT empty strings
+func ensureExactHeight(content string, height, width int) string {
+    lines := strings.Split(content, "\n")
+    if len(lines) > height {
+        lines = lines[:height]
+    }
+    emptyLine := strings.Repeat(" ", width)  // FULL WIDTH!
+    for len(lines) < height {
+        lines = append(lines, emptyLine)
+    }
+    return strings.Join(lines, "\n")
+}
+```
+- Empty strings `""` break `ansi.Cut()` for modal overlays
+- Newlines alone don't overwrite previous content
+- Each line must have actual space characters
+
+### ANSI Resets Between Styled Elements
+```go
+result.WriteString("\033[0m")  // Reset after styled element
+result.WriteString(styledContent)
+result.WriteString("\033[0m")  // Reset before padding
+result.WriteString(padding)
+```
+- Add explicit resets to prevent style bleeding
+- Especially important when compositing modals over backgrounds
+
+### APIs to AVOID
+| Don't Use | Why | Use Instead |
+|-----------|-----|-------------|
+| `lipgloss.Height(n)` | Sets MINIMUM, not exact | `MaxHeight + manual padding` |
+| `lipgloss.Background()` | Only works on styled chars | `termenv.SetBackgroundColor()` |
+| Empty string padding `""` | Breaks `ansi.Cut()` overlays | `strings.Repeat(" ", width)` |
+| `switch msg := msg.(type)` | Causes shadowing | Use `typedMsg` + reassign to `msg` |
+
+### View Height Management
+```go
+// In app.go handleWindowSize:
+contentHeight := max(1, a.height - 2)  // Subtract header + status bar
+a.prList.SetSize(a.width, contentHeight)
+```
+- Always subtract chrome (header/footer) from content height
+- Views should render to their allocated height, not full terminal

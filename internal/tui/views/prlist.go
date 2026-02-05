@@ -84,6 +84,16 @@ func (m *PRListModel) SelectedPR() *domain.PR {
 	return &pr
 }
 
+// IsLoading returns true if the PR list is still loading.
+func (m *PRListModel) IsLoading() bool {
+	return m.loading
+}
+
+// HasPRs returns true if PRs have been loaded (even if filtered list is empty).
+func (m *PRListModel) HasPRs() bool {
+	return !m.loading
+}
+
 // PRListMsg types for communication with parent.
 type (
 	PRsLoadedMsg struct {
@@ -303,12 +313,11 @@ func (m *PRListModel) ensureVisible() {
 // View renders the PR list.
 func (m *PRListModel) View() string {
 	if m.loading {
-		return lipgloss.NewStyle().
-			Width(m.width).
-			Height(m.height).
-			Align(lipgloss.Center, lipgloss.Center).
+		content := lipgloss.NewStyle().
 			Foreground(m.styles.Theme.Muted).
 			Render("Loading PRs...")
+		centered := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+		return ensureExactHeight(centered, m.height, m.width)
 	}
 
 	if len(m.filtered) == 0 {
@@ -316,19 +325,18 @@ func (m *PRListModel) View() string {
 		if m.searchQuery != "" {
 			msg = fmt.Sprintf("No PRs matching %q", m.searchQuery)
 		}
-		return lipgloss.NewStyle().
-			Width(m.width).
-			Height(m.height).
-			Align(lipgloss.Center, lipgloss.Center).
+		content := lipgloss.NewStyle().
 			Foreground(m.styles.Theme.Muted).
 			Render(msg)
+		centered := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+		return ensureExactHeight(centered, m.height, m.width)
 	}
 
 	var rows []string
 
-	// Header row.
-	rows = append(rows, m.renderHeaderRow())
-	rows = append(rows, m.renderSeparator())
+	// Column headers row.
+	rows = append(rows, m.renderColumnHeaders())
+	rows = append(rows, m.renderTableSeparator())
 
 	// PR rows.
 	visible := m.visibleRows()
@@ -338,15 +346,42 @@ func (m *PRListModel) View() string {
 		rows = append(rows, m.renderPRRow(i, m.filtered[i]))
 	}
 
-	// Search bar.
+	// Search bar (replaces one row if active).
 	if m.searching {
 		rows = append(rows, m.renderSearchBar())
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+	// Join rows into content
+	content := lipgloss.JoinVertical(lipgloss.Left, rows...)
+
+	// Ensure exact height with full-width padding lines
+	// This is critical for overwriting previous screen content (e.g., banner)
+	return ensureExactHeight(content, m.height, m.width)
 }
 
-func (m *PRListModel) renderHeaderRow() string {
+// ensureExactHeight pads or truncates content to exactly the specified height.
+// Each padding line is full-width spaces to properly overwrite previous content.
+// This pattern is from yukti - see CLAUDE.md for details.
+func ensureExactHeight(content string, height, width int) string {
+	lines := strings.Split(content, "\n")
+
+	// Truncate if too many lines
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+
+	// Create a full-width empty line for padding
+	emptyLine := strings.Repeat(" ", width)
+
+	// Pad if too few lines - use full-width empty lines
+	for len(lines) < height {
+		lines = append(lines, emptyLine)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m *PRListModel) renderColumnHeaders() string {
 	t := m.styles.Theme
 	header := lipgloss.NewStyle().Foreground(t.Muted)
 
@@ -359,19 +394,37 @@ func (m *PRListModel) renderHeaderRow() string {
 		ageLabel = m.sortLabel("created", "Age")
 	}
 
-	return header.Render(fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %s",
+	// Format: "  #   Title                              Author       CI  Review   Age"
+	// Left-padded by 2 spaces to align with row indicator column
+	return header.Render(fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
 		cols.num, m.sortLabel("number", "#"),
 		cols.title, m.sortLabel("title", "Title"),
 		cols.author, m.sortLabel("author", "Author"),
 		cols.ci, "CI",
 		cols.review, "Review",
-		ageLabel,
+		cols.age, ageLabel,
 	))
 }
 
-func (m *PRListModel) renderSeparator() string {
-	return lipgloss.NewStyle().Foreground(m.styles.Theme.Border).
-		Render(strings.Repeat("─", m.width))
+func (m *PRListModel) renderTableSeparator() string {
+	t := m.styles.Theme
+	cols := m.columns()
+
+	// Build separator with + characters at column boundaries like mock:
+	// " -----+---------------------------------+------------+----+--------+-----"
+	sep := lipgloss.NewStyle().Foreground(t.Border)
+
+	// Use ASCII hyphen (-) not box-drawing character, matches mock
+	numSep := strings.Repeat("-", cols.num+1)
+	titleSep := strings.Repeat("-", cols.title+1)
+	authorSep := strings.Repeat("-", cols.author+1)
+	ciSep := strings.Repeat("-", cols.ci+1)
+	reviewSep := strings.Repeat("-", cols.review+1)
+	ageSep := strings.Repeat("-", cols.age+1)
+
+	line := " " + numSep + "+" + titleSep + "+" + authorSep + "+" + ciSep + "+" + reviewSep + "+" + ageSep
+
+	return sep.Render(line)
 }
 
 type colWidths struct {
@@ -379,15 +432,19 @@ type colWidths struct {
 }
 
 func (m *PRListModel) columns() colWidths {
-	fixed := 4 + 10 + 4 + 7 + 5 + 6 // padding between columns
-	titleWidth := max(15, m.width-fixed)
+	// Fixed columns: num(4) + author(12) + ci(4) + review(8) + age(5) = 33
+	// Plus spaces between columns: 6 columns * 2 spaces = 12
+	// Plus left indicator: 2 chars
+	// Total fixed: 33 + 12 + 2 = 47
+	fixedWidth := 47
+	titleWidth := max(20, m.width-fixedWidth)
 	return colWidths{
 		num:    4,
 		title:  titleWidth,
-		author: 10,
-		ci:     3,
-		review: 7,
-		age:    4,
+		author: 12,
+		ci:     4,
+		review: 8,
+		age:    5,
 	}
 }
 
@@ -408,12 +465,42 @@ func (m *PRListModel) renderPRRow(idx int, pr domain.PR) string {
 		title = title[:cols.title-1] + "…"
 	}
 
-	// Author - style in teal/secondary
+	// Determine styles based on row state
+	var numStyle, titleStyle, authorStyle, ageStyle lipgloss.Style
+	leftIndicator := " " // space for non-selected
+
+	switch {
+	case selected:
+		// Selected row: mauve left border, bold number
+		leftIndicator = lipgloss.NewStyle().Foreground(t.Primary).Render("│")
+		numStyle = lipgloss.NewStyle().Foreground(t.Primary).Bold(true)
+		titleStyle = lipgloss.NewStyle().Foreground(t.Fg).Bold(true)
+		authorStyle = lipgloss.NewStyle().Foreground(t.Secondary)
+		ageStyle = lipgloss.NewStyle().Foreground(t.Subtext)
+	case isDraft:
+		// Draft: all dimmed
+		numStyle = lipgloss.NewStyle().Foreground(t.Muted)
+		titleStyle = lipgloss.NewStyle().Foreground(t.Muted)
+		authorStyle = lipgloss.NewStyle().Foreground(t.Muted)
+		ageStyle = lipgloss.NewStyle().Foreground(t.Muted)
+	case isBranch:
+		// Current branch: highlighted number
+		numStyle = lipgloss.NewStyle().Foreground(t.Primary)
+		titleStyle = lipgloss.NewStyle().Foreground(t.Fg)
+		authorStyle = lipgloss.NewStyle().Foreground(t.Secondary)
+		ageStyle = lipgloss.NewStyle().Foreground(t.Subtext)
+	default:
+		numStyle = lipgloss.NewStyle().Foreground(t.Fg)
+		titleStyle = lipgloss.NewStyle().Foreground(t.Fg)
+		authorStyle = lipgloss.NewStyle().Foreground(t.Secondary)
+		ageStyle = lipgloss.NewStyle().Foreground(t.Subtext)
+	}
+
+	// Author truncation
 	author := pr.Author
 	if len(author) > cols.author {
 		author = author[:cols.author-1] + "…"
 	}
-	authorStyle := lipgloss.NewStyle().Foreground(t.Secondary)
 
 	// CI icon with proper color
 	ci := m.renderCIIcon(pr.CI)
@@ -424,47 +511,32 @@ func (m *PRListModel) renderPRRow(idx int, pr domain.PR) string {
 	// Age
 	age := relativeTime(pr.UpdatedAt)
 
-	// Build row with proper styling
-	var rowStyle lipgloss.Style
-	var numStyle lipgloss.Style
-	var titleStyle lipgloss.Style
-	leftBorder := " "
-
-	switch {
-	case selected:
-		// Selected row: mauve left border, highlighted background
-		leftBorder = lipgloss.NewStyle().Foreground(t.Primary).Render("│")
-		rowStyle = lipgloss.NewStyle().Background(t.Border)
-		numStyle = lipgloss.NewStyle().Foreground(t.Primary).Bold(true)
-		titleStyle = lipgloss.NewStyle().Foreground(t.Fg)
-	case isDraft:
-		// Draft: dimmed
-		numStyle = lipgloss.NewStyle().Foreground(t.Muted)
-		titleStyle = lipgloss.NewStyle().Foreground(t.Muted)
-		authorStyle = lipgloss.NewStyle().Foreground(t.Muted)
-	case isBranch:
-		// Current branch: highlighted
-		numStyle = lipgloss.NewStyle().Foreground(t.Primary)
-		titleStyle = lipgloss.NewStyle().Foreground(t.Fg)
-	default:
-		numStyle = lipgloss.NewStyle().Foreground(t.Fg)
-		titleStyle = lipgloss.NewStyle().Foreground(t.Fg)
-	}
-
-	// Build row parts
-	num := numStyle.Render(fmt.Sprintf("%-*d", cols.num, pr.Number))
+	// Build the row with consistent column spacing
+	// Format matches column headers: "  #   Title...  Author  CI  Review  Age"
+	num := numStyle.Render(fmt.Sprintf("%*d", cols.num, pr.Number))
 	titleText := titleStyle.Render(fmt.Sprintf("%-*s", cols.title, title))
 	authorText := authorStyle.Render(fmt.Sprintf("%-*s", cols.author, author))
-	ageText := lipgloss.NewStyle().Foreground(t.Subtext).Render(fmt.Sprintf("%-*s", cols.age, age))
+	ageText := ageStyle.Render(fmt.Sprintf("%-*s", cols.age, age))
 
+	// Pad CI and review using visual width (ANSI codes don't count toward visual width)
+	ciPad := max(0, cols.ci-lipgloss.Width(ci))
+	ciPadded := ci + strings.Repeat(" ", ciPad)
+
+	reviewPad := max(0, cols.review-lipgloss.Width(review))
+	reviewPadded := review + strings.Repeat(" ", reviewPad)
+
+	// Build row: indicator + space + num + spaces + title + spaces + author + spaces + ci + spaces + review + spaces + age
 	row := fmt.Sprintf("%s %s  %s  %s  %s  %s  %s",
-		leftBorder, num, titleText, authorText, ci, review, ageText)
+		leftIndicator,
+		num,
+		titleText,
+		authorText,
+		ciPadded,
+		reviewPadded,
+		ageText,
+	)
 
-	// Apply row-level background if selected
-	if selected {
-		return rowStyle.Width(m.width).Render(row)
-	}
-	return lipgloss.NewStyle().Width(m.width).Render(row)
+	return row
 }
 
 // renderCIIcon returns the colored CI status icon.
