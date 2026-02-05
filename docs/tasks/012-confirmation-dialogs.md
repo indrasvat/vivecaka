@@ -2,6 +2,17 @@
 
 ## Status: DONE
 
+## Implementation Notes
+
+- `ConfirmModel` has three states: `confirmPrompt` → `confirmLoading` → `confirmResult`
+- Prompt state: centered bordered dialog with y/n keys, shows branch name and PR number
+- Loading state: animated braille spinner while `gh pr checkout` runs, keys disabled
+- Result state: green border + ✓ on success, red border + ✗ on error, "Press any key to continue"
+- Dialog stays visible throughout the entire checkout flow — no ephemeral toasts
+- Status bar updates to match dialog state ("Checking out..." / "Press any key to continue")
+- Bug fix: `gh pr checkout` outputs to stderr not stdout — adapter now runs `git branch --show-current` after checkout for reliable branch name
+- Review submit confirmation handled by Task 011's huh form (built-in Submit/Cancel step)
+
 ## Problem
 
 Destructive actions happen immediately with no confirmation:
