@@ -49,13 +49,14 @@ type App struct {
 	version string
 
 	// State
-	view     core.ViewState
-	prevView core.ViewState
-	width    int
-	height   int
-	ready    bool
-	repo     domain.RepoRef
-	username string
+	view         core.ViewState
+	prevView     core.ViewState
+	width        int
+	height       int
+	ready        bool
+	repo         domain.RepoRef
+	username     string
+	loadingFrame int // animation frame for loading spinner
 
 	// Shared
 	keys   core.KeyMap
@@ -179,6 +180,15 @@ func (a *App) Init() tea.Cmd {
 }
 
 type viewReadyMsg struct{}
+
+// loadingTickMsg drives the loading screen spinner animation.
+type loadingTickMsg struct{}
+
+func (a *App) loadingTick() tea.Cmd {
+	return tea.Tick(80*time.Millisecond, func(_ time.Time) tea.Msg {
+		return loadingTickMsg{}
+	})
+}
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
@@ -352,7 +362,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Force a full screen redraw to clear banner remnants
 		// The tea.ClearScreen command clears the alt screen buffer
-		return a, tea.ClearScreen
+		return a, tea.Batch(tea.ClearScreen, a.loadingTick())
+
+	case loadingTickMsg:
+		if a.view == core.ViewLoading {
+			a.loadingFrame++
+			return a, a.loadingTick()
+		}
+		return a, nil
 	}
 
 	// Dispatch to active view model for unhandled messages.
@@ -395,9 +412,17 @@ func (a *App) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Banner intercepts all keys when visible.
 	if a.view == core.ViewBanner && a.banner.Visible() {
+		// Quit key should exit immediately, not just dismiss the banner.
+		if key.Matches(msg, a.keys.Quit) {
+			return a, tea.Quit
+		}
 		a.banner.Update(msg)
-		a.view = core.ViewLoading
-		return a, nil
+		if a.prList.HasPRs() {
+			a.view = core.ViewPRList
+		} else {
+			a.view = core.ViewLoading
+		}
+		return a, tea.Batch(tea.ClearScreen, a.loadingTick())
 	}
 
 	// Tutorial intercepts all keys when visible.
@@ -822,11 +847,12 @@ func (a *App) View() string {
 func (a *App) renderContent(height int) string {
 	switch a.view {
 	case core.ViewLoading:
-		return lipgloss.NewStyle().
-			Width(a.width).Height(height).
-			Align(lipgloss.Center, lipgloss.Center).
-			Foreground(a.theme.Muted).
-			Render("Loading...")
+		spinnerFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+		frame := spinnerFrames[a.loadingFrame%len(spinnerFrames)]
+		spinner := lipgloss.NewStyle().Foreground(a.theme.Primary).Render(frame)
+		text := lipgloss.NewStyle().Foreground(a.theme.Muted).Render(" Loading...")
+		content := spinner + text
+		return lipgloss.Place(a.width, height, lipgloss.Center, lipgloss.Center, content)
 
 	case core.ViewPRList:
 		return a.prList.View()

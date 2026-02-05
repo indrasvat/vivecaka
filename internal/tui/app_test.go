@@ -67,6 +67,76 @@ func TestAppQuitKey(t *testing.T) {
 	}
 }
 
+func TestAppQuitDuringBanner(t *testing.T) {
+	app := newTestApp()
+	app.ready = true
+	// Banner is visible by default (view=ViewBanner, banner.Visible()=true)
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
+	_, cmd := app.Update(msg)
+
+	if cmd == nil {
+		t.Fatal("quit key during banner should return tea.Quit cmd")
+	}
+	// The banner should still be visible (we quit, not dismiss)
+	if !app.banner.Visible() {
+		t.Error("banner should still be visible (quit, not dismiss)")
+	}
+}
+
+func TestAppDismissBannerKey(t *testing.T) {
+	app := newTestApp()
+	app.ready = true
+	// Banner is visible by default
+
+	// Press a non-quit key to dismiss
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	updated, cmd := app.Update(msg)
+	a := updated.(*App)
+
+	if a.banner.Visible() {
+		t.Error("banner should be dismissed after keypress")
+	}
+	if a.view != core.ViewLoading {
+		t.Errorf("view = %d, want ViewLoading after banner dismiss", a.view)
+	}
+	if cmd == nil {
+		t.Fatal("should return tea.ClearScreen + loading tick cmd")
+	}
+}
+
+func TestAppLoadingTickAnimation(t *testing.T) {
+	app := newTestApp()
+	app.ready = true
+	app.view = core.ViewLoading
+	app.width = 80
+	app.height = 24
+
+	// Verify loading tick increments frame
+	initialFrame := app.loadingFrame
+	updated, cmd := app.Update(loadingTickMsg{})
+	a := updated.(*App)
+
+	if a.loadingFrame != initialFrame+1 {
+		t.Errorf("loadingFrame = %d, want %d", a.loadingFrame, initialFrame+1)
+	}
+	if cmd == nil {
+		t.Fatal("loading tick should return another tick cmd")
+	}
+}
+
+func TestAppLoadingTickStopsOnViewChange(t *testing.T) {
+	app := newTestApp()
+	app.ready = true
+	app.view = core.ViewPRList // Not on loading screen
+
+	_, cmd := app.Update(loadingTickMsg{})
+
+	if cmd != nil {
+		t.Error("loading tick should not continue when not on loading view")
+	}
+}
+
 func TestAppHelpToggle(t *testing.T) {
 	app := newTestApp()
 	app.ready = true

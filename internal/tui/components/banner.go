@@ -1,6 +1,7 @@
 package components
 
 import (
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -126,17 +127,28 @@ func (b *Banner) View() string {
 		styledLogo,
 		"",
 		sanskrit,
-		"",
 		tagline,
 		"",
 		version,
 	)
 
-	// Center in the available space
-	// Note: No Background() needed - termenv.SetBackgroundColor() handles the terminal default
-	return lipgloss.NewStyle().
-		Width(b.width).
-		Height(b.height).
-		Align(lipgloss.Center, lipgloss.Center).
-		Render(content)
+	// Use lipgloss.Place for reliable centering, then enforce exact height
+	// with full-width padding lines. Avoids lipgloss.Height() which sets
+	// MINIMUM height and can cause rendering artifacts (see CLAUDE.md).
+	placed := lipgloss.Place(b.width, b.height, lipgloss.Center, lipgloss.Center, content)
+	return bannerExactHeight(placed, b.height, b.width)
+}
+
+// bannerExactHeight pads or truncates content to exactly the specified height.
+// Each padding line is full-width spaces to properly overwrite previous content.
+func bannerExactHeight(content string, height, width int) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	emptyLine := strings.Repeat(" ", width)
+	for len(lines) < height {
+		lines = append(lines, emptyLine)
+	}
+	return strings.Join(lines, "\n")
 }
