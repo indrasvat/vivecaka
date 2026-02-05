@@ -73,6 +73,29 @@ func TestSetDetail(t *testing.T) {
 	if m.detail.Number != 42 {
 		t.Errorf("detail.Number = %d, want 42", m.detail.Number)
 	}
+	if m.pendingNum != 0 {
+		t.Errorf("pendingNum = %d, want 0", m.pendingNum)
+	}
+}
+
+func TestDetailStartLoading(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	cmd := m.StartLoading(99)
+
+	if !m.loading {
+		t.Error("StartLoading should set loading = true")
+	}
+	if m.pendingNum != 99 {
+		t.Errorf("pendingNum = %d, want 99", m.pendingNum)
+	}
+	if cmd == nil {
+		t.Error("StartLoading should return spinner command")
+	}
+
+	view := m.View()
+	if !strings.Contains(view, "Loading PR #99") {
+		t.Errorf("loading view should include PR number, got %q", view)
+	}
 }
 
 func TestDetailSetSize(t *testing.T) {

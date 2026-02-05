@@ -453,14 +453,16 @@ func (a *App) handlePRsLoaded(msg views.PRsLoadedMsg) (tea.Model, tea.Cmd) {
 
 func (a *App) handleOpenPR(msg views.OpenPRMsg) (tea.Model, tea.Cmd) {
 	a.view = core.ViewPRDetail
+	cmd := a.prDetail.StartLoading(msg.Number)
 	if a.getPRDetail != nil && a.repo.Owner != "" {
-		return a, loadPRDetailCmd(a.getPRDetail, a.repo, msg.Number)
+		return a, tea.Batch(cmd, loadPRDetailCmd(a.getPRDetail, a.repo, msg.Number))
 	}
-	return a, nil
+	return a, cmd
 }
 
 func (a *App) handlePRDetailLoaded(msg views.PRDetailLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
+		a.prDetail.StopLoading()
 		cmd := a.toasts.Add(
 			fmt.Sprintf("Error loading PR detail: %v", msg.Err),
 			domain.ToastError, 5*time.Second,

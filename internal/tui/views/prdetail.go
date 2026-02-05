@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
@@ -22,9 +23,11 @@ type PRDetailModel struct {
 	pane    DetailPane
 	scrollY int
 	loading bool
+	spinner spinner.Model
 
 	bodyCache    markdownCache
 	commentCache map[string]markdownCache
+	pendingNum   int
 }
 
 // DetailPane represents the active pane in detail view.
@@ -49,6 +52,7 @@ func NewPRDetailModel(styles core.Styles, keys core.KeyMap) PRDetailModel {
 		styles:  styles,
 		keys:    keys,
 		loading: true,
+		spinner: newDetailSpinner(styles),
 	}
 }
 
@@ -65,6 +69,23 @@ func (m *PRDetailModel) SetDetail(d *domain.PRDetail) {
 	m.scrollY = 0
 	m.bodyCache = markdownCache{}
 	m.commentCache = make(map[string]markdownCache)
+	m.pendingNum = 0
+}
+
+// StartLoading shows loading state while detail is fetched.
+func (m *PRDetailModel) StartLoading(number int) tea.Cmd {
+	m.loading = true
+	m.pendingNum = number
+	m.scrollY = 0
+	m.detail = nil
+	m.spinner = newDetailSpinner(m.styles)
+	return m.spinner.Tick
+}
+
+// StopLoading clears loading state without mutating detail.
+func (m *PRDetailModel) StopLoading() {
+	m.loading = false
+	m.pendingNum = 0
 }
 
 // Message types.
@@ -84,6 +105,13 @@ func (m *PRDetailModel) Update(msg tea.Msg) tea.Cmd {
 		return m.handleKey(msg)
 	case PRDetailLoadedMsg:
 		m.SetDetail(msg.Detail)
+	case spinner.TickMsg:
+		if !m.loading {
+			return nil
+		}
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return cmd
 	}
 	return nil
 }
@@ -171,11 +199,15 @@ func (m *PRDetailModel) selectedCheckURL() string {
 // View renders the PR detail view.
 func (m *PRDetailModel) View() string {
 	if m.loading || m.detail == nil {
+		msg := "Loading PR detail..."
+		if m.pendingNum > 0 {
+			msg = fmt.Sprintf("%s Loading PR #%d...", m.spinner.View(), m.pendingNum)
+		}
 		return lipgloss.NewStyle().
 			Width(m.width).Height(m.height).
 			Align(lipgloss.Center, lipgloss.Center).
 			Foreground(m.styles.Theme.Muted).
-			Render("Loading PR detail...")
+			Render(msg)
 	}
 
 	t := m.styles.Theme
@@ -386,6 +418,13 @@ func formatCheckSummary(checks []domain.Check) string {
 		parts = append(parts, fmt.Sprintf("%d no status", none))
 	}
 	return strings.Join(parts, ", ")
+}
+
+func newDetailSpinner(styles core.Styles) spinner.Model {
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(styles.Theme.Info)
+	return sp
 }
 
 func renderMarkdown(content string, width int) string {
