@@ -220,3 +220,4 @@ Dependency chains:
 - 0 lint issues, all tests pass with -race
 - Task 001: PR list sort now reorders data with ▲/▼ indicator; added error handling for tutorial flag write to satisfy errcheck.
 - Task 002: added platform helpers for clipboard/browser; wired copy/open handling and detail view open key.
+- Task 001/002 task files updated to DONE status.

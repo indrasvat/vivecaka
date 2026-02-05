@@ -1,6 +1,6 @@
 # Task 002: Clipboard and Browser Integration
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 

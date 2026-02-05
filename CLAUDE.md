@@ -15,8 +15,9 @@ While Phase 14 tasks remain incomplete, keep executing tasks back-to-back. Auto-
 2. Execute the task
 3. **Verify** — run `make ci`, then run iterm2-driver visual QA (every task, no exceptions)
 4. Update `docs/PROGRESS.md` — mark the task as DONE with notes
-5. Commit the changes (atomic, conventional commit)
-6. Immediately pick up the next TODO task — do not wait for user input
+5. Update the task file `docs/tasks/NNN-*.md` — set `Status: DONE`
+6. Commit the changes (atomic, conventional commit)
+7. Immediately pick up the next TODO task — do not wait for user input
 
 Do NOT skip verification. Do NOT mark tasks done without functional + visual confirmation.
 The source of truth is always on disk: `PROGRESS.md`, task files, and git history.
