@@ -10,9 +10,13 @@ import (
 
 // JSON field lists for gh pr list/view --json.
 const (
+	// prListFields is for the initial load (single page). Includes statusCheckRollup for CI status.
 	prListFields = "number,title,author,state,isDraft,headRefName,baseRefName,labels,statusCheckRollup,reviewDecision,updatedAt,createdAt,url"
-	prViewFields = "number,title,author,state,isDraft,headRefName,baseRefName,labels,statusCheckRollup,reviewDecision,updatedAt,createdAt,url,body,assignees,reviewRequests,latestReviews,files"
-	checkFields  = "name,status,conclusion,startedAt,completedAt,detailsUrl"
+	// prListFieldsLight is for pagination (loading more PRs). Excludes statusCheckRollup to avoid API timeouts.
+	// CI status will show as "none" for paginated items until detail view is opened.
+	prListFieldsLight = "number,title,author,state,isDraft,headRefName,baseRefName,labels,reviewDecision,updatedAt,createdAt,url"
+	prViewFields      = "number,title,author,state,isDraft,headRefName,baseRefName,labels,statusCheckRollup,reviewDecision,updatedAt,createdAt,url,body,assignees,reviewRequests,latestReviews,files"
+	checkFields       = "name,status,conclusion,startedAt,completedAt,detailsUrl"
 )
 
 // ghPR is the JSON shape returned by gh pr list/view.
@@ -107,8 +111,15 @@ func (a *Adapter) GetPRCount(ctx context.Context, repo domain.RepoRef, state dom
 // ListPRs fetches PRs via gh pr list --json.
 // Supports pagination via opts.Page and opts.PerPage.
 // Page is 1-based. For page > 1, we fetch page*perPage items and return only items for that page.
+// Note: For pagination (page > 1), we use a lighter field list that excludes statusCheckRollup
+// to avoid GitHub API timeouts on large result sets.
 func (a *Adapter) ListPRs(ctx context.Context, repo domain.RepoRef, opts domain.ListOpts) ([]domain.PR, error) {
-	args := []string{"pr", "list", "--json", prListFields}
+	// Use light fields for pagination to avoid API timeouts
+	fields := prListFields
+	if opts.Page > 1 {
+		fields = prListFieldsLight
+	}
+	args := []string{"pr", "list", "--json", fields}
 	args = append(args, repoArgs(repo)...)
 
 	if opts.State != "" && opts.State != "all" {
