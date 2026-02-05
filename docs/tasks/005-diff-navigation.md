@@ -1,6 +1,6 @@
 # Task 005: Diff Navigation Enhancements
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 

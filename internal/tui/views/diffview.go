@@ -26,6 +26,8 @@ type DiffViewModel struct {
 	searching     bool
 	searchMatches []searchMatch
 	currentMatch  int
+	pendingKey    rune
+	collapsed     map[int]bool
 }
 
 // NewDiffViewModel creates a new diff viewer.
@@ -77,13 +79,54 @@ func (m *DiffViewModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.handleSearchKey(msg)
 	}
 
+	if m.pendingKey != 0 && msg.Type != tea.KeyRunes {
+		m.pendingKey = 0
+	}
+
 	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
-		switch msg.Runes[0] {
+		r := msg.Runes[0]
+		switch m.pendingKey {
+		case 'g':
+			m.pendingKey = 0
+			if r == 'g' {
+				m.scrollToTop()
+				return nil
+			}
+		case 'z':
+			m.pendingKey = 0
+			if r == 'a' {
+				m.toggleCollapse()
+				return nil
+			}
+		}
+
+		switch r {
 		case 'n':
 			m.nextMatch()
 			return nil
 		case 'N':
 			m.prevMatch()
+			return nil
+		case 'g':
+			m.pendingKey = 'g'
+			return nil
+		case 'G':
+			m.scrollToBottom()
+			return nil
+		case '[':
+			m.jumpToHunk(-1)
+			return nil
+		case ']':
+			m.jumpToHunk(1)
+			return nil
+		case '{':
+			m.prevFile()
+			return nil
+		case '}':
+			m.nextFile()
+			return nil
+		case 'z':
+			m.pendingKey = 'z'
 			return nil
 		}
 	}
@@ -104,16 +147,10 @@ func (m *DiffViewModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		}
 	case key.Matches(msg, m.keys.Tab):
 		// Next file.
-		if m.diff != nil && m.fileIdx < len(m.diff.Files)-1 {
-			m.fileIdx++
-			m.scrollY = 0
-		}
+		m.nextFile()
 	case key.Matches(msg, m.keys.ShiftTab):
 		// Previous file.
-		if m.fileIdx > 0 {
-			m.fileIdx--
-			m.scrollY = 0
-		}
+		m.prevFile()
 	case key.Matches(msg, m.keys.Search):
 		m.searching = true
 		m.searchQuery = ""
@@ -181,36 +218,40 @@ func (m *DiffViewModel) View() string {
 	var lines []string
 	lineIdx := 0
 
-	for _, hunk := range file.Hunks {
-		// Hunk header.
-		hunkStyle := lipgloss.NewStyle().Foreground(t.Info)
-		header := hunk.Header
-		if matches := lineMatches[lineIdx]; len(matches) > 0 {
-			header = applyHighlights(header, matches, hunkStyle, matchStyle)
-			lines = append(lines, header)
-		} else {
-			lines = append(lines, hunkStyle.Render(header))
-		}
-		lineIdx++
-
-		for _, dl := range hunk.Lines {
-			matches := lineMatches[lineIdx]
-			lineNum := ""
-			switch dl.Type {
-			case domain.DiffAdd:
-				lineNum = fmt.Sprintf("%4s %4d ", "", dl.NewNum)
-				line := renderDiffLine(lineNum, "+", dl.Content, m.styles.DiffAdd, matchStyle, matches)
-				lines = append(lines, line)
-			case domain.DiffDelete:
-				lineNum = fmt.Sprintf("%4d %4s ", dl.OldNum, "")
-				line := renderDiffLine(lineNum, "-", dl.Content, m.styles.DiffDelete, matchStyle, matches)
-				lines = append(lines, line)
-			default:
-				lineNum = fmt.Sprintf("%4d %4d ", dl.OldNum, dl.NewNum)
-				line := renderDiffLine(lineNum, " ", dl.Content, lipgloss.NewStyle().Foreground(t.Fg), matchStyle, matches)
-				lines = append(lines, line)
+	if m.isCollapsed(m.fileIdx) {
+		lines = append(lines, m.renderCollapsedFile(file))
+	} else {
+		for _, hunk := range file.Hunks {
+			// Hunk header.
+			hunkStyle := lipgloss.NewStyle().Foreground(t.Info)
+			header := hunk.Header
+			if matches := lineMatches[lineIdx]; len(matches) > 0 {
+				header = applyHighlights(header, matches, hunkStyle, matchStyle)
+				lines = append(lines, header)
+			} else {
+				lines = append(lines, hunkStyle.Render(header))
 			}
 			lineIdx++
+
+			for _, dl := range hunk.Lines {
+				matches := lineMatches[lineIdx]
+				lineNum := ""
+				switch dl.Type {
+				case domain.DiffAdd:
+					lineNum = fmt.Sprintf("%4s %4d ", "", dl.NewNum)
+					line := renderDiffLine(lineNum, "+", dl.Content, m.styles.DiffAdd, matchStyle, matches)
+					lines = append(lines, line)
+				case domain.DiffDelete:
+					lineNum = fmt.Sprintf("%4d %4s ", dl.OldNum, "")
+					line := renderDiffLine(lineNum, "-", dl.Content, m.styles.DiffDelete, matchStyle, matches)
+					lines = append(lines, line)
+				default:
+					lineNum = fmt.Sprintf("%4d %4d ", dl.OldNum, dl.NewNum)
+					line := renderDiffLine(lineNum, " ", dl.Content, lipgloss.NewStyle().Foreground(t.Fg), matchStyle, matches)
+					lines = append(lines, line)
+				}
+				lineIdx++
+			}
 		}
 	}
 
@@ -378,6 +419,9 @@ func (m *DiffViewModel) fileLineCount(fileIdx int) int {
 	if m.diff == nil || fileIdx < 0 || fileIdx >= len(m.diff.Files) {
 		return 0
 	}
+	if m.isCollapsed(fileIdx) {
+		return 1
+	}
 	count := 0
 	for _, hunk := range m.diff.Files[fileIdx].Hunks {
 		count++ // header
@@ -413,6 +457,128 @@ func (m *DiffViewModel) searchBarText() string {
 		return "/ ▎"
 	}
 	return fmt.Sprintf("/ %s [%d/%d]▎", m.searchQuery, current, count)
+}
+
+func (m *DiffViewModel) nextFile() {
+	if m.diff == nil || m.fileIdx >= len(m.diff.Files)-1 {
+		return
+	}
+	m.fileIdx++
+	m.scrollY = 0
+}
+
+func (m *DiffViewModel) prevFile() {
+	if m.diff == nil || m.fileIdx <= 0 {
+		return
+	}
+	m.fileIdx--
+	m.scrollY = 0
+}
+
+func (m *DiffViewModel) scrollToTop() {
+	m.scrollY = 0
+}
+
+func (m *DiffViewModel) scrollToBottom() {
+	lineCount := m.fileLineCount(m.fileIdx)
+	visible := max(1, m.height-2)
+	m.scrollY = max(0, lineCount-visible)
+}
+
+func (m *DiffViewModel) jumpToHunk(direction int) {
+	if m.diff == nil || m.isCollapsed(m.fileIdx) {
+		return
+	}
+	hunks := m.hunkLineIndexes(m.fileIdx)
+	if len(hunks) == 0 {
+		return
+	}
+
+	current := m.scrollY
+	target := -1
+	if direction > 0 {
+		for _, h := range hunks {
+			if h > current {
+				target = h
+				break
+			}
+		}
+		if target == -1 {
+			target = hunks[0]
+		}
+	} else {
+		for i := len(hunks) - 1; i >= 0; i-- {
+			if hunks[i] < current {
+				target = hunks[i]
+				break
+			}
+		}
+		if target == -1 {
+			target = hunks[len(hunks)-1]
+		}
+	}
+
+	if target < 0 {
+		return
+	}
+	m.scrollY = target
+}
+
+func (m *DiffViewModel) hunkLineIndexes(fileIdx int) []int {
+	if m.diff == nil || fileIdx < 0 || fileIdx >= len(m.diff.Files) {
+		return nil
+	}
+	var indexes []int
+	lineIdx := 0
+	for _, hunk := range m.diff.Files[fileIdx].Hunks {
+		indexes = append(indexes, lineIdx)
+		lineIdx++
+		lineIdx += len(hunk.Lines)
+	}
+	return indexes
+}
+
+func (m *DiffViewModel) toggleCollapse() {
+	if m.collapsed == nil {
+		m.collapsed = make(map[int]bool)
+	}
+	m.collapsed[m.fileIdx] = !m.collapsed[m.fileIdx]
+	m.scrollY = 0
+}
+
+func (m *DiffViewModel) isCollapsed(fileIdx int) bool {
+	if m.collapsed == nil {
+		return false
+	}
+	return m.collapsed[fileIdx]
+}
+
+func (m *DiffViewModel) renderCollapsedFile(file domain.FileDiff) string {
+	t := m.styles.Theme
+	adds, dels := countFileChanges(file)
+	addStyle := lipgloss.NewStyle().Foreground(t.Success)
+	delStyle := lipgloss.NewStyle().Foreground(t.Error)
+	line := fmt.Sprintf("%s  %s %s",
+		file.Path,
+		addStyle.Render(fmt.Sprintf("+%d", adds)),
+		delStyle.Render(fmt.Sprintf("-%d", dels)),
+	)
+	return lipgloss.NewStyle().Foreground(t.Muted).Render(line)
+}
+
+func countFileChanges(file domain.FileDiff) (int, int) {
+	var adds, dels int
+	for _, hunk := range file.Hunks {
+		for _, line := range hunk.Lines {
+			switch line.Type {
+			case domain.DiffAdd:
+				adds++
+			case domain.DiffDelete:
+				dels++
+			}
+		}
+	}
+	return adds, dels
 }
 
 func findMatchSpans(text, lowerQuery string) []matchSpan {

@@ -47,6 +47,30 @@ func testDiff() *domain.Diff {
 	}
 }
 
+func testDiffWithHunks() *domain.Diff {
+	return &domain.Diff{
+		Files: []domain.FileDiff{
+			{
+				Path: "internal/plugin/registry.go",
+				Hunks: []domain.Hunk{
+					{
+						Header: "@@ -1,1 +1,1 @@",
+						Lines: []domain.DiffLine{
+							{Type: domain.DiffContext, Content: "line one", OldNum: 1, NewNum: 1},
+						},
+					},
+					{
+						Header: "@@ -10,1 +10,1 @@",
+						Lines: []domain.DiffLine{
+							{Type: domain.DiffContext, Content: "line two", OldNum: 10, NewNum: 10},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func TestNewDiffViewModel(t *testing.T) {
 	m := NewDiffViewModel(testStyles(), testKeys())
 	if !m.loading {
@@ -203,6 +227,91 @@ func TestDiffFileNavResetsScroll(t *testing.T) {
 	m.Update(tab)
 	if m.scrollY != 0 {
 		t.Errorf("scrollY should reset on file switch, got %d", m.scrollY)
+	}
+}
+
+func TestDiffHunkNavigation(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 10)
+	m.SetDiff(testDiffWithHunks())
+
+	if m.scrollY != 0 {
+		t.Fatalf("initial scrollY = %d, want 0", m.scrollY)
+	}
+
+	next := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{']'}}
+	m.Update(next)
+	if m.scrollY != 2 {
+		t.Errorf("scrollY after ] = %d, want 2", m.scrollY)
+	}
+
+	prev := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'['}}
+	m.Update(prev)
+	if m.scrollY != 0 {
+		t.Errorf("scrollY after [ = %d, want 0", m.scrollY)
+	}
+}
+
+func TestDiffFileJump(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+	m.scrollY = 5
+
+	next := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'}'}}
+	m.Update(next)
+	if m.fileIdx != 1 {
+		t.Errorf("fileIdx after } = %d, want 1", m.fileIdx)
+	}
+	if m.scrollY != 0 {
+		t.Errorf("scrollY after } = %d, want 0", m.scrollY)
+	}
+
+	prev := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'{'}}
+	m.Update(prev)
+	if m.fileIdx != 0 {
+		t.Errorf("fileIdx after { = %d, want 0", m.fileIdx)
+	}
+}
+
+func TestDiffTopBottomNavigation(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 5)
+	m.SetDiff(testDiff())
+	m.scrollY = 3
+
+	g := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}
+	m.Update(g)
+	m.Update(g)
+	if m.scrollY != 0 {
+		t.Errorf("scrollY after gg = %d, want 0", m.scrollY)
+	}
+
+	G := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}}
+	m.Update(G)
+	if m.scrollY != 3 {
+		t.Errorf("scrollY after G = %d, want 3", m.scrollY)
+	}
+}
+
+func TestDiffCollapseToggle(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	z := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'z'}}
+	a := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+
+	m.Update(z)
+	m.Update(a)
+	if !m.isCollapsed(m.fileIdx) {
+		t.Error("expected file to be collapsed after za")
+	}
+
+	m.Update(z)
+	m.Update(a)
+	if m.isCollapsed(m.fileIdx) {
+		t.Error("expected file to expand after za again")
 	}
 }
 
