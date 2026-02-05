@@ -1,6 +1,6 @@
 # Task 009: Syntax Highlighting in Diff (Chroma)
 
-## Status: TODO
+## Status: DONE
 
 ## Depends On: 008 (Glamour may bring Chroma as transitive dep)
 

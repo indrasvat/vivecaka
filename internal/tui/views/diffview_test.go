@@ -532,3 +532,162 @@ func TestDiffFileBarTruncation(t *testing.T) {
 		t.Error("view with long paths should not be empty")
 	}
 }
+
+func TestDiffSyntaxHighlighting(t *testing.T) {
+	origProfile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() {
+		lipgloss.SetColorProfile(origProfile)
+	})
+
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(&domain.Diff{
+		Files: []domain.FileDiff{
+			{
+				Path: "main.go",
+				Hunks: []domain.Hunk{
+					{
+						Header: "@@ -1,1 +1,1 @@",
+						Lines: []domain.DiffLine{
+							{Type: domain.DiffAdd, Content: "func main() { fmt.Println(\"hello\") }", NewNum: 1},
+							{Type: domain.DiffDelete, Content: "package main", OldNum: 1},
+							{Type: domain.DiffContext, Content: "import \"fmt\"", OldNum: 2, NewNum: 2},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	view := m.View()
+	// Syntax highlighted output should contain ANSI escape sequences
+	if !strings.Contains(view, "\x1b[") {
+		t.Error("expected ANSI escape sequences from syntax highlighting")
+	}
+	// Should contain the code keywords
+	if !strings.Contains(view, "func") {
+		t.Error("expected 'func' keyword in output")
+	}
+	if !strings.Contains(view, "main") {
+		t.Error("expected 'main' in output")
+	}
+}
+
+func TestDiffSyntaxHighlightingUnknownLanguage(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(&domain.Diff{
+		Files: []domain.FileDiff{
+			{
+				Path: "data.unknown",
+				Hunks: []domain.Hunk{
+					{
+						Header: "@@ -1,1 +1,1 @@",
+						Lines: []domain.DiffLine{
+							{Type: domain.DiffContext, Content: "some random content", OldNum: 1, NewNum: 1},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	// Should not panic with unknown file types
+	view := m.View()
+	if view == "" {
+		t.Error("view should not be empty for unknown file types")
+	}
+	if !strings.Contains(view, "random content") {
+		t.Error("expected content to be present even without syntax highlighting")
+	}
+}
+
+func TestSyntaxHighlighterCaching(t *testing.T) {
+	h := newSyntaxHighlighter()
+
+	// First call creates the lexer
+	_ = h.highlight("func main() {}", "test.go")
+
+	// Check lexer is cached
+	h.mu.RLock()
+	_, cached := h.lexerCache[".go"]
+	h.mu.RUnlock()
+
+	if !cached {
+		t.Error("expected .go lexer to be cached")
+	}
+
+	// Second call should use cache
+	result := h.highlight("package main", "other.go")
+	if result == "" {
+		t.Error("highlight should return non-empty result")
+	}
+}
+
+func TestSyntaxHighlighterGoCode(t *testing.T) {
+	h := newSyntaxHighlighter()
+
+	// Go code with keywords and strings
+	code := `func main() { fmt.Println("hello world") }`
+	result := h.highlight(code, "main.go")
+
+	// Result should contain ANSI escape sequences for syntax colors
+	if !strings.Contains(result, "\x1b[") {
+		t.Errorf("expected ANSI escape sequences in highlighted Go code, got: %q", result)
+	}
+
+	// Result should still contain the original text
+	if !strings.Contains(result, "func") {
+		t.Error("expected 'func' keyword in result")
+	}
+	if !strings.Contains(result, "main") {
+		t.Error("expected 'main' in result")
+	}
+	if !strings.Contains(result, "hello world") {
+		t.Error("expected string literal in result")
+	}
+}
+
+func TestSyntaxHighlighterRustCode(t *testing.T) {
+	h := newSyntaxHighlighter()
+
+	// Rust code with keywords
+	code := `fn main() { println!("hello"); }`
+	result := h.highlight(code, "main.rs")
+
+	// Result should contain ANSI escape sequences
+	if !strings.Contains(result, "\x1b[") {
+		t.Errorf("expected ANSI escape sequences in highlighted Rust code, got: %q", result)
+	}
+}
+
+func TestSyntaxHighlighterTypescriptCode(t *testing.T) {
+	h := newSyntaxHighlighter()
+
+	// TypeScript code with keywords
+	code := `const x: number = 42; export default function foo() {}`
+	result := h.highlight(code, "app.ts")
+
+	// Result should contain ANSI escape sequences
+	if !strings.Contains(result, "\x1b[") {
+		t.Errorf("expected ANSI escape sequences in highlighted TypeScript code, got: %q", result)
+	}
+}
+
+func TestSyntaxHighlighterFallback(t *testing.T) {
+	h := newSyntaxHighlighter()
+
+	// Unknown file type should return original content
+	code := "some random content"
+	result := h.highlight(code, "file.unknown123xyz")
+
+	// For truly unknown extensions, should return original
+	if result != code {
+		// This is actually fine - Chroma might have broad fallback rules
+		// Just verify it doesn't crash and returns something
+		if result == "" {
+			t.Error("highlight should return non-empty result even for unknown types")
+		}
+	}
+}

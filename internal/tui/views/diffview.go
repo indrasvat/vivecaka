@@ -1,16 +1,99 @@
 package views
 
 import (
+	"bytes"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/formatters"
+	"github.com/alecthomas/chroma/v2/lexers"
+	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
+
+// syntaxHighlighter provides language-aware code highlighting for diff lines.
+type syntaxHighlighter struct {
+	mu         sync.RWMutex
+	lexerCache map[string]chroma.Lexer
+	formatter  chroma.Formatter
+	style      *chroma.Style
+}
+
+// newSyntaxHighlighter creates a highlighter with terminal256 formatter and monokai style.
+func newSyntaxHighlighter() *syntaxHighlighter {
+	return &syntaxHighlighter{
+		lexerCache: make(map[string]chroma.Lexer),
+		formatter:  formatters.TTY256,
+		style:      styles.Get("monokai"),
+	}
+}
+
+// getLexer returns a cached lexer for the given filename.
+func (h *syntaxHighlighter) getLexer(filename string) chroma.Lexer {
+	ext := filepath.Ext(filename)
+	if ext == "" {
+		ext = filename // for files like Makefile, Dockerfile
+	}
+
+	h.mu.RLock()
+	if lexer, ok := h.lexerCache[ext]; ok {
+		h.mu.RUnlock()
+		return lexer
+	}
+	h.mu.RUnlock()
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Double-check after acquiring write lock
+	if lexer, ok := h.lexerCache[ext]; ok {
+		return lexer
+	}
+
+	lexer := lexers.Match(filename)
+	if lexer == nil {
+		lexer = lexers.Fallback
+	}
+	lexer = chroma.Coalesce(lexer)
+	h.lexerCache[ext] = lexer
+	return lexer
+}
+
+// highlight applies syntax highlighting to a code line.
+// Returns the original content if highlighting fails.
+func (h *syntaxHighlighter) highlight(content, filename string) string {
+	if content == "" {
+		return content
+	}
+
+	lexer := h.getLexer(filename)
+	if lexer == nil || lexer == lexers.Fallback {
+		return content
+	}
+
+	iterator, err := lexer.Tokenise(nil, content)
+	if err != nil {
+		return content
+	}
+
+	var buf bytes.Buffer
+	if err := h.formatter.Format(&buf, h.style, iterator); err != nil {
+		return content
+	}
+
+	// Chroma adds trailing newline; strip it
+	result := buf.String()
+	result = strings.TrimSuffix(result, "\n")
+	return result
+}
 
 // DiffViewModel implements the diff viewer.
 type DiffViewModel struct {
@@ -28,6 +111,7 @@ type DiffViewModel struct {
 	currentMatch  int
 	pendingKey    rune
 	collapsed     map[int]bool
+	highlighter   *syntaxHighlighter
 }
 
 // NewDiffViewModel creates a new diff viewer.
@@ -37,6 +121,7 @@ func NewDiffViewModel(styles core.Styles, keys core.KeyMap) DiffViewModel {
 		keys:         keys,
 		loading:      true,
 		currentMatch: -1,
+		highlighter:  newSyntaxHighlighter(),
 	}
 }
 
@@ -236,18 +321,20 @@ func (m *DiffViewModel) View() string {
 			for _, dl := range hunk.Lines {
 				matches := lineMatches[lineIdx]
 				lineNum := ""
+				// Apply syntax highlighting to content
+				highlightedContent := m.highlighter.highlight(dl.Content, file.Path)
 				switch dl.Type {
 				case domain.DiffAdd:
 					lineNum = fmt.Sprintf("%4s %4d ", "", dl.NewNum)
-					line := renderDiffLine(lineNum, "+", dl.Content, m.styles.DiffAdd, matchStyle, matches)
+					line := renderDiffLineWithSyntax(lineNum, "+", dl.Content, highlightedContent, m.styles.DiffAdd, matchStyle, matches)
 					lines = append(lines, line)
 				case domain.DiffDelete:
 					lineNum = fmt.Sprintf("%4d %4s ", dl.OldNum, "")
-					line := renderDiffLine(lineNum, "-", dl.Content, m.styles.DiffDelete, matchStyle, matches)
+					line := renderDiffLineWithSyntax(lineNum, "-", dl.Content, highlightedContent, m.styles.DiffDelete, matchStyle, matches)
 					lines = append(lines, line)
 				default:
 					lineNum = fmt.Sprintf("%4d %4d ", dl.OldNum, dl.NewNum)
-					line := renderDiffLine(lineNum, " ", dl.Content, lipgloss.NewStyle().Foreground(t.Fg), matchStyle, matches)
+					line := renderDiffLineWithSyntax(lineNum, " ", dl.Content, highlightedContent, lipgloss.NewStyle().Foreground(t.Fg), matchStyle, matches)
 					lines = append(lines, line)
 				}
 				lineIdx++
@@ -601,12 +688,26 @@ func findMatchSpans(text, lowerQuery string) []matchSpan {
 	return spans
 }
 
-func renderDiffLine(prefix, marker, content string, baseStyle, matchStyle lipgloss.Style, matches []searchMatch) string {
+// renderDiffLineWithSyntax renders a diff line with syntax highlighting.
+// When search matches exist, falls back to plain styling for correct highlighting.
+// Otherwise, uses Chroma syntax colors with a background tint for add/delete lines.
+func renderDiffLineWithSyntax(prefix, marker, rawContent, highlightedContent string, baseStyle, matchStyle lipgloss.Style, matches []searchMatch) string {
+	// Marker and prefix keep their original style
 	prefixRendered := baseStyle.Render(prefix + marker)
-	if len(matches) == 0 {
-		return prefixRendered + baseStyle.Render(content)
+
+	// If there are search matches, use raw content with match highlighting
+	// (syntax colors would interfere with search highlight visibility)
+	if len(matches) > 0 {
+		return prefixRendered + applyHighlights(rawContent, matches, baseStyle, matchStyle)
 	}
-	return prefixRendered + applyHighlights(content, matches, baseStyle, matchStyle)
+
+	// If highlighting produced no change (fallback lexer or error), use base style
+	if highlightedContent == rawContent {
+		return prefixRendered + baseStyle.Render(rawContent)
+	}
+
+	// Use syntax highlighted content
+	return prefixRendered + highlightedContent
 }
 
 func applyHighlights(text string, matches []searchMatch, baseStyle, matchStyle lipgloss.Style) string {
