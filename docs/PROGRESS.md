@@ -49,6 +49,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 026 | `docs/tasks/026-testing-foundation.md` | testify migration, adapter fixtures, 80%+ coverage | TODO | — |
 | 027 | `docs/tasks/027-integration-tests.md` | teatest integration tests, TUI test quality | TODO | 026 |
 | 028 | `docs/tasks/028-pr-detail-tabs-layout.md` | Redesign PR detail with horizontal tabs layout | DONE | — |
+| 029 | `docs/tasks/029-debug-logging.md` | Debug logging infrastructure with --debug flag | TODO | — |
 
 Notes:
 - Task 007: filter panel matches mock (static label options: enhancement/bug/docs; CI filter options: All/Passing/Failing; Review filter options: All/Approved/Pending). Pending CI + changes-requested review filters not exposed yet.
