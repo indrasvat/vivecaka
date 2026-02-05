@@ -53,6 +53,9 @@ Notes:
 - Task 007: filter panel matches mock (static label options: enhancement/bug/docs; CI filter options: All/Passing/Failing; Review filter options: All/Approved/Pending). Pending CI + changes-requested review filters not exposed yet.
 - Task 008: iterm2-driver markdown QA could not open PR detail (no open PRs in repo). Captured PR list screenshot only.
 
+Open Issues:
+- PR detail loading spinner appears stuck to user (reported in `/Users/indrasvat/code/github.com/indrasvat-visarga` with 1 open PR). Attempts: added explicit spinner tick loop via custom `DetailSpinnerTickMsg` + `tea.Tick` (spinner still appeared frozen); switched to ASCII `spinner.Line`; reverted to native `spinner.Tick`/`spinner.Update` path in `PRDetailModel` with ticks handled inside `Update`. iTerm2 probes showed spinner frames changing, but user still reports static "Loading PR details..." with no visible animation. Need deeper tracing (possible slow gh `pr view`/`pr checks`/`gh api` call masking updates or terminal rendering refresh issue). Unresolved as of Feb 5, 2026.
+
 ## Recommended Execution Order
 
 Independent tasks (can be done in any order): 001, 002, 004, 005, 006, 008, 011, 012, 013, 015, 016, 017, 019, 021, 022, 023, 024, 026

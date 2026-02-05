@@ -88,13 +88,31 @@ func TestDetailStartLoading(t *testing.T) {
 	if m.pendingNum != 99 {
 		t.Errorf("pendingNum = %d, want 99", m.pendingNum)
 	}
-	if cmd == nil {
-		t.Error("StartLoading should return spinner command")
-	}
 
 	view := m.View()
 	if !strings.Contains(view, "Loading PR #99") {
 		t.Errorf("loading view should include PR number, got %q", view)
+	}
+	if cmd == nil {
+		t.Error("StartLoading should return a spinner command")
+	}
+}
+
+func TestDetailSpinnerTick(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	cmd := m.StartLoading(1)
+	if cmd == nil {
+		t.Fatal("StartLoading should return a spinner command")
+	}
+	first := m.spinner.View()
+	msg := cmd()
+	next := m.Update(msg)
+	second := m.spinner.View()
+	if first == second {
+		t.Errorf("spinner frame should advance, got %q", second)
+	}
+	if next == nil {
+		t.Error("spinner tick should return a follow-up command")
 	}
 }
 
