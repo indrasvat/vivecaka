@@ -328,6 +328,8 @@ func StatusHints(view core.ViewState, width int) string {
 		hints = "? or Esc to close"
 	case core.ViewFilter:
 		hints = "Tab next  Space toggle  Enter apply  r reset  Esc cancel"
+	case core.ViewConfirm:
+		hints = StatusHintsConfirm()
 	default:
 		hints = "? help  q quit"
 	}

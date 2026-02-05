@@ -1,6 +1,6 @@
 # Task 012: Confirmation Dialogs
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 

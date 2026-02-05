@@ -175,8 +175,11 @@ type (
 		PRs []domain.PR
 		Err error
 	}
-	OpenPRMsg      struct{ Number int }
-	CheckoutPRMsg  struct{ Number int }
+	OpenPRMsg     struct{ Number int }
+	CheckoutPRMsg struct {
+		Number int
+		Branch string
+	}
 	CopyURLMsg     struct{ URL string }
 	OpenBrowserMsg struct{ URL string }
 )
@@ -289,7 +292,7 @@ func (m *PRListModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		}
 	case key.Matches(msg, m.keys.Checkout):
 		if pr := m.SelectedPR(); pr != nil {
-			return func() tea.Msg { return CheckoutPRMsg{Number: pr.Number} }
+			return func() tea.Msg { return CheckoutPRMsg{Number: pr.Number, Branch: pr.Branch.Head} }
 		}
 	case key.Matches(msg, m.keys.Yank):
 		if pr := m.SelectedPR(); pr != nil {

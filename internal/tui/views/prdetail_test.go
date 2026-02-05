@@ -275,8 +275,13 @@ func TestPRDetailCheckoutKey(t *testing.T) {
 	msg := cmd()
 	if checkout, ok := msg.(CheckoutPRMsg); !ok {
 		t.Errorf("expected CheckoutPRMsg, got %T", msg)
-	} else if checkout.Number != 42 {
-		t.Errorf("CheckoutPRMsg.Number = %d, want 42", checkout.Number)
+	} else {
+		if checkout.Number != 42 {
+			t.Errorf("CheckoutPRMsg.Number = %d, want 42", checkout.Number)
+		}
+		if checkout.Branch != "feat/plugins" {
+			t.Errorf("CheckoutPRMsg.Branch = %q, want %q", checkout.Branch, "feat/plugins")
+		}
 	}
 }
 

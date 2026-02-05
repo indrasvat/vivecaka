@@ -34,6 +34,7 @@ func (m *ReviewModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	if m.form != nil {
+		m.form.WithWidth(w - 4)  // Account for padding
 		m.form.WithHeight(h - 4) // Account for title and padding
 	}
 }
@@ -82,6 +83,9 @@ func (m *ReviewModel) initForm() {
 
 	// Apply custom styling
 	m.form.WithTheme(m.createTheme())
+	if m.width > 4 {
+		m.form.WithWidth(m.width - 4) // Account for padding
+	}
 	if m.height > 4 {
 		m.form.WithHeight(m.height - 4)
 	}

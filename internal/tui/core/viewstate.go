@@ -14,4 +14,5 @@ const (
 	ViewRepoSwitch
 	ViewInbox
 	ViewFilter
+	ViewConfirm
 )

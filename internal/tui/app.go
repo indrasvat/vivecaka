@@ -86,6 +86,9 @@ type App struct {
 	tutorial     views.TutorialModel
 	filterPanel  views.FilterModel
 
+	// Overlays
+	confirmDialog views.ConfirmModel
+
 	// Filters
 	filterOpts domain.ListOpts
 
@@ -110,15 +113,16 @@ func New(cfg *config.Config, opts ...Option) *App {
 		styles: styles,
 
 		// View models
-		prList:       views.NewPRListModel(styles, keys),
-		prDetail:     views.NewPRDetailModel(styles, keys),
-		diffView:     views.NewDiffViewModel(styles, keys),
-		reviewForm:   views.NewReviewModel(styles, keys),
-		repoSwitcher: views.NewRepoSwitcherModel(styles, keys),
-		helpOverlay:  views.NewHelpModel(styles),
-		inbox:        views.NewInboxModel(styles, keys),
-		tutorial:     views.NewTutorialModel(styles),
-		filterPanel:  views.NewFilterModel(styles, keys),
+		prList:        views.NewPRListModel(styles, keys),
+		prDetail:      views.NewPRDetailModel(styles, keys),
+		diffView:      views.NewDiffViewModel(styles, keys),
+		reviewForm:    views.NewReviewModel(styles, keys),
+		repoSwitcher:  views.NewRepoSwitcherModel(styles, keys),
+		helpOverlay:   views.NewHelpModel(styles),
+		inbox:         views.NewInboxModel(styles, keys),
+		tutorial:      views.NewTutorialModel(styles),
+		filterPanel:   views.NewFilterModel(styles, keys),
+		confirmDialog: views.NewConfirmModel(styles),
 
 		// Components
 		banner: nil, // initialized after options apply
@@ -262,7 +266,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.prevView = a.view
 		a.view = core.ViewReview
 		a.reviewForm.SetPRNumber(msg.Number)
-		return a, nil
+		return a, a.reviewForm.Init()
 
 	case views.SubmitReviewMsg:
 		return a.handleSubmitReview(msg)
@@ -275,7 +279,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case views.CheckoutPRMsg:
-		return a.handleCheckoutPR(msg)
+		return a.handleCheckoutConfirm(msg)
+
+	case views.ConfirmResultMsg:
+		return a.handleConfirmResult(msg)
+
+	case views.CloseConfirmMsg:
+		a.view = a.prevView
+		return a, nil
 
 	case views.CheckoutDoneMsg:
 		return a.handleCheckoutDone(msg)
@@ -400,6 +411,7 @@ func (a *App) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	a.inbox.SetSize(a.width, contentHeight)
 	a.tutorial.SetSize(a.width, contentHeight)
 	a.filterPanel.SetSize(a.width, contentHeight)
+	a.confirmDialog.SetSize(a.width, contentHeight)
 
 	// Components.
 	a.header.SetWidth(a.width)
@@ -423,6 +435,12 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.view = core.ViewLoading
 		}
 		return a, tea.Batch(tea.ClearScreen, a.loadingTick())
+	}
+
+	// Confirm dialog intercepts all keys when visible.
+	if a.view == core.ViewConfirm {
+		cmd := a.confirmDialog.Update(msg)
+		return a, cmd
 	}
 
 	// Tutorial intercepts all keys when visible.
@@ -489,6 +507,8 @@ func (a *App) handleBack() (tea.Model, tea.Cmd) {
 	case core.ViewInbox:
 		a.view = core.ViewPRList
 	case core.ViewFilter:
+		a.view = a.prevView
+	case core.ViewConfirm:
 		a.view = a.prevView
 	}
 	return a, nil
@@ -649,9 +669,30 @@ func (a *App) handleReviewSubmitted(msg views.ReviewSubmittedMsg) (tea.Model, te
 	return a, cmd
 }
 
-func (a *App) handleCheckoutPR(msg views.CheckoutPRMsg) (tea.Model, tea.Cmd) {
-	if a.checkoutPR != nil && a.repo.Owner != "" {
-		return a, checkoutPRCmd(a.checkoutPR, a.repo, msg.Number)
+func (a *App) handleCheckoutConfirm(msg views.CheckoutPRMsg) (tea.Model, tea.Cmd) {
+	branch := msg.Branch
+	if branch == "" {
+		branch = fmt.Sprintf("PR #%d", msg.Number)
+	}
+	a.prevView = a.view
+	a.view = core.ViewConfirm
+	a.confirmDialog.Show(
+		"Checkout Branch",
+		fmt.Sprintf("Check out branch \"%s\" for PR #%d?", branch, msg.Number),
+		msg,
+	)
+	return a, nil
+}
+
+func (a *App) handleConfirmResult(msg views.ConfirmResultMsg) (tea.Model, tea.Cmd) {
+	a.view = a.prevView
+	if !msg.Confirmed {
+		return a, nil
+	}
+	// Re-dispatch the original action
+	checkoutMsg, ok := msg.Action.(views.CheckoutPRMsg)
+	if ok && a.checkoutPR != nil && a.repo.Owner != "" {
+		return a, checkoutPRCmd(a.checkoutPR, a.repo, checkoutMsg.Number)
 	}
 	return a, nil
 }
@@ -738,6 +779,8 @@ func (a *App) dispatchKeyToView(msg tea.KeyMsg) tea.Cmd {
 		return a.inbox.Update(msg)
 	case core.ViewFilter:
 		return a.filterPanel.Update(msg)
+	case core.ViewConfirm:
+		return a.confirmDialog.Update(msg)
 	}
 	return nil
 }
@@ -760,6 +803,8 @@ func (a *App) updateActiveView(msg tea.Msg) tea.Cmd {
 		return a.inbox.Update(msg)
 	case core.ViewFilter:
 		return a.filterPanel.Update(msg)
+	case core.ViewConfirm:
+		return a.confirmDialog.Update(msg)
 	}
 	return nil
 }
@@ -778,6 +823,7 @@ func (a *App) rebuildStyles() {
 	a.inbox = views.NewInboxModel(s, k)
 	a.tutorial = views.NewTutorialModel(s)
 	a.filterPanel = views.NewFilterModel(s, k)
+	a.confirmDialog = views.NewConfirmModel(s)
 
 	a.banner = components.NewBanner(s, a.version)
 	a.header = components.NewHeader(s)
@@ -799,6 +845,7 @@ func (a *App) rebuildStyles() {
 	a.inbox.SetSize(a.width, ch)
 	a.tutorial.SetSize(a.width, ch)
 	a.filterPanel.SetSize(a.width, ch)
+	a.confirmDialog.SetSize(a.width, ch)
 	a.header.SetWidth(a.width)
 	a.status.SetWidth(a.width)
 	a.toasts.SetWidth(a.width)
@@ -877,6 +924,9 @@ func (a *App) renderContent(height int) string {
 	case core.ViewFilter:
 		return a.filterPanel.View()
 
+	case core.ViewConfirm:
+		return a.confirmDialog.View()
+
 	default:
 		return ""
 	}
@@ -902,6 +952,8 @@ func (a *App) viewName() string {
 		return "Inbox"
 	case core.ViewFilter:
 		return "Filter"
+	case core.ViewConfirm:
+		return "Confirm"
 	default:
 		return ""
 	}

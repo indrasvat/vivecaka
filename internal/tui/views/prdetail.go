@@ -197,7 +197,9 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	case key.Matches(msg, m.keys.Checkout):
 		if m.detail != nil {
-			return func() tea.Msg { return CheckoutPRMsg{Number: m.detail.Number} }
+			return func() tea.Msg {
+				return CheckoutPRMsg{Number: m.detail.Number, Branch: m.detail.Branch.Head}
+			}
 		}
 		return nil
 	}

@@ -32,7 +32,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 009 | `docs/tasks/009-syntax-highlighting.md` | Syntax highlighting in diff via Chroma | DONE | 008 |
 | 010 | `docs/tasks/010-comments-enhancement.md` | Comment collapse/expand, reply, resolve | DONE | 008 |
 | 011 | `docs/tasks/011-review-form-huh.md` | Rewrite review form using huh library | DONE | — |
-| 012 | `docs/tasks/012-confirmation-dialogs.md` | Add confirmation before checkout and review submit | TODO | — |
+| 012 | `docs/tasks/012-confirmation-dialogs.md` | Add confirmation before checkout and review submit | DONE | — |
 | 013 | `docs/tasks/013-repo-switcher-wiring.md` | Load favorites from config into repo switcher | TODO | — |
 | 014 | `docs/tasks/014-inbox-wiring.md` | Wire inbox: I key, multi-repo fetch, priority sort | TODO | 006, 013 |
 | 015 | `docs/tasks/015-auto-refresh.md` | Background polling with countdown, pause, toasts | TODO | — |
@@ -55,6 +55,8 @@ Notes:
 - Task 007: filter panel matches mock (static label options: enhancement/bug/docs; CI filter options: All/Passing/Failing; Review filter options: All/Approved/Pending). Pending CI + changes-requested review filters not exposed yet.
 - Task 008: iterm2-driver markdown QA could not open PR detail (no open PRs in repo). Captured PR list screenshot only.
 - Task 028: PR detail redesigned with 4 horizontal tabs (Description, Checks, Files, Comments). Tab bar has counts, active tab uses Primary color. Number keys 1-4, Tab/Shift-Tab, j/k/g/G navigation all working. Visual QA blocked by 0 open PRs in repo; functional tests pass.
+- Task 011: **Fix applied (Feb 5, 2026):** Review form was rendering empty because `m.form.Init()` was never dispatched when entering review mode. Fixed by returning `a.reviewForm.Init()` from the `StartReviewMsg` handler. Also added `WithWidth` propagation. Verified on openclaw/openclaw: huh form renders with action select (Comment/Approve/Request Changes), text body, and Submit/Cancel confirmation. Navigation with arrow keys works. Escape cancels and returns to detail.
+- Task 012: Reusable `ConfirmModel` created with centered bordered dialog. Checkout now shows "Check out branch X for PR #N?" before proceeding. Keys: Enter/y confirm, Esc/n cancel. `ViewConfirm` state added. `CheckoutPRMsg` extended with Branch field. Verified on openclaw/openclaw from both PR list and detail views; both 'n' and Esc cancel correctly return to previous view. Review submit confirmation handled by Task 011's huh form (built-in Submit/Cancel confirm step).
 - Task 022: Pagination implemented and fully verified. Initial load uses config.PageSize (default 50). When cursor nears bottom (within 5 items), LoadMorePRsMsg triggers, animated braille spinner shows, and PRs append via cumulative fetch. Header shows "loaded/total" format (e.g., "100/1896 open") using GraphQL API for total count. Tested on openclaw/openclaw repo (1,896 PRs). **Fix applied (Feb 5, 2026):** The original implementation used full field list including `statusCheckRollup` which caused GitHub API timeouts (HTTP 504) when fetching 100+ PRs. Fixed by using `prListFieldsLight` (excludes statusCheckRollup) for pagination requests. CI status will show as "—" for paginated items until detail view is opened; this is an acceptable tradeoff for reliable pagination. Verified: 50→100→150 PRs load successfully with ~1.5s per page.
 
 Open Issues:
