@@ -3,6 +3,7 @@ package ghcli
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/indrasvat/vivecaka/internal/domain"
@@ -13,14 +14,18 @@ func (a *Adapter) Checkout(ctx context.Context, repo domain.RepoRef, number int)
 	args := []string{"pr", "checkout", fmt.Sprintf("%d", number)}
 	args = append(args, repoArgs(repo)...)
 
-	out, err := ghExec(ctx, args...)
-	if err != nil {
+	if _, err := ghExec(ctx, args...); err != nil {
 		return "", fmt.Errorf("checking out PR #%d: %w", number, err)
 	}
 
-	// gh pr checkout prints the branch name to stdout.
-	branch := strings.TrimSpace(string(out))
-	return branch, nil
+	// gh pr checkout outputs branch info to stderr, not stdout.
+	// Get the actual branch name via git after checkout succeeds.
+	cmd := exec.CommandContext(ctx, "git", "branch", "--show-current")
+	out, err := cmd.Output()
+	if err != nil {
+		return fmt.Sprintf("PR #%d", number), nil
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // Merge merges a PR via gh pr merge (post-MVP, not exposed in UI).
