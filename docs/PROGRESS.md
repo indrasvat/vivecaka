@@ -28,7 +28,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 005 | `docs/tasks/005-diff-navigation.md` | Hunk jump [/], file jump {/}, gg/G, collapse za | DONE | — |
 | 006 | `docs/tasks/006-quick-filters.md` | Quick filters: m (My PRs), n (Needs Review) | DONE | — |
 | 007 | `docs/tasks/007-filter-panel.md` | Full filter panel overlay with f key | DONE | 006 |
-| 008 | `docs/tasks/008-markdown-rendering.md` | Render PR body/comments as markdown via Glamour | TODO | — |
+| 008 | `docs/tasks/008-markdown-rendering.md` | Render PR body/comments as markdown via Glamour | DONE | — |
 | 009 | `docs/tasks/009-syntax-highlighting.md` | Syntax highlighting in diff via Chroma | TODO | 008 |
 | 010 | `docs/tasks/010-comments-enhancement.md` | Comment collapse/expand, reply, resolve | TODO | 008 |
 | 011 | `docs/tasks/011-review-form-huh.md` | Rewrite review form using huh library | TODO | — |
@@ -51,6 +51,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 
 Notes:
 - Task 007: filter panel matches mock (static label options: enhancement/bug/docs; CI filter options: All/Passing/Failing; Review filter options: All/Approved/Pending). Pending CI + changes-requested review filters not exposed yet.
+- Task 008: iterm2-driver markdown QA could not open PR detail (no open PRs in repo). Captured PR list screenshot only.
 
 ## Recommended Execution Order
 

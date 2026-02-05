@@ -1,6 +1,6 @@
 # Task 008: Markdown Rendering with Glamour
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 

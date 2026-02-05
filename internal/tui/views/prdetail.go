@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/indrasvat/vivecaka/internal/tui/core"
@@ -21,6 +22,9 @@ type PRDetailModel struct {
 	pane    DetailPane
 	scrollY int
 	loading bool
+
+	bodyCache    markdownCache
+	commentCache map[string]markdownCache
 }
 
 // DetailPane represents the active pane in detail view.
@@ -32,6 +36,12 @@ const (
 	PaneChecks
 	PaneComments
 )
+
+type markdownCache struct {
+	width    int
+	source   string
+	rendered string
+}
 
 // NewPRDetailModel creates a new PR detail view.
 func NewPRDetailModel(styles core.Styles, keys core.KeyMap) PRDetailModel {
@@ -53,6 +63,8 @@ func (m *PRDetailModel) SetDetail(d *domain.PRDetail) {
 	m.detail = d
 	m.loading = false
 	m.scrollY = 0
+	m.bodyCache = markdownCache{}
+	m.commentCache = make(map[string]markdownCache)
 }
 
 // Message types.
@@ -243,7 +255,8 @@ func (m *PRDetailModel) renderInfoPane(height int) string {
 
 	lines = append(lines, "")
 	if d.Body != "" {
-		lines = append(lines, d.Body)
+		bodyWidth := max(20, m.width-2)
+		lines = append(lines, renderMarkdownCached(&m.bodyCache, d.Body, bodyWidth))
 	} else {
 		lines = append(lines, lipgloss.NewStyle().Foreground(t.Muted).Render("No description provided."))
 	}
@@ -313,6 +326,11 @@ func (m *PRDetailModel) renderCommentsPane(height int) string {
 	}
 
 	var lines []string
+	commentIndent := "      "
+	commentWidth := max(20, m.width-len(commentIndent))
+	if m.commentCache == nil {
+		m.commentCache = make(map[string]markdownCache)
+	}
 	for _, thread := range d.Comments {
 		header := fmt.Sprintf("  %s:%d", thread.Path, thread.Line)
 		if thread.Resolved {
@@ -321,9 +339,9 @@ func (m *PRDetailModel) renderCommentsPane(height int) string {
 		lines = append(lines, lipgloss.NewStyle().Foreground(t.Info).Bold(true).Render(header))
 
 		for _, c := range thread.Comments {
-			lines = append(lines,
-				fmt.Sprintf("    @%s: %s", c.Author, c.Body),
-			)
+			lines = append(lines, fmt.Sprintf("    @%s:", c.Author))
+			rendered := renderMarkdownCachedMap(m.commentCache, c.ID, c.Body, commentWidth)
+			lines = append(lines, indentLines(rendered, commentIndent))
 		}
 		lines = append(lines, "")
 	}
@@ -368,4 +386,62 @@ func formatCheckSummary(checks []domain.Check) string {
 		parts = append(parts, fmt.Sprintf("%d no status", none))
 	}
 	return strings.Join(parts, ", ")
+}
+
+func renderMarkdown(content string, width int) string {
+	if strings.TrimSpace(content) == "" {
+		return ""
+	}
+	if width < 20 {
+		width = 20
+	}
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return content
+	}
+	out, err := renderer.Render(content)
+	if err != nil {
+		return content
+	}
+	return strings.TrimRight(out, "\n")
+}
+
+func renderMarkdownCached(cache *markdownCache, content string, width int) string {
+	if cache != nil && cache.source == content && cache.width == width && cache.rendered != "" {
+		return cache.rendered
+	}
+	rendered := renderMarkdown(content, width)
+	if cache != nil {
+		cache.source = content
+		cache.width = width
+		cache.rendered = rendered
+	}
+	return rendered
+}
+
+func renderMarkdownCachedMap(cache map[string]markdownCache, key, content string, width int) string {
+	if cache != nil {
+		if entry, ok := cache[key]; ok && entry.source == content && entry.width == width && entry.rendered != "" {
+			return entry.rendered
+		}
+	}
+	rendered := renderMarkdown(content, width)
+	if cache != nil {
+		cache[key] = markdownCache{width: width, source: content, rendered: rendered}
+	}
+	return rendered
+}
+
+func indentLines(text, prefix string) string {
+	if text == "" {
+		return ""
+	}
+	lines := strings.Split(text, "\n")
+	for i := range lines {
+		lines[i] = prefix + lines[i]
+	}
+	return strings.Join(lines, "\n")
 }

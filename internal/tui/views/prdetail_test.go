@@ -1,6 +1,7 @@
 package views
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -463,5 +464,22 @@ func TestDetailViewSmallHeight(t *testing.T) {
 	view := m.View()
 	if view == "" {
 		t.Error("small height view should not be empty")
+	}
+}
+
+func TestRenderMarkdownBold(t *testing.T) {
+	out := renderMarkdown("**bold**", 40)
+	if !strings.Contains(out, "bold") {
+		t.Errorf("rendered markdown should contain text, got %q", out)
+	}
+}
+
+func TestRenderMarkdownList(t *testing.T) {
+	out := renderMarkdown("- item", 40)
+	if !strings.Contains(out, "item") {
+		t.Errorf("rendered list should contain item, got %q", out)
+	}
+	if !strings.Contains(out, "•") {
+		t.Errorf("rendered list should include bullet, got %q", out)
 	}
 }
