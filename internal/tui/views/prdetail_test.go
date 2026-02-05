@@ -524,3 +524,200 @@ func TestRenderMarkdownList(t *testing.T) {
 		t.Errorf("rendered list should include bullet, got %q", out)
 	}
 }
+
+// Comment pane tests
+
+func TestCommentPaneNavigation(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDetail(testDetail())
+	m.pane = PaneComments
+
+	// Start at first thread
+	if m.commentCursor != 0 {
+		t.Errorf("initial cursor = %d, want 0", m.commentCursor)
+	}
+
+	// Navigate down
+	down := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	m.Update(down)
+	if m.commentCursor != 1 {
+		t.Errorf("cursor after j = %d, want 1", m.commentCursor)
+	}
+
+	// Navigate up
+	up := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
+	m.Update(up)
+	if m.commentCursor != 0 {
+		t.Errorf("cursor after k = %d, want 0", m.commentCursor)
+	}
+
+	// Can't go below 0
+	m.Update(up)
+	if m.commentCursor != 0 {
+		t.Errorf("cursor after k at 0 = %d, want 0", m.commentCursor)
+	}
+}
+
+func TestCommentPaneCollapseExpand(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDetail(testDetail())
+	m.pane = PaneComments
+
+	// Initially not collapsed
+	if m.commentCollapsed[0] {
+		t.Error("thread should not be collapsed initially")
+	}
+
+	// Collapse with Space
+	space := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	m.Update(space)
+	if !m.commentCollapsed[0] {
+		t.Error("thread should be collapsed after Space")
+	}
+
+	// Expand again
+	m.Update(space)
+	if m.commentCollapsed[0] {
+		t.Error("thread should be expanded after second Space")
+	}
+
+	// Collapse with za
+	z := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'z'}}
+	a := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+	m.Update(z)
+	m.Update(a)
+	if !m.commentCollapsed[0] {
+		t.Error("thread should be collapsed after za")
+	}
+}
+
+func TestCommentPaneResolve(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	detail := testDetail()
+	detail.Comments[0].ID = "thread-1"
+	m.SetDetail(detail)
+	m.pane = PaneComments
+
+	// 'x' should produce ResolveThreadMsg for unresolved thread
+	x := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
+	cmd := m.Update(x)
+	if cmd == nil {
+		t.Fatal("'x' key should produce a command")
+	}
+
+	msg := cmd()
+	resolve, ok := msg.(ResolveThreadMsg)
+	if !ok {
+		t.Fatalf("expected ResolveThreadMsg, got %T", msg)
+	}
+	if resolve.ThreadID != "thread-1" {
+		t.Errorf("ThreadID = %q, want thread-1", resolve.ThreadID)
+	}
+}
+
+func TestCommentPaneUnresolve(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	detail := testDetail()
+	detail.Comments[1].ID = "thread-2" // This one is resolved
+	m.SetDetail(detail)
+	m.pane = PaneComments
+	m.commentCursor = 1 // Move to resolved thread
+
+	// 'X' should produce UnresolveThreadMsg for resolved thread
+	X := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}}
+	cmd := m.Update(X)
+	if cmd == nil {
+		t.Fatal("'X' key should produce a command")
+	}
+
+	msg := cmd()
+	unresolve, ok := msg.(UnresolveThreadMsg)
+	if !ok {
+		t.Fatalf("expected UnresolveThreadMsg, got %T", msg)
+	}
+	if unresolve.ThreadID != "thread-2" {
+		t.Errorf("ThreadID = %q, want thread-2", unresolve.ThreadID)
+	}
+}
+
+func TestCommentPaneReplyKey(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	detail := testDetail()
+	detail.Comments[0].ID = "thread-1"
+	m.SetDetail(detail)
+	m.pane = PaneComments
+
+	// 'r' in comments pane should produce ReplyToThreadMsg
+	r := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+	cmd := m.Update(r)
+	if cmd == nil {
+		t.Fatal("'r' key should produce a command in comments pane")
+	}
+
+	msg := cmd()
+	reply, ok := msg.(ReplyToThreadMsg)
+	if !ok {
+		t.Fatalf("expected ReplyToThreadMsg, got %T", msg)
+	}
+	if reply.ThreadID != "thread-1" {
+		t.Errorf("ThreadID = %q, want thread-1", reply.ThreadID)
+	}
+}
+
+func TestCommentPaneViewRendering(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDetail(testDetail())
+	m.pane = PaneComments
+
+	view := m.View()
+	if view == "" {
+		t.Error("comments pane view should not be empty")
+	}
+	// Should contain thread info
+	if !strings.Contains(view, "plugin.go") {
+		t.Error("view should contain file path")
+	}
+}
+
+func TestCommentPaneCollapsedView(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDetail(testDetail())
+	m.pane = PaneComments
+	m.commentCollapsed[0] = true
+
+	view := m.View()
+	// Collapsed view should show reply count
+	if !strings.Contains(view, "replies") {
+		t.Error("collapsed view should show reply count")
+	}
+}
+
+func TestGetPRNumber(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+
+	// No detail set
+	if m.GetPRNumber() != 0 {
+		t.Error("GetPRNumber should return 0 when no detail")
+	}
+
+	// After setting detail
+	m.SetDetail(testDetail())
+	if m.GetPRNumber() != 42 {
+		t.Errorf("GetPRNumber = %d, want 42", m.GetPRNumber())
+	}
+
+	// When loading
+	m.detail = nil
+	m.pendingNum = 123
+	if m.GetPRNumber() != 123 {
+		t.Errorf("GetPRNumber (pending) = %d, want 123", m.GetPRNumber())
+	}
+}

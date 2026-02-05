@@ -28,6 +28,11 @@ type PRDetailModel struct {
 	bodyCache    markdownCache
 	commentCache map[string]markdownCache
 	pendingNum   int
+
+	// Comment pane state
+	commentCollapsed map[int]bool // collapsed state per thread index
+	commentCursor    int          // selected thread index
+	pendingCollapseZ bool         // waiting for 'a' after 'z'
 }
 
 // DetailPane represents the active pane in detail view.
@@ -70,6 +75,16 @@ func (m *PRDetailModel) SetDetail(d *domain.PRDetail) {
 	m.bodyCache = markdownCache{}
 	m.commentCache = make(map[string]markdownCache)
 	m.pendingNum = 0
+	m.commentCollapsed = make(map[int]bool)
+	m.commentCursor = 0
+}
+
+// GetPRNumber returns the current PR number (0 if no PR loaded).
+func (m *PRDetailModel) GetPRNumber() int {
+	if m.detail != nil {
+		return m.detail.Number
+	}
+	return m.pendingNum
 }
 
 // StartLoading shows loading state while detail is fetched.
@@ -96,6 +111,18 @@ type (
 	}
 	OpenDiffMsg    struct{ Number int }
 	StartReviewMsg struct{ Number int }
+
+	// Comment thread messages
+	ReplyToThreadMsg struct {
+		ThreadID string
+		Body     string
+	}
+	ResolveThreadMsg struct {
+		ThreadID string
+	}
+	UnresolveThreadMsg struct {
+		ThreadID string
+	}
 )
 
 // Update handles messages for the detail view.
@@ -118,6 +145,15 @@ func (m *PRDetailModel) Update(msg tea.Msg) tea.Cmd {
 }
 
 func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
+	// Handle za sequence for collapse
+	if m.pendingCollapseZ && msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
+		m.pendingCollapseZ = false
+		if msg.Runes[0] == 'a' && m.pane == PaneComments {
+			m.toggleCommentCollapse()
+			return nil
+		}
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Tab):
 		m.pane = (m.pane + 1) % 4
@@ -126,9 +162,19 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		m.pane = (m.pane + 3) % 4
 		m.scrollY = 0
 	case key.Matches(msg, m.keys.Down):
-		m.scrollY++
+		if m.pane == PaneComments && m.detail != nil && len(m.detail.Comments) > 0 {
+			if m.commentCursor < len(m.detail.Comments)-1 {
+				m.commentCursor++
+			}
+		} else {
+			m.scrollY++
+		}
 	case key.Matches(msg, m.keys.Up):
-		if m.scrollY > 0 {
+		if m.pane == PaneComments && m.detail != nil && len(m.detail.Comments) > 0 {
+			if m.commentCursor > 0 {
+				m.commentCursor--
+			}
+		} else if m.scrollY > 0 {
 			m.scrollY--
 		}
 	case key.Matches(msg, m.keys.Enter):
@@ -147,20 +193,66 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 			return func() tea.Msg { return CheckoutPRMsg{Number: m.detail.Number} }
 		}
 	}
-	// 'r' key for review.
+
+	// Handle single-key commands
 	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
-		switch msg.Runes[0] {
+		r := msg.Runes[0]
+		switch r {
 		case 'r':
 			if m.detail != nil {
+				// In comments pane, 'r' starts a reply to the current thread
+				// In other panes, 'r' starts a review
+				if m.pane == PaneComments && len(m.detail.Comments) > 0 {
+					thread := m.detail.Comments[m.commentCursor]
+					return func() tea.Msg {
+						return ReplyToThreadMsg{ThreadID: thread.ID, Body: ""}
+					}
+				}
 				return func() tea.Msg { return StartReviewMsg{Number: m.detail.Number} }
 			}
 		case 'd':
 			if m.detail != nil {
 				return func() tea.Msg { return OpenDiffMsg{Number: m.detail.Number} }
 			}
+		case 'z':
+			if m.pane == PaneComments {
+				m.pendingCollapseZ = true
+			}
+		case ' ':
+			// Space toggles collapse in comments pane
+			if m.pane == PaneComments {
+				m.toggleCommentCollapse()
+			}
+		case 'x':
+			// Resolve thread
+			if m.pane == PaneComments && m.detail != nil && len(m.detail.Comments) > 0 {
+				thread := m.detail.Comments[m.commentCursor]
+				if !thread.Resolved {
+					return func() tea.Msg { return ResolveThreadMsg{ThreadID: thread.ID} }
+				}
+			}
+		case 'X':
+			// Unresolve thread
+			if m.pane == PaneComments && m.detail != nil && len(m.detail.Comments) > 0 {
+				thread := m.detail.Comments[m.commentCursor]
+				if thread.Resolved {
+					return func() tea.Msg { return UnresolveThreadMsg{ThreadID: thread.ID} }
+				}
+			}
 		}
 	}
 	return nil
+}
+
+// toggleCommentCollapse toggles the collapsed state of the current thread.
+func (m *PRDetailModel) toggleCommentCollapse() {
+	if m.detail == nil || len(m.detail.Comments) == 0 {
+		return
+	}
+	if m.commentCollapsed == nil {
+		m.commentCollapsed = make(map[int]bool)
+	}
+	m.commentCollapsed[m.commentCursor] = !m.commentCollapsed[m.commentCursor]
 }
 
 func (m *PRDetailModel) openURL() string {
@@ -375,17 +467,53 @@ func (m *PRDetailModel) renderCommentsPane(height int) string {
 	if m.commentCache == nil {
 		m.commentCache = make(map[string]markdownCache)
 	}
-	for _, thread := range d.Comments {
-		header := fmt.Sprintf("  %s:%d", thread.Path, thread.Line)
+	if m.commentCollapsed == nil {
+		m.commentCollapsed = make(map[int]bool)
+	}
+
+	for i, thread := range d.Comments {
+		isSelected := i == m.commentCursor
+		isCollapsed := m.commentCollapsed[i]
+
+		// Build header
+		marker := "▼"
+		if isCollapsed {
+			marker = "▶"
+		}
+		cursorMark := " "
+		if isSelected {
+			cursorMark = ">"
+		}
+
+		header := fmt.Sprintf("%s%s %s:%d", cursorMark, marker, thread.Path, thread.Line)
 		if thread.Resolved {
 			header += " [resolved]"
 		}
-		lines = append(lines, lipgloss.NewStyle().Foreground(t.Info).Bold(true).Render(header))
+		if isCollapsed && len(thread.Comments) > 0 {
+			// Show first comment preview and reply count
+			firstBody := thread.Comments[0].Body
+			firstBody = strings.ReplaceAll(firstBody, "\n", " ")
+			if len(firstBody) > 30 {
+				firstBody = firstBody[:30] + "..."
+			}
+			header += fmt.Sprintf(": %s (%d replies)", firstBody, len(thread.Comments))
+		}
 
-		for _, c := range thread.Comments {
-			lines = append(lines, fmt.Sprintf("    @%s:", c.Author))
-			rendered := renderMarkdownCachedMap(m.commentCache, c.ID, c.Body, commentWidth)
-			lines = append(lines, indentLines(rendered, commentIndent))
+		// Style the header
+		headerStyle := lipgloss.NewStyle().Foreground(t.Info).Bold(true)
+		if isSelected {
+			headerStyle = headerStyle.Background(t.Primary).Foreground(t.Bg)
+		}
+		lines = append(lines, headerStyle.Render(header))
+
+		// If not collapsed, show comment details
+		if !isCollapsed {
+			for _, c := range thread.Comments {
+				authorLine := fmt.Sprintf("    @%s:", c.Author)
+				lines = append(lines, lipgloss.NewStyle().Foreground(t.Muted).Render(authorLine))
+				rendered := renderMarkdownCachedMap(m.commentCache, c.ID, c.Body, commentWidth)
+				lines = append(lines, indentLines(rendered, commentIndent))
+			}
 		}
 		lines = append(lines, "")
 	}

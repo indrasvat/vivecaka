@@ -65,3 +65,11 @@ func checkoutPRCmd(uc *usecase.CheckoutPR, repo domain.RepoRef, number int) tea.
 		return views.CheckoutDoneMsg{Branch: branch, Err: err}
 	}
 }
+
+// resolveThreadCmd resolves a review comment thread.
+func resolveThreadCmd(uc *usecase.ResolveThread, repo domain.RepoRef, threadID string) tea.Cmd {
+	return func() tea.Msg {
+		err := uc.Execute(context.Background(), repo, threadID)
+		return resolveThreadDoneMsg{ThreadID: threadID, Err: err}
+	}
+}

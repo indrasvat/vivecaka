@@ -68,10 +68,11 @@ type App struct {
 	writer   domain.PRWriter
 
 	// Use cases
-	listPRs     *usecase.ListPRs
-	getPRDetail *usecase.GetPRDetail
-	reviewPR    *usecase.ReviewPR
-	checkoutPR  *usecase.CheckoutPR
+	listPRs       *usecase.ListPRs
+	getPRDetail   *usecase.GetPRDetail
+	reviewPR      *usecase.ReviewPR
+	checkoutPR    *usecase.CheckoutPR
+	resolveThread *usecase.ResolveThread
 
 	// View models
 	prList       views.PRListModel
@@ -142,6 +143,7 @@ func New(cfg *config.Config, opts ...Option) *App {
 	}
 	if a.reviewer != nil {
 		a.reviewPR = usecase.NewReviewPR(a.reviewer)
+		a.resolveThread = usecase.NewResolveThread(a.reviewer)
 	}
 	if a.writer != nil {
 		a.checkoutPR = usecase.NewCheckoutPR(a.writer)
@@ -288,6 +290,22 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.CloseInboxMsg:
 		a.view = core.ViewPRList
 		return a, nil
+
+	case views.ResolveThreadMsg:
+		return a.handleResolveThread(msg)
+
+	case views.UnresolveThreadMsg:
+		// TODO: Implement unresolve (needs API support)
+		cmd := a.toasts.Add("Unresolve not implemented yet", domain.ToastInfo, 3*time.Second)
+		return a, cmd
+
+	case views.ReplyToThreadMsg:
+		// TODO: Implement reply (needs text input UI)
+		cmd := a.toasts.Add("Reply not implemented yet", domain.ToastInfo, 3*time.Second)
+		return a, cmd
+
+	case resolveThreadDoneMsg:
+		return a.handleResolveThreadDone(msg)
 
 	case views.TutorialDoneMsg:
 		if err := views.MarkTutorialDone(); err != nil {
@@ -571,6 +589,35 @@ func (a *App) handleSwitchRepo(msg views.SwitchRepoMsg) (tea.Model, tea.Cmd) {
 		return a, loadPRsCmd(a.listPRs, a.repo, a.filterOpts)
 	}
 	return a, nil
+}
+
+// resolveThreadDoneMsg is sent when a resolve/unresolve thread operation completes.
+type resolveThreadDoneMsg struct {
+	ThreadID string
+	Err      error
+}
+
+func (a *App) handleResolveThread(msg views.ResolveThreadMsg) (tea.Model, tea.Cmd) {
+	if a.resolveThread != nil && a.repo.Owner != "" {
+		return a, resolveThreadCmd(a.resolveThread, a.repo, msg.ThreadID)
+	}
+	return a, nil
+}
+
+func (a *App) handleResolveThreadDone(msg resolveThreadDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		cmd := a.toasts.Add(
+			fmt.Sprintf("Resolve failed: %v", msg.Err),
+			domain.ToastError, 5*time.Second,
+		)
+		return a, cmd
+	}
+	cmd := a.toasts.Add("Thread resolved", domain.ToastSuccess, 3*time.Second)
+	// Refresh PR detail to show updated resolved status
+	if a.getPRDetail != nil && a.prDetail.GetPRNumber() > 0 {
+		return a, tea.Batch(cmd, loadPRDetailCmd(a.getPRDetail, a.repo, a.prDetail.GetPRNumber()))
+	}
+	return a, cmd
 }
 
 func (a *App) dispatchKeyToView(msg tea.KeyMsg) tea.Cmd {

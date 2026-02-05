@@ -1,6 +1,6 @@
 # Task 010: Comments Pane Enhancement
 
-## Status: TODO
+## Status: DONE
 
 ## Depends On: 008 (markdown rendering for comment bodies)
 
