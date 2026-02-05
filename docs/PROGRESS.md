@@ -42,7 +42,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 019 | `docs/tasks/019-diff-two-pane-layout.md` | File tree + content split layout for diff | TODO | — |
 | 020 | `docs/tasks/020-diff-side-by-side.md` | Side-by-side diff mode with t toggle | TODO | 019 |
 | 021 | `docs/tasks/021-visual-selection-mode.md` | v key for multi-select, batch operations | TODO | — |
-| 022 | `docs/tasks/022-pagination.md` | Paginated PR loading with infinite scroll | TODO | — |
+| 022 | `docs/tasks/022-pagination.md` | Paginated PR loading with infinite scroll | DONE | — |
 | 023 | `docs/tasks/023-caching.md` | PR list caching for instant startup | TODO | — |
 | 024 | `docs/tasks/024-config-enhancements.md` | Keybinding overrides, adaptive colors, notifications | TODO | — |
 | 025 | `docs/tasks/025-persistence.md` | Per-repo filter memory, unread indicators | TODO | 001, 007, 023 |
@@ -55,6 +55,7 @@ Notes:
 - Task 007: filter panel matches mock (static label options: enhancement/bug/docs; CI filter options: All/Passing/Failing; Review filter options: All/Approved/Pending). Pending CI + changes-requested review filters not exposed yet.
 - Task 008: iterm2-driver markdown QA could not open PR detail (no open PRs in repo). Captured PR list screenshot only.
 - Task 028: PR detail redesigned with 4 horizontal tabs (Description, Checks, Files, Comments). Tab bar has counts, active tab uses Primary color. Number keys 1-4, Tab/Shift-Tab, j/k/g/G navigation all working. Visual QA blocked by 0 open PRs in repo; functional tests pass.
+- Task 022: Pagination implemented. Initial load uses config.PageSize (default 50). When cursor nears bottom (within 5 items), LoadMorePRsMsg triggers, "Loading more..." indicator shows, and PRs append via cumulative fetch. Tested on openclaw/openclaw repo (1,895+ PRs). gh CLI doesn't support offset, so adapter fetches page*perPage items and returns only items for current page.
 
 Open Issues:
 - ~~PR detail loading spinner appears stuck~~ **RESOLVED** (Feb 5, 2026): Spinner now animates correctly. Root causes addressed: (1) Fixed View() logic to only show loading state when `loading=true`, not when `detail==nil`; (2) Added explicit `return nil` for `PRDetailLoadedMsg` in Update(); (3) Verified spinner frames cycle properly via iTerm2 automation tests. The `gh pr checks` API call takes ~1.4s which causes visible spinner animation before PR detail loads.

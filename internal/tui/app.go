@@ -125,7 +125,7 @@ func New(cfg *config.Config, opts ...Option) *App {
 		status: components.NewStatusBar(styles),
 		toasts: components.NewToastManager(styles),
 
-		filterOpts: domain.ListOpts{State: domain.PRStateOpen, Draft: domain.DraftInclude},
+		filterOpts: domain.ListOpts{State: domain.PRStateOpen, Draft: domain.DraftInclude, PerPage: cfg.General.PageSize},
 	}
 
 	for _, opt := range opts {
@@ -134,6 +134,7 @@ func New(cfg *config.Config, opts ...Option) *App {
 
 	// Initialize banner with version
 	a.banner = components.NewBanner(styles, a.version)
+	a.prList.SetPerPage(cfg.General.PageSize)
 	a.prList.SetFilter(a.filterOpts)
 
 	// Wire use cases from injected adapters.
@@ -196,6 +197,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case views.PRsLoadedMsg:
 		return a.handlePRsLoaded(msg)
+
+	case views.LoadMorePRsMsg:
+		return a.handleLoadMorePRs(msg)
+
+	case views.MorePRsLoadedMsg:
+		return a.handleMorePRsLoaded(msg)
 
 	case views.OpenPRMsg:
 		return a.handleOpenPR(msg)
@@ -503,7 +510,7 @@ func (a *App) handlePRsLoaded(msg views.PRsLoadedMsg) (tea.Model, tea.Cmd) {
 	// Store PRs but don't switch view while banner is visible
 	// The banner dismiss handler will transition to the PR list
 	a.prList.SetPRs(msg.PRs)
-	a.header.SetPRCount(len(msg.PRs))
+	a.header.SetPRCount(a.prList.TotalPRs())
 	a.header.SetFilter(a.prList.FilterLabel())
 	if a.view != core.ViewBanner {
 		a.view = core.ViewPRList
@@ -511,9 +518,39 @@ func (a *App) handlePRsLoaded(msg views.PRsLoadedMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+func (a *App) handleLoadMorePRs(msg views.LoadMorePRsMsg) (tea.Model, tea.Cmd) {
+	if a.listPRs == nil || a.repo.Owner == "" {
+		return a, nil
+	}
+	// Mark that we're loading more
+	a.prList.SetLoadingMore(msg.Page)
+	// Create opts with pagination
+	opts := a.filterOpts
+	opts.Page = msg.Page
+	return a, loadMorePRsCmd(a.listPRs, a.repo, opts, msg.Page)
+}
+
+func (a *App) handleMorePRsLoaded(msg views.MorePRsLoadedMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		cmd := a.toasts.Add(
+			fmt.Sprintf("Error loading more PRs: %v", msg.Err),
+			domain.ToastError, 5*time.Second,
+		)
+		// Reset loading state
+		a.prList.AppendPRs(nil, false)
+		return a, cmd
+	}
+	// Append the new PRs
+	a.prList.AppendPRs(msg.PRs, msg.HasMore)
+	// Update header count to show total loaded PRs
+	a.header.SetPRCount(a.prList.TotalPRs())
+	return a, nil
+}
+
 func (a *App) handleOpenPR(msg views.OpenPRMsg) (tea.Model, tea.Cmd) {
 	a.view = core.ViewPRDetail
 	spinCmd := a.prDetail.StartLoading(msg.Number)
+
 	if a.getPRDetail != nil && a.repo.Owner != "" {
 		return a, tea.Batch(spinCmd, loadPRDetailCmd(a.getPRDetail, a.repo, msg.Number))
 	}

@@ -40,3 +40,16 @@ type CheckoutDoneMsg struct {
 type ReviewSubmittedMsg struct {
 	Err error
 }
+
+// LoadMorePRsMsg is sent when the user scrolls near the bottom and more PRs should be loaded.
+type LoadMorePRsMsg struct {
+	Page int
+}
+
+// MorePRsLoadedMsg is sent when additional PRs have been loaded (pagination).
+type MorePRsLoadedMsg struct {
+	PRs     []domain.PR
+	Page    int
+	HasMore bool
+	Err     error
+}

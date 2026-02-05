@@ -1,6 +1,6 @@
 # Task 022: Pagination and Infinite Scroll
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 

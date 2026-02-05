@@ -34,6 +34,12 @@ type PRListModel struct {
 	username      string
 	quickFilter   quickFilter
 	panelLabel    string
+
+	// Pagination state
+	page        int  // current page (1-based)
+	perPage     int  // items per page
+	hasMore     bool // are there more PRs to load?
+	loadingMore bool // currently loading more PRs?
 }
 
 // NewPRListModel creates a new PR list view.
@@ -45,6 +51,16 @@ func NewPRListModel(styles core.Styles, keys core.KeyMap) PRListModel {
 		sortField: "updated",
 		sortAsc:   false,
 		filter:    domain.ListOpts{State: domain.PRStateOpen},
+		page:      1,
+		perPage:   50, // default, can be overridden via SetPerPage
+		hasMore:   true,
+	}
+}
+
+// SetPerPage sets the page size for pagination.
+func (m *PRListModel) SetPerPage(n int) {
+	if n > 0 {
+		m.perPage = n
 	}
 }
 
@@ -54,19 +70,62 @@ func (m *PRListModel) SetSize(w, h int) {
 	m.height = h
 }
 
-// SetPRs updates the PR list data.
+// SetPRs updates the PR list data (initial load, replaces all PRs).
 func (m *PRListModel) SetPRs(prs []domain.PR) {
 	m.prs = prs
 	m.loading = false
+	m.page = 1
+	// If we got fewer than perPage, there are no more pages
+	m.hasMore = len(prs) >= m.perPage
+	m.loadingMore = false
 	m.applyFilter()
 }
 
+// AppendPRs adds more PRs to the existing list (pagination).
+func (m *PRListModel) AppendPRs(prs []domain.PR, hasMore bool) {
+	m.prs = append(m.prs, prs...)
+	m.hasMore = hasMore
+	m.loadingMore = false
+	m.applyFilter()
+}
+
+// IsLoadingMore returns true if more PRs are being loaded.
+func (m *PRListModel) IsLoadingMore() bool {
+	return m.loadingMore
+}
+
+// HasMore returns true if there are more PRs to load.
+func (m *PRListModel) HasMore() bool {
+	return m.hasMore
+}
+
+// CurrentPage returns the current page number.
+func (m *PRListModel) CurrentPage() int {
+	return m.page
+}
+
+// PerPage returns the page size.
+func (m *PRListModel) PerPage() int {
+	return m.perPage
+}
+
+// SetLoadingMore marks that more PRs are being loaded.
+func (m *PRListModel) SetLoadingMore(page int) {
+	m.loadingMore = true
+	m.page = page
+}
+
 // SetFilter updates the active filter options.
+// This resets pagination state since filters change the result set.
 func (m *PRListModel) SetFilter(opts domain.ListOpts) {
 	m.filter = opts
 	m.panelLabel = filterLabelFromOpts(opts)
 	m.cursor = 0
 	m.offset = 0
+	// Reset pagination when filter changes
+	m.page = 1
+	m.hasMore = true
+	m.loadingMore = false
 	m.applyFilter()
 }
 
@@ -92,6 +151,16 @@ func (m *PRListModel) IsLoading() bool {
 // HasPRs returns true if PRs have been loaded (even if filtered list is empty).
 func (m *PRListModel) HasPRs() bool {
 	return !m.loading
+}
+
+// FilteredPRs returns the current filtered PR list.
+func (m *PRListModel) FilteredPRs() []domain.PR {
+	return m.filtered
+}
+
+// TotalPRs returns the total number of PRs loaded (before filtering).
+func (m *PRListModel) TotalPRs() int {
+	return len(m.prs)
 }
 
 // PRListMsg types for communication with parent.
@@ -155,6 +224,10 @@ func (m *PRListModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		if m.cursor < listLen-1 {
 			m.cursor++
 			m.ensureVisible()
+			// Check if we need to load more PRs
+			if cmd := m.checkLoadMore(); cmd != nil {
+				return cmd
+			}
 		}
 	case key.Matches(msg, m.keys.Up):
 		if m.cursor > 0 {
@@ -168,6 +241,10 @@ func (m *PRListModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 			m.cursor = listLen - 1
 		}
 		m.ensureVisible()
+		// Check if we need to load more PRs
+		if cmd := m.checkLoadMore(); cmd != nil {
+			return cmd
+		}
 	case key.Matches(msg, m.keys.HalfPageUp):
 		visible := m.visibleRows()
 		m.cursor -= visible / 2
@@ -181,6 +258,10 @@ func (m *PRListModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, m.keys.Bottom):
 		m.cursor = listLen - 1
 		m.ensureVisible()
+		// Check if we need to load more PRs
+		if cmd := m.checkLoadMore(); cmd != nil {
+			return cmd
+		}
 	case key.Matches(msg, m.keys.Enter):
 		if pr := m.SelectedPR(); pr != nil {
 			return func() tea.Msg { return OpenPRMsg{Number: pr.Number} }
@@ -310,6 +391,25 @@ func (m *PRListModel) ensureVisible() {
 	}
 }
 
+// checkLoadMore checks if we should load more PRs and returns a command if so.
+// Triggers when cursor is within 5 items of the bottom and more PRs are available.
+func (m *PRListModel) checkLoadMore() tea.Cmd {
+	// Don't load more if already loading, no more pages, or list is empty
+	if m.loadingMore || !m.hasMore || len(m.filtered) == 0 {
+		return nil
+	}
+
+	// Trigger load when within 5 items of bottom
+	distanceFromBottom := len(m.filtered) - 1 - m.cursor
+	if distanceFromBottom <= 5 {
+		nextPage := m.page + 1
+		return func() tea.Msg {
+			return LoadMorePRsMsg{Page: nextPage}
+		}
+	}
+	return nil
+}
+
 // View renders the PR list.
 func (m *PRListModel) View() string {
 	if m.loading {
@@ -344,6 +444,12 @@ func (m *PRListModel) View() string {
 
 	for i := m.offset; i < end; i++ {
 		rows = append(rows, m.renderPRRow(i, m.filtered[i]))
+	}
+
+	// Loading more indicator (shows at bottom when fetching next page).
+	if m.loadingMore {
+		loadingStyle := lipgloss.NewStyle().Foreground(m.styles.Theme.Muted).Italic(true)
+		rows = append(rows, loadingStyle.Render("  Loading more..."))
 	}
 
 	// Search bar (replaces one row if active).

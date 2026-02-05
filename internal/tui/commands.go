@@ -38,11 +38,22 @@ func loadPRsCmd(uc *usecase.ListPRs, repo domain.RepoRef, opts domain.ListOpts) 
 	}
 }
 
+// loadMorePRsCmd fetches additional PRs for pagination.
+func loadMorePRsCmd(uc *usecase.ListPRs, repo domain.RepoRef, opts domain.ListOpts, page int) tea.Cmd {
+	return func() tea.Msg {
+		prs, err := uc.Execute(context.Background(), repo, opts)
+		// Determine if there are more pages: if we got fewer than PerPage, no more
+		hasMore := len(prs) >= opts.PerPage
+		return views.MorePRsLoadedMsg{PRs: prs, Page: page, HasMore: hasMore, Err: err}
+	}
+}
+
 // loadPRDetailCmd fetches full PR detail with timeout.
 func loadPRDetailCmd(uc *usecase.GetPRDetail, repo domain.RepoRef, number int) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), ghTimeout)
 		defer cancel()
+
 		detail, err := uc.Execute(ctx, repo, number)
 		return views.PRDetailLoadedMsg{Detail: detail, Err: err}
 	}

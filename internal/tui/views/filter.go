@@ -56,6 +56,9 @@ type FilterModel struct {
 	ciIdx     int
 	reviewIdx int
 	draftIdx  int
+
+	// Preserve pagination settings from original opts
+	perPage int
 }
 
 // NewFilterModel creates a new filter panel.
@@ -80,6 +83,9 @@ func (m *FilterModel) SetSize(w, h int) {
 func (m *FilterModel) SetOpts(opts domain.ListOpts) {
 	m.Reset()
 	m.focus = filterFieldStatus
+
+	// Preserve pagination settings
+	m.perPage = opts.PerPage
 
 	switch opts.State {
 	case domain.PRStateClosed:
@@ -108,11 +114,12 @@ func (m *FilterModel) SetOpts(opts domain.ListOpts) {
 // Opts returns the current filter selections as ListOpts.
 func (m *FilterModel) Opts() domain.ListOpts {
 	opts := domain.ListOpts{
-		State:  filterStatusValues[m.statusIdx],
-		Author: strings.TrimSpace(m.author),
-		CI:     filterCIValues[m.ciIdx],
-		Review: filterReviewValues[m.reviewIdx],
-		Draft:  filterDraftValues[m.draftIdx],
+		State:   filterStatusValues[m.statusIdx],
+		Author:  strings.TrimSpace(m.author),
+		CI:      filterCIValues[m.ciIdx],
+		Review:  filterReviewValues[m.reviewIdx],
+		Draft:   filterDraftValues[m.draftIdx],
+		PerPage: m.perPage, // Preserve pagination settings
 	}
 
 	for _, label := range m.labelOptions {

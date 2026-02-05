@@ -72,6 +72,8 @@ type ghFile struct {
 }
 
 // ListPRs fetches PRs via gh pr list --json.
+// Supports pagination via opts.Page and opts.PerPage.
+// Page is 1-based. For page > 1, we fetch page*perPage items and return only items for that page.
 func (a *Adapter) ListPRs(ctx context.Context, repo domain.RepoRef, opts domain.ListOpts) ([]domain.PR, error) {
 	args := []string{"pr", "list", "--json", prListFields}
 	args = append(args, repoArgs(repo)...)
@@ -88,17 +90,35 @@ func (a *Adapter) ListPRs(ctx context.Context, repo domain.RepoRef, opts domain.
 	if opts.Search != "" {
 		args = append(args, "--search", opts.Search)
 	}
-	if opts.PerPage > 0 {
-		args = append(args, "--limit", fmt.Sprintf("%d", opts.PerPage))
+
+	// Calculate limit for pagination
+	// For page N, we need to fetch N*PerPage items total and skip the first (N-1)*PerPage
+	page := opts.Page
+	if page < 1 {
+		page = 1
 	}
+	perPage := opts.PerPage
+	if perPage <= 0 {
+		perPage = 50 // default
+	}
+	limit := page * perPage
+	args = append(args, "--limit", fmt.Sprintf("%d", limit))
 
 	var ghPRs []ghPR
 	if err := ghJSON(ctx, &ghPRs, args...); err != nil {
 		return nil, fmt.Errorf("listing PRs: %w", err)
 	}
 
-	prs := make([]domain.PR, 0, len(ghPRs))
-	for _, g := range ghPRs {
+	// For pagination, skip items from previous pages
+	startIdx := (page - 1) * perPage
+	if startIdx >= len(ghPRs) {
+		// No more items for this page
+		return []domain.PR{}, nil
+	}
+	pageItems := ghPRs[startIdx:]
+
+	prs := make([]domain.PR, 0, len(pageItems))
+	for _, g := range pageItems {
 		pr := toDomainPR(g)
 		// Client-side draft filter.
 		switch opts.Draft {
