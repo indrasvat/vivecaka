@@ -192,3 +192,14 @@ renderer, _ := glamour.NewTermRenderer(
 - `WithStandardStyle("dark")` or `WithStandardStyle("dracula")` is instant
 - Cache the renderer globally - creating it is fast but reusing is better
 - Available styles: "dark", "light", "dracula", "tokyo-night", "pink", "ascii"
+
+### gh CLI Output Quirks
+- `gh pr checkout` outputs branch info to **stderr**, not stdout. Stdout gets "Already up to date." or similar git noise. Use `git branch --show-current` after checkout to get the actual branch name.
+- Always verify which stream (`stdout` vs `stderr`) a `gh` subcommand uses before relying on its output.
+
+### Async Action UX Pattern (CRITICAL)
+For destructive actions that take time (checkout, merge, review submit):
+- **Don't** close the dialog and show a toast — toasts appear in unexpected locations, are brief, and easy to miss entirely.
+- **Do** keep the dialog visible and transition through states: **prompt → loading (spinner) → result (success/error) → dismiss on keypress**.
+- The user's attention is already on the centered dialog; keep feedback there.
+- Status bar should update to match dialog state ("Checking out..." / "Press any key to continue").
