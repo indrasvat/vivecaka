@@ -685,31 +685,50 @@ func (a *App) handleCheckoutConfirm(msg views.CheckoutPRMsg) (tea.Model, tea.Cmd
 }
 
 func (a *App) handleConfirmResult(msg views.ConfirmResultMsg) (tea.Model, tea.Cmd) {
-	a.view = a.prevView
 	if !msg.Confirmed {
+		a.view = a.prevView
 		return a, nil
 	}
-	// Re-dispatch the original action
+	// Keep dialog open and show loading spinner while the action runs.
 	checkoutMsg, ok := msg.Action.(views.CheckoutPRMsg)
 	if ok && a.checkoutPR != nil && a.repo.Owner != "" {
-		return a, checkoutPRCmd(a.checkoutPR, a.repo, checkoutMsg.Number)
+		branch := checkoutMsg.Branch
+		if branch == "" {
+			branch = fmt.Sprintf("PR #%d", checkoutMsg.Number)
+		}
+		spinnerCmd := a.confirmDialog.ShowLoading(
+			"Checkout Branch",
+			fmt.Sprintf("Checking out \"%s\" for PR #%d...", branch, checkoutMsg.Number),
+		)
+		return a, tea.Batch(spinnerCmd, checkoutPRCmd(a.checkoutPR, a.repo, checkoutMsg.Number))
 	}
+	a.view = a.prevView
 	return a, nil
 }
 
 func (a *App) handleCheckoutDone(msg views.CheckoutDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
+		// Show error in the dialog if it's still open, otherwise toast.
+		if a.view == core.ViewConfirm {
+			a.confirmDialog.ShowResult("Checkout Failed", msg.Err.Error(), false)
+			return a, nil
+		}
 		cmd := a.toasts.Add(
 			fmt.Sprintf("Checkout failed: %v", msg.Err),
 			domain.ToastError, 5*time.Second,
 		)
 		return a, cmd
 	}
+	a.prList.SetCurrentBranch(msg.Branch)
+	// Show success in the dialog if it's still open, otherwise toast.
+	if a.view == core.ViewConfirm {
+		a.confirmDialog.ShowResult("Checkout Complete", fmt.Sprintf("Checked out branch: %s", msg.Branch), true)
+		return a, nil
+	}
 	cmd := a.toasts.Add(
 		fmt.Sprintf("Checked out branch: %s", msg.Branch),
 		domain.ToastSuccess, 3*time.Second,
 	)
-	a.prList.SetCurrentBranch(msg.Branch)
 	return a, cmd
 }
 
@@ -877,8 +896,12 @@ func (a *App) View() string {
 	contentHeight := a.contentHeight()
 	content := a.renderContent(contentHeight)
 
-	// Status bar.
-	a.status.SetHints([]string{views.StatusHints(a.view, a.width)})
+	// Status bar — use dialog-specific hints when confirm is active.
+	if a.view == core.ViewConfirm {
+		a.status.SetHints([]string{a.confirmDialog.ConfirmStateHint()})
+	} else {
+		a.status.SetHints([]string{views.StatusHints(a.view, a.width)})
+	}
 	statusView := a.status.View()
 
 	// Stack vertically: header, content, status bar.
