@@ -48,10 +48,12 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 025 | `docs/tasks/025-persistence.md` | Per-repo filter memory, unread indicators | TODO | 001, 007, 023 |
 | 026 | `docs/tasks/026-testing-foundation.md` | testify migration, adapter fixtures, 80%+ coverage | TODO | — |
 | 027 | `docs/tasks/027-integration-tests.md` | teatest integration tests, TUI test quality | TODO | 026 |
+| 028 | `docs/tasks/028-pr-detail-tabs-layout.md` | Redesign PR detail with horizontal tabs layout | DONE | — |
 
 Notes:
 - Task 007: filter panel matches mock (static label options: enhancement/bug/docs; CI filter options: All/Passing/Failing; Review filter options: All/Approved/Pending). Pending CI + changes-requested review filters not exposed yet.
 - Task 008: iterm2-driver markdown QA could not open PR detail (no open PRs in repo). Captured PR list screenshot only.
+- Task 028: PR detail redesigned with 4 horizontal tabs (Description, Checks, Files, Comments). Tab bar has counts, active tab uses Primary color. Number keys 1-4, Tab/Shift-Tab, j/k/g/G navigation all working. Visual QA blocked by 0 open PRs in repo; functional tests pass.
 
 Open Issues:
 - ~~PR detail loading spinner appears stuck~~ **RESOLVED** (Feb 5, 2026): Spinner now animates correctly. Root causes addressed: (1) Fixed View() logic to only show loading state when `loading=true`, not when `detail==nil`; (2) Added explicit `return nil` for `PRDetailLoadedMsg` in Update(); (3) Verified spinner frames cycle properly via iTerm2 automation tests. The `gh pr checks` API call takes ~1.4s which causes visible spinner animation before PR detail loads.

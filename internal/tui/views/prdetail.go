@@ -14,14 +14,14 @@ import (
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
-// PRDetailModel implements the PR detail view.
+// PRDetailModel implements the PR detail view with horizontal tabs.
 type PRDetailModel struct {
 	detail  *domain.PRDetail
 	width   int
 	height  int
 	styles  core.Styles
 	keys    core.KeyMap
-	pane    DetailPane
+	tab     DetailTab
 	scrollY int
 	loading bool
 	spinner spinner.Model
@@ -30,21 +30,23 @@ type PRDetailModel struct {
 	commentCache map[string]markdownCache
 	pendingNum   int
 
-	// Comment pane state
-	commentCollapsed map[int]bool // collapsed state per thread index
-	commentCursor    int          // selected thread index
-	pendingCollapseZ bool         // waiting for 'a' after 'z'
+	// Comment state
+	commentCollapsed map[int]bool
+	commentCursor    int
+	pendingCollapseZ bool
 }
 
-// DetailPane represents the active pane in detail view.
-type DetailPane int
+// DetailTab represents the active tab in detail view.
+type DetailTab int
 
 const (
-	PaneInfo DetailPane = iota
-	PaneFiles
-	PaneChecks
-	PaneComments
+	TabDescription DetailTab = iota
+	TabChecks
+	TabFiles
+	TabComments
 )
+
+const numTabs = 4
 
 type markdownCache struct {
 	width    int
@@ -59,6 +61,7 @@ func NewPRDetailModel(styles core.Styles, keys core.KeyMap) PRDetailModel {
 		keys:    keys,
 		loading: true,
 		spinner: newDetailSpinner(styles),
+		tab:     TabDescription,
 	}
 }
 
@@ -113,7 +116,6 @@ type (
 	OpenDiffMsg    struct{ Number int }
 	StartReviewMsg struct{ Number int }
 
-	// Comment thread messages
 	ReplyToThreadMsg struct {
 		ThreadID string
 		Body     string
@@ -149,61 +151,80 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	// Handle za sequence for collapse
 	if m.pendingCollapseZ && msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
 		m.pendingCollapseZ = false
-		if msg.Runes[0] == 'a' && m.pane == PaneComments {
+		if msg.Runes[0] == 'a' && m.tab == TabComments {
 			m.toggleCommentCollapse()
 			return nil
 		}
 	}
 
+	// Tab navigation
 	switch {
 	case key.Matches(msg, m.keys.Tab):
-		m.pane = (m.pane + 1) % 4
+		m.tab = (m.tab + 1) % numTabs
 		m.scrollY = 0
+		return nil
 	case key.Matches(msg, m.keys.ShiftTab):
-		m.pane = (m.pane + 3) % 4
+		m.tab = (m.tab + numTabs - 1) % numTabs
 		m.scrollY = 0
+		return nil
 	case key.Matches(msg, m.keys.Down):
-		if m.pane == PaneComments && m.detail != nil && len(m.detail.Comments) > 0 {
+		if m.tab == TabComments && m.detail != nil && len(m.detail.Comments) > 0 {
 			if m.commentCursor < len(m.detail.Comments)-1 {
 				m.commentCursor++
 			}
 		} else {
 			m.scrollY++
 		}
+		return nil
 	case key.Matches(msg, m.keys.Up):
-		if m.pane == PaneComments && m.detail != nil && len(m.detail.Comments) > 0 {
+		if m.tab == TabComments && m.detail != nil && len(m.detail.Comments) > 0 {
 			if m.commentCursor > 0 {
 				m.commentCursor--
 			}
 		} else if m.scrollY > 0 {
 			m.scrollY--
 		}
+		return nil
 	case key.Matches(msg, m.keys.Enter):
-		if m.detail != nil {
-			num := m.detail.Number
-			if m.pane == PaneFiles {
-				return func() tea.Msg { return OpenDiffMsg{Number: num} }
-			}
+		if m.detail != nil && m.tab == TabFiles {
+			return func() tea.Msg { return OpenDiffMsg{Number: m.detail.Number} }
 		}
+		return nil
 	case key.Matches(msg, m.keys.Open):
 		if url := m.openURL(); url != "" {
 			return func() tea.Msg { return OpenBrowserMsg{URL: url} }
 		}
+		return nil
 	case key.Matches(msg, m.keys.Checkout):
 		if m.detail != nil {
 			return func() tea.Msg { return CheckoutPRMsg{Number: m.detail.Number} }
 		}
+		return nil
 	}
 
-	// Handle single-key commands
+	// Number keys for direct tab access
 	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
 		r := msg.Runes[0]
 		switch r {
+		case '1':
+			m.tab = TabDescription
+			m.scrollY = 0
+			return nil
+		case '2':
+			m.tab = TabChecks
+			m.scrollY = 0
+			return nil
+		case '3':
+			m.tab = TabFiles
+			m.scrollY = 0
+			return nil
+		case '4':
+			m.tab = TabComments
+			m.scrollY = 0
+			return nil
 		case 'r':
 			if m.detail != nil {
-				// In comments pane, 'r' starts a reply to the current thread
-				// In other panes, 'r' starts a review
-				if m.pane == PaneComments && len(m.detail.Comments) > 0 {
+				if m.tab == TabComments && len(m.detail.Comments) > 0 {
 					thread := m.detail.Comments[m.commentCursor]
 					return func() tea.Msg {
 						return ReplyToThreadMsg{ThreadID: thread.ID, Body: ""}
@@ -216,36 +237,37 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 				return func() tea.Msg { return OpenDiffMsg{Number: m.detail.Number} }
 			}
 		case 'z':
-			if m.pane == PaneComments {
+			if m.tab == TabComments {
 				m.pendingCollapseZ = true
 			}
 		case ' ':
-			// Space toggles collapse in comments pane
-			if m.pane == PaneComments {
+			if m.tab == TabComments {
 				m.toggleCommentCollapse()
 			}
 		case 'x':
-			// Resolve thread
-			if m.pane == PaneComments && m.detail != nil && len(m.detail.Comments) > 0 {
+			if m.tab == TabComments && m.detail != nil && len(m.detail.Comments) > 0 {
 				thread := m.detail.Comments[m.commentCursor]
 				if !thread.Resolved {
 					return func() tea.Msg { return ResolveThreadMsg{ThreadID: thread.ID} }
 				}
 			}
 		case 'X':
-			// Unresolve thread
-			if m.pane == PaneComments && m.detail != nil && len(m.detail.Comments) > 0 {
+			if m.tab == TabComments && m.detail != nil && len(m.detail.Comments) > 0 {
 				thread := m.detail.Comments[m.commentCursor]
 				if thread.Resolved {
 					return func() tea.Msg { return UnresolveThreadMsg{ThreadID: thread.ID} }
 				}
 			}
+		case 'g':
+			m.scrollY = 0
+		case 'G':
+			// Scroll to bottom - will be clamped in render
+			m.scrollY = 9999
 		}
 	}
 	return nil
 }
 
-// toggleCommentCollapse toggles the collapsed state of the current thread.
 func (m *PRDetailModel) toggleCommentCollapse() {
 	if m.detail == nil || len(m.detail.Comments) == 0 {
 		return
@@ -260,7 +282,7 @@ func (m *PRDetailModel) openURL() string {
 	if m.detail == nil {
 		return ""
 	}
-	if m.pane == PaneChecks {
+	if m.tab == TabChecks {
 		if url := m.selectedCheckURL(); url != "" {
 			return url
 		}
@@ -290,10 +312,8 @@ func (m *PRDetailModel) selectedCheckURL() string {
 	return ""
 }
 
-// View renders the PR detail view.
+// View renders the PR detail view with tabs.
 func (m *PRDetailModel) View() string {
-	// Show loading state while loading OR if detail hasn't arrived yet
-	// Note: Use m.loading for spinner control, m.detail for content check
 	if m.loading {
 		msg := "Loading PR detail..."
 		if m.pendingNum > 0 {
@@ -306,7 +326,6 @@ func (m *PRDetailModel) View() string {
 			Render(msg)
 	}
 
-	// Handle case where loading finished but detail is nil (error case)
 	if m.detail == nil {
 		return lipgloss.NewStyle().
 			Width(m.width).Height(m.height).
@@ -315,23 +334,19 @@ func (m *PRDetailModel) View() string {
 			Render("No PR detail available")
 	}
 
-	var content string
+	// Layout:
+	// Line 1: PR header
+	// Line 2: Tab bar
+	// Line 3+: Content area (scrollable)
+	prHeader := m.renderPRHeader()
+	tabBar := m.renderTabBar()
+	contentHeight := max(1, m.height-2) // -2 for header and tab bar
+	content := m.renderTabContent(contentHeight)
 
-	switch m.pane {
-	case PaneComments:
-		// Comments view uses full width
-		content = m.renderCommentsPane(m.height)
-	default:
-		// Default view: two-column layout for Info/Checks + Description + Files
-		content = m.renderDefaultLayout(m.height)
-	}
-
-	// PR title header is integrated into the pane layout now
-	// Ensure exact height to prevent overflow
-	return ensureExactHeight(content, m.height, m.width)
+	return lipgloss.JoinVertical(lipgloss.Left, prHeader, tabBar, content)
 }
 
-// renderPRHeader renders the PR header line within the detail view.
+// renderPRHeader renders the PR title line.
 func (m *PRDetailModel) renderPRHeader() string {
 	t := m.styles.Theme
 	d := m.detail
@@ -341,152 +356,169 @@ func (m *PRDetailModel) renderPRHeader() string {
 	authorStyle := lipgloss.NewStyle().Foreground(t.Muted)
 	branchStyle := lipgloss.NewStyle().Foreground(t.Info)
 	arrowStyle := lipgloss.NewStyle().Foreground(t.Muted)
+	stateStyle := lipgloss.NewStyle().Foreground(t.Success)
+	if d.State == domain.PRStateClosed {
+		stateStyle = lipgloss.NewStyle().Foreground(t.Error)
+	}
 
-	return fmt.Sprintf("%s  %s  %s %s %s",
+	// Truncate title to fit
+	maxTitleLen := max(10, m.width-50)
+	title := d.Title
+	if len(title) > maxTitleLen {
+		title = title[:maxTitleLen-3] + "..."
+	}
+
+	return fmt.Sprintf("%s  %s  %s %s %s  %s",
 		prNumStyle.Render(fmt.Sprintf("#%d", d.Number)),
-		titleStyle.Render(truncateStr(d.Title, m.width/2)),
+		titleStyle.Render(title),
 		authorStyle.Render(d.Author),
 		arrowStyle.Render("→"),
 		branchStyle.Render(d.Branch.Base),
+		stateStyle.Render(string(d.State)),
 	)
 }
 
-// renderDefaultLayout renders the two-column layout with Info/Checks, Description, and Files.
-func (m *PRDetailModel) renderDefaultLayout(height int) string {
+// renderTabBar renders the horizontal tab bar with counts.
+func (m *PRDetailModel) renderTabBar() string {
 	t := m.styles.Theme
 	d := m.detail
 
-	// PR Header line at top
-	prHeader := m.renderPRHeader()
+	// Tab styles
+	activeStyle := lipgloss.NewStyle().
+		Foreground(t.Bg).
+		Background(t.Primary).
+		Bold(true).
+		Padding(0, 1)
 
-	// Calculate pane widths - each column gets half the width minus gap
-	// Border takes 2 chars (left + right), so inner width = paneWidth - 2
-	totalWidth := max(60, m.width)
-	paneWidth := (totalWidth - 1) / 2 // -1 for single space gap between panes
-	innerWidth := paneWidth - 2       // account for border
-
-	// Pane styles with fixed height for top row
-	topPaneHeight := 7 // Fixed height for Info/Checks panes
-	paneStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.Border).
-		Width(paneWidth - 2). // Set inner width (lipgloss Width is content width)
-		Height(topPaneHeight)
-
-	fullWidthPaneStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.Border).
-		Width(totalWidth - 2) // Full width minus border
-
-	paneHeaderStyle := lipgloss.NewStyle().
+	inactiveStyle := lipgloss.NewStyle().
 		Foreground(t.Muted).
-		Bold(true)
+		Padding(0, 1)
 
-	activePaneHeaderStyle := paneHeaderStyle.
-		Foreground(t.Primary)
+	countStyle := lipgloss.NewStyle().
+		Foreground(t.Info)
 
-	// === Info Pane (left) ===
-	infoHeader := paneHeaderStyle.Render(" Info")
-	if m.pane == PaneInfo {
-		infoHeader = activePaneHeaderStyle.Render(" Info")
+	// Build tab labels with counts
+	tabs := []struct {
+		name  string
+		count int
+		tab   DetailTab
+	}{
+		{"Description", 0, TabDescription},
+		{"Checks", len(d.Checks), TabChecks},
+		{"Files", len(d.Files), TabFiles},
+		{"Comments", len(d.Comments), TabComments},
 	}
-	infoContent := m.renderInfoContent(innerWidth - 2)
-	infoPaneContent := lipgloss.JoinVertical(lipgloss.Left, infoHeader, infoContent)
-	infoPane := paneStyle.Render(infoPaneContent)
 
-	// === Checks Pane (right) ===
-	checksHeader := paneHeaderStyle.Render(" Checks")
-	if m.pane == PaneChecks {
-		checksHeader = activePaneHeaderStyle.Render(" Checks")
-	}
-	checksContent := m.renderChecksContent(innerWidth - 2)
-	checksPaneContent := lipgloss.JoinVertical(lipgloss.Left, checksHeader, checksContent)
-	checksPane := paneStyle.Render(checksPaneContent)
-
-	// Join Info and Checks horizontally with proper alignment
-	topRow := lipgloss.JoinHorizontal(lipgloss.Top, infoPane, " ", checksPane)
-
-	// === Description Pane ===
-	descHeader := paneHeaderStyle.Render(" Description")
-	descContent := m.renderDescriptionContent(totalWidth - 4)
-	descPaneContent := lipgloss.JoinVertical(lipgloss.Left, descHeader, descContent)
-	descPane := fullWidthPaneStyle.Render(descPaneContent)
-
-	// === Files Pane ===
-	filesHeaderText := " Files Changed"
-	if len(d.Files) > 0 {
-		var adds, dels int
-		for _, f := range d.Files {
-			adds += f.Additions
-			dels += f.Deletions
+	var tabStrings []string
+	for _, tab := range tabs {
+		label := tab.name
+		if tab.count > 0 {
+			label = fmt.Sprintf("%s %s", tab.name, countStyle.Render(fmt.Sprintf("(%d)", tab.count)))
 		}
-		addStyle := lipgloss.NewStyle().Foreground(t.Success)
-		delStyle := lipgloss.NewStyle().Foreground(t.Error)
-		filesHeaderText = fmt.Sprintf(" Files Changed (%d)  %s %s",
-			len(d.Files),
-			addStyle.Render(fmt.Sprintf("+%d", adds)),
-			delStyle.Render(fmt.Sprintf("-%d", dels)),
-		)
-	}
-	filesHeader := paneHeaderStyle.Render(filesHeaderText)
-	if m.pane == PaneFiles {
-		filesHeader = activePaneHeaderStyle.Render(filesHeaderText)
-	}
-	filesContent := m.renderFilesContent(totalWidth - 4)
-	filesPaneContent := lipgloss.JoinVertical(lipgloss.Left, filesHeader, filesContent)
-	filesPane := fullWidthPaneStyle.Render(filesPaneContent)
 
-	// Join all sections vertically with breathing room between sections
-	// Use full-width space lines for proper rendering (not empty strings per CLAUDE.md)
-	spacer := strings.Repeat(" ", totalWidth)
-	return lipgloss.JoinVertical(lipgloss.Left,
-		prHeader,
-		spacer, // breathing room after header
-		topRow,
-		spacer, // breathing room after Info/Checks
-		descPane,
-		spacer, // breathing room after Description
-		filesPane,
-	)
+		if m.tab == tab.tab {
+			tabStrings = append(tabStrings, activeStyle.Render(label))
+		} else {
+			tabStrings = append(tabStrings, inactiveStyle.Render(label))
+		}
+	}
+
+	// Join tabs with separator
+	separator := lipgloss.NewStyle().Foreground(t.Border).Render("  ")
+	tabBar := strings.Join(tabStrings, separator)
+
+	// Add bottom border
+	borderStyle := lipgloss.NewStyle().
+		BorderBottom(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(t.Border).
+		Width(m.width)
+
+	return borderStyle.Render(tabBar)
 }
 
-// renderInfoContent renders the info pane content without borders.
-func (m *PRDetailModel) renderInfoContent(width int) string {
+// renderTabContent renders the content for the active tab.
+func (m *PRDetailModel) renderTabContent(height int) string {
+	var content string
+	switch m.tab {
+	case TabDescription:
+		content = m.renderDescriptionTab()
+	case TabChecks:
+		content = m.renderChecksTab()
+	case TabFiles:
+		content = m.renderFilesTab()
+	case TabComments:
+		content = m.renderCommentsTab()
+	}
+
+	// Apply scrolling
+	lines := strings.Split(content, "\n")
+	totalLines := len(lines)
+
+	// Clamp scroll
+	maxScroll := max(0, totalLines-height)
+	if m.scrollY > maxScroll {
+		m.scrollY = maxScroll
+	}
+	if m.scrollY < 0 {
+		m.scrollY = 0
+	}
+
+	// Get visible lines
+	start := m.scrollY
+	end := min(start+height, totalLines)
+	visibleLines := lines[start:end]
+
+	// Add scroll indicator if needed
+	if totalLines > height {
+		indicator := fmt.Sprintf(" ↓ %d more", totalLines-end)
+		if end >= totalLines {
+			indicator = " ↑ scroll up"
+		}
+		// Pad to fill height, then add indicator on last line
+		for len(visibleLines) < height-1 {
+			visibleLines = append(visibleLines, "")
+		}
+		indicatorStyle := lipgloss.NewStyle().Foreground(m.styles.Theme.Muted).Italic(true)
+		if len(visibleLines) >= height {
+			visibleLines[height-1] = indicatorStyle.Render(indicator)
+		} else {
+			visibleLines = append(visibleLines, indicatorStyle.Render(indicator))
+		}
+	}
+
+	// Ensure exact height with full-width padding
+	return ensureExactHeight(strings.Join(visibleLines, "\n"), height, m.width)
+}
+
+// renderDescriptionTab renders the Description tab content.
+func (m *PRDetailModel) renderDescriptionTab() string {
 	t := m.styles.Theme
 	d := m.detail
-
-	labelStyle := lipgloss.NewStyle().Foreground(t.Muted)
-	valueStyle := lipgloss.NewStyle().Foreground(t.Fg)
-	branchStyle := lipgloss.NewStyle().Foreground(t.Info)
-	badgeStyle := lipgloss.NewStyle().Foreground(t.Info)
 
 	var lines []string
 
-	// Branch
-	lines = append(lines, fmt.Sprintf("%s  %s %s %s",
+	// Branch info
+	labelStyle := lipgloss.NewStyle().Foreground(t.Muted)
+	valueStyle := lipgloss.NewStyle().Foreground(t.Fg)
+	branchStyle := lipgloss.NewStyle().Foreground(t.Info)
+
+	lines = append(lines, fmt.Sprintf("%s  %s → %s",
 		labelStyle.Render("Branch:"),
-		branchStyle.Render(truncateStr(d.Branch.Head, width/2)),
-		labelStyle.Render("→"),
+		branchStyle.Render(d.Branch.Head),
 		branchStyle.Render(d.Branch.Base),
 	))
 
 	// Labels
 	if len(d.Labels) > 0 {
-		var labelBadges []string
+		badgeStyle := lipgloss.NewStyle().Foreground(t.Info)
+		var badges []string
 		for _, l := range d.Labels {
-			labelBadges = append(labelBadges, badgeStyle.Render(l))
+			badges = append(badges, badgeStyle.Render(l))
 		}
 		lines = append(lines, fmt.Sprintf("%s  %s",
 			labelStyle.Render("Labels:"),
-			strings.Join(labelBadges, " "),
-		))
-	}
-
-	// Assignees
-	if len(d.Assignees) > 0 {
-		lines = append(lines, fmt.Sprintf("%s  %s",
-			labelStyle.Render("Assignees:"),
-			valueStyle.Render(strings.Join(d.Assignees, ", ")),
+			strings.Join(badges, " "),
 		))
 	}
 
@@ -494,7 +526,7 @@ func (m *PRDetailModel) renderInfoContent(width int) string {
 	if len(d.Reviewers) > 0 {
 		var revs []string
 		for _, r := range d.Reviewers {
-			icon := "●" // pending
+			icon := "●"
 			style := lipgloss.NewStyle().Foreground(t.Warning)
 			switch r.State {
 			case domain.ReviewApproved:
@@ -504,7 +536,7 @@ func (m *PRDetailModel) renderInfoContent(width int) string {
 				icon = "✗"
 				style = lipgloss.NewStyle().Foreground(t.Error)
 			}
-			revs = append(revs, fmt.Sprintf("%s %s", style.Render(r.Login), style.Render(icon)))
+			revs = append(revs, fmt.Sprintf("%s %s", style.Render(icon), r.Login))
 		}
 		lines = append(lines, fmt.Sprintf("%s  %s",
 			labelStyle.Render("Reviewers:"),
@@ -512,7 +544,7 @@ func (m *PRDetailModel) renderInfoContent(width int) string {
 		))
 	}
 
-	// Created/Updated times
+	// Dates
 	created := formatRelativeTime(d.CreatedAt)
 	updated := formatRelativeTime(d.UpdatedAt)
 	lines = append(lines, fmt.Sprintf("%s %s  %s %s",
@@ -522,99 +554,148 @@ func (m *PRDetailModel) renderInfoContent(width int) string {
 		valueStyle.Render(updated),
 	))
 
+	lines = append(lines, "") // Spacer
+
+	// PR body
+	if d.Body == "" {
+		lines = append(lines, lipgloss.NewStyle().Foreground(t.Muted).Italic(true).Render("No description provided."))
+	} else {
+		bodyWidth := max(20, m.width-4)
+		rendered := renderMarkdownCached(&m.bodyCache, d.Body, bodyWidth)
+		lines = append(lines, strings.Split(rendered, "\n")...)
+	}
+
 	return strings.Join(lines, "\n")
 }
 
-// renderChecksContent renders the checks pane content without borders.
-func (m *PRDetailModel) renderChecksContent(width int) string {
+// renderChecksTab renders the Checks tab content.
+func (m *PRDetailModel) renderChecksTab() string {
 	t := m.styles.Theme
 	d := m.detail
 
 	if len(d.Checks) == 0 {
-		return lipgloss.NewStyle().Foreground(t.Muted).Render("No CI checks.")
+		return lipgloss.NewStyle().Foreground(t.Muted).Italic(true).Render("No CI checks.")
 	}
 
 	var lines []string
 
-	// Individual checks
-	maxChecks := 5 // Show at most 5 checks
-	for i, c := range d.Checks {
-		if i >= maxChecks {
-			remaining := len(d.Checks) - maxChecks
-			lines = append(lines, lipgloss.NewStyle().Foreground(t.Muted).Render(
-				fmt.Sprintf("... %d more checks", remaining),
-			))
-			break
+	// Summary line
+	var pass, fail, pending, skipped int
+	for _, c := range d.Checks {
+		switch c.Status {
+		case domain.CIPass:
+			pass++
+		case domain.CIFail:
+			fail++
+		case domain.CIPending:
+			pending++
+		case domain.CISkipped:
+			skipped++
 		}
-		icon := ciIcon(c.Status)
-		dur := ""
-		if c.Duration > 0 {
-			dur = lipgloss.NewStyle().Foreground(t.Muted).Render(
-				fmt.Sprintf(" %s", c.Duration.Truncate(1e9)),
-			)
-		}
-		checkName := truncateStr(c.Name, width-15)
-		lines = append(lines, fmt.Sprintf("%s %s%s", icon, checkName, dur))
 	}
 
-	// Summary line
-	lines = append(lines, "")
-	summary := formatCheckSummary(d.Checks)
-	if summary != "" {
-		summaryStyle := lipgloss.NewStyle().Foreground(t.Success).Bold(true)
-		// Check if any failing
-		for _, c := range d.Checks {
-			if c.Status == domain.CIFail {
-				summaryStyle = lipgloss.NewStyle().Foreground(t.Error).Bold(true)
-				break
-			}
+	summaryParts := []string{fmt.Sprintf("%d/%d passing", pass, len(d.Checks))}
+	if fail > 0 {
+		summaryParts = append(summaryParts, lipgloss.NewStyle().Foreground(t.Error).Render(fmt.Sprintf("%d failing", fail)))
+	}
+	if pending > 0 {
+		summaryParts = append(summaryParts, lipgloss.NewStyle().Foreground(t.Warning).Render(fmt.Sprintf("%d pending", pending)))
+	}
+	if skipped > 0 {
+		summaryParts = append(summaryParts, lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("%d skipped", skipped)))
+	}
+
+	summaryStyle := lipgloss.NewStyle().Bold(true)
+	if fail > 0 {
+		summaryStyle = summaryStyle.Foreground(t.Error)
+	} else {
+		summaryStyle = summaryStyle.Foreground(t.Success)
+	}
+	lines = append(lines, summaryStyle.Render(strings.Join(summaryParts, ", ")))
+	lines = append(lines, "") // Spacer
+
+	// Individual checks
+	for i, c := range d.Checks {
+		icon := detailCIIcon(c.Status)
+		cursor := "  "
+		if i == m.scrollY {
+			cursor = "> "
 		}
-		lines = append(lines, summaryStyle.Render(summary))
+		dur := ""
+		if c.Duration > 0 {
+			dur = lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf(" %s", c.Duration.Truncate(time.Second)))
+		}
+		lines = append(lines, fmt.Sprintf("%s%s %s%s", cursor, icon, c.Name, dur))
 	}
 
 	return strings.Join(lines, "\n")
 }
 
-// renderDescriptionContent renders the description pane content.
-func (m *PRDetailModel) renderDescriptionContent(width int) string {
-	t := m.styles.Theme
-	d := m.detail
-
-	if d.Body == "" {
-		return lipgloss.NewStyle().Foreground(t.Muted).Render("No description provided.")
+// formatCheckSummary returns a plain text summary of check statuses (for testing).
+func formatCheckSummary(checks []domain.Check) string {
+	var pass, fail, pending, skipped int
+	for _, c := range checks {
+		switch c.Status {
+		case domain.CIPass:
+			pass++
+		case domain.CIFail:
+			fail++
+		case domain.CIPending:
+			pending++
+		case domain.CISkipped:
+			skipped++
+		}
 	}
 
-	bodyWidth := max(20, width)
-	return renderMarkdownCached(&m.bodyCache, d.Body, bodyWidth)
+	parts := []string{fmt.Sprintf("%d/%d passing", pass, len(checks))}
+	if fail > 0 {
+		parts = append(parts, fmt.Sprintf("%d failing", fail))
+	}
+	if pending > 0 {
+		parts = append(parts, fmt.Sprintf("%d pending", pending))
+	}
+	if skipped > 0 {
+		parts = append(parts, fmt.Sprintf("%d skipped", skipped))
+	}
+
+	return strings.Join(parts, ", ")
 }
 
-// renderFilesContent renders the files pane content.
-func (m *PRDetailModel) renderFilesContent(width int) string {
+// renderFilesTab renders the Files tab content.
+func (m *PRDetailModel) renderFilesTab() string {
 	t := m.styles.Theme
 	d := m.detail
 
 	if len(d.Files) == 0 {
-		return lipgloss.NewStyle().Foreground(t.Muted).Render("No files changed.")
+		return lipgloss.NewStyle().Foreground(t.Muted).Italic(true).Render("No files changed.")
 	}
 
 	var lines []string
-	maxFiles := 6 // Show at most 6 files
-	for i, f := range d.Files {
-		if i >= maxFiles {
-			remaining := len(d.Files) - maxFiles
-			lines = append(lines, lipgloss.NewStyle().Foreground(t.Muted).Render(
-				fmt.Sprintf("... %d more files", remaining),
-			))
-			break
+
+	// Summary
+	var totalAdds, totalDels int
+	for _, f := range d.Files {
+		totalAdds += f.Additions
+		totalDels += f.Deletions
+	}
+	summaryStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Fg)
+	addStyle := lipgloss.NewStyle().Foreground(t.Success)
+	delStyle := lipgloss.NewStyle().Foreground(t.Error)
+	lines = append(lines, summaryStyle.Render(fmt.Sprintf("%d files changed  %s  %s",
+		len(d.Files),
+		addStyle.Render(fmt.Sprintf("+%d", totalAdds)),
+		delStyle.Render(fmt.Sprintf("-%d", totalDels)),
+	)))
+	lines = append(lines, "") // Spacer
+
+	// File list
+	maxPathLen := max(20, m.width-25)
+	for _, f := range d.Files {
+		path := f.Path
+		if len(path) > maxPathLen {
+			path = "..." + path[len(path)-maxPathLen+3:]
 		}
-		addStyle := lipgloss.NewStyle().Foreground(t.Success)
-		delStyle := lipgloss.NewStyle().Foreground(t.Error)
-
-		// Truncate path if needed
-		pathWidth := max(10, width-20)
-		path := truncateStr(f.Path, pathWidth)
-
-		line := fmt.Sprintf("%s  %s %s",
+		line := fmt.Sprintf("  %s  %s %s",
 			path,
 			addStyle.Render(fmt.Sprintf("+%d", f.Additions)),
 			delStyle.Render(fmt.Sprintf("-%d", f.Deletions)),
@@ -625,17 +706,18 @@ func (m *PRDetailModel) renderFilesContent(width int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (m *PRDetailModel) renderCommentsPane(height int) string {
+// renderCommentsTab renders the Comments tab content.
+func (m *PRDetailModel) renderCommentsTab() string {
 	t := m.styles.Theme
 	d := m.detail
 
 	if len(d.Comments) == 0 {
-		return lipgloss.NewStyle().Foreground(t.Muted).Render("No comments.")
+		return lipgloss.NewStyle().Foreground(t.Muted).Italic(true).Render("No comments.")
 	}
 
 	var lines []string
-	commentIndent := "      "
-	commentWidth := max(20, m.width-len(commentIndent))
+	commentWidth := max(20, m.width-10)
+
 	if m.commentCache == nil {
 		m.commentCache = make(map[string]markdownCache)
 	}
@@ -647,90 +729,53 @@ func (m *PRDetailModel) renderCommentsPane(height int) string {
 		isSelected := i == m.commentCursor
 		isCollapsed := m.commentCollapsed[i]
 
-		// Build header
+		// Thread header
 		marker := "▼"
 		if isCollapsed {
 			marker = "▶"
 		}
-		cursorMark := " "
+		cursor := " "
 		if isSelected {
-			cursorMark = ">"
+			cursor = ">"
 		}
 
-		header := fmt.Sprintf("%s%s %s:%d", cursorMark, marker, thread.Path, thread.Line)
+		header := fmt.Sprintf("%s%s %s:%d", cursor, marker, thread.Path, thread.Line)
 		if thread.Resolved {
-			header += " [resolved]"
+			header += lipgloss.NewStyle().Foreground(t.Success).Render(" [resolved]")
 		}
 		if isCollapsed && len(thread.Comments) > 0 {
-			// Show first comment preview and reply count
-			firstBody := thread.Comments[0].Body
-			firstBody = strings.ReplaceAll(firstBody, "\n", " ")
-			if len(firstBody) > 30 {
-				firstBody = firstBody[:30] + "..."
+			preview := thread.Comments[0].Body
+			preview = strings.ReplaceAll(preview, "\n", " ")
+			if len(preview) > 40 {
+				preview = preview[:40] + "..."
 			}
-			header += fmt.Sprintf(": %s (%d replies)", firstBody, len(thread.Comments))
+			header += lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf(" %s", preview))
 		}
 
-		// Style the header
 		headerStyle := lipgloss.NewStyle().Foreground(t.Info).Bold(true)
 		if isSelected {
 			headerStyle = headerStyle.Background(t.Primary).Foreground(t.Bg)
 		}
 		lines = append(lines, headerStyle.Render(header))
 
-		// If not collapsed, show comment details
+		// Thread comments (if expanded)
 		if !isCollapsed {
 			for _, c := range thread.Comments {
 				authorLine := fmt.Sprintf("    @%s:", c.Author)
 				lines = append(lines, lipgloss.NewStyle().Foreground(t.Muted).Render(authorLine))
 				rendered := renderMarkdownCachedMap(m.commentCache, c.ID, c.Body, commentWidth)
-				lines = append(lines, indentLines(rendered, commentIndent))
+				for _, l := range strings.Split(rendered, "\n") {
+					lines = append(lines, "      "+l)
+				}
 			}
 		}
-		lines = append(lines, "")
+		lines = append(lines, "") // Spacer between threads
 	}
 
-	return lipgloss.NewStyle().Width(m.width).Height(height).
-		Render(strings.Join(lines, "\n"))
+	return strings.Join(lines, "\n")
 }
 
-func formatCheckSummary(checks []domain.Check) string {
-	if len(checks) == 0 {
-		return ""
-	}
-
-	var pass, fail, pending, skipped, none int
-	for _, c := range checks {
-		switch c.Status {
-		case domain.CIPass:
-			pass++
-		case domain.CIFail:
-			fail++
-		case domain.CIPending:
-			pending++
-		case domain.CISkipped:
-			skipped++
-		default:
-			none++
-		}
-	}
-
-	total := len(checks)
-	parts := []string{fmt.Sprintf("%d/%d passing", pass, total)}
-	if fail > 0 {
-		parts = append(parts, fmt.Sprintf("%d failing", fail))
-	}
-	if pending > 0 {
-		parts = append(parts, fmt.Sprintf("%d pending", pending))
-	}
-	if skipped > 0 {
-		parts = append(parts, fmt.Sprintf("%d skipped", skipped))
-	}
-	if none > 0 {
-		parts = append(parts, fmt.Sprintf("%d no status", none))
-	}
-	return strings.Join(parts, ", ")
-}
+// Helper functions
 
 func newDetailSpinner(styles core.Styles) spinner.Model {
 	sp := spinner.New()
@@ -739,25 +784,70 @@ func newDetailSpinner(styles core.Styles) spinner.Model {
 	return sp
 }
 
-func renderMarkdown(content string, width int) string {
+// Cached glamour renderer - use dracula style for colorful markdown.
+// Avoid WithAutoStyle() which does slow terminal detection (~5 seconds).
+var glamourRenderer *glamour.TermRenderer
+
+func getGlamourRenderer() *glamour.TermRenderer {
+	if glamourRenderer == nil {
+		var err error
+		glamourRenderer, err = glamour.NewTermRenderer(
+			glamour.WithStandardStyle("dracula"),
+			glamour.WithWordWrap(100),
+		)
+		if err != nil {
+			return nil
+		}
+	}
+	return glamourRenderer
+}
+
+func renderMarkdown(content string, _ int) string {
 	if strings.TrimSpace(content) == "" {
 		return ""
 	}
-	if width < 20 {
-		width = 20
+
+	renderer := getGlamourRenderer()
+	if renderer == nil {
+		return simpleMarkdown(content)
 	}
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(width),
-	)
-	if err != nil {
-		return content
-	}
+
 	out, err := renderer.Render(content)
 	if err != nil {
-		return content
+		return simpleMarkdown(content)
 	}
 	return strings.TrimRight(out, "\n")
+}
+
+func simpleMarkdown(content string) string {
+	lines := strings.Split(content, "\n")
+	var result []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			result = append(result, "")
+			continue
+		}
+		if strings.HasPrefix(trimmed, "#") {
+			for strings.HasPrefix(trimmed, "#") {
+				trimmed = strings.TrimPrefix(trimmed, "#")
+			}
+			result = append(result, strings.TrimSpace(trimmed))
+			continue
+		}
+		if strings.HasPrefix(trimmed, "- ") {
+			result = append(result, "• "+strings.TrimPrefix(trimmed, "- "))
+			continue
+		}
+		if strings.HasPrefix(trimmed, "* ") {
+			result = append(result, "• "+strings.TrimPrefix(trimmed, "* "))
+			continue
+		}
+		result = append(result, trimmed)
+	}
+
+	return strings.TrimRight(strings.Join(result, "\n"), "\n")
 }
 
 func renderMarkdownCached(cache *markdownCache, content string, width int) string {
@@ -786,32 +876,6 @@ func renderMarkdownCachedMap(cache map[string]markdownCache, key, content string
 	return rendered
 }
 
-func indentLines(text, prefix string) string {
-	if text == "" {
-		return ""
-	}
-	lines := strings.Split(text, "\n")
-	for i := range lines {
-		lines[i] = prefix + lines[i]
-	}
-	return strings.Join(lines, "\n")
-}
-
-// truncateStr truncates a string to maxLen, adding "..." if truncated.
-func truncateStr(s string, maxLen int) string {
-	if maxLen <= 0 {
-		return ""
-	}
-	if len(s) <= maxLen {
-		return s
-	}
-	if maxLen <= 3 {
-		return s[:maxLen]
-	}
-	return s[:maxLen-3] + "..."
-}
-
-// formatRelativeTime formats a time as a relative duration (e.g., "2h ago").
 func formatRelativeTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
@@ -828,5 +892,20 @@ func formatRelativeTime(t time.Time) string {
 		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	default:
 		return t.Format("Jan 2")
+	}
+}
+
+func detailCIIcon(status domain.CIStatus) string {
+	switch status {
+	case domain.CIPass:
+		return "✓"
+	case domain.CIFail:
+		return "✗"
+	case domain.CIPending:
+		return "●"
+	case domain.CISkipped:
+		return "—"
+	default:
+		return "?"
 	}
 }

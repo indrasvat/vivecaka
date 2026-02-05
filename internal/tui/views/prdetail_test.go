@@ -58,8 +58,8 @@ func TestNewPRDetailModel(t *testing.T) {
 	if !m.loading {
 		t.Error("new model should be in loading state")
 	}
-	if m.pane != PaneInfo {
-		t.Errorf("default pane = %d, want PaneInfo", m.pane)
+	if m.tab != TabDescription {
+		t.Errorf("default pane = %d, want TabDescription", m.tab)
 	}
 }
 
@@ -129,26 +129,26 @@ func TestDetailTabNavigation(t *testing.T) {
 	m.SetSize(120, 40)
 	m.SetDetail(testDetail())
 
-	// Tab forward through all panes.
+	// Tab forward through all tabs: Description → Checks → Files → Comments → Description
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	m.Update(tab)
-	if m.pane != PaneFiles {
-		t.Errorf("after 1 tab pane = %d, want PaneFiles", m.pane)
+	if m.tab != TabChecks {
+		t.Errorf("after 1 tab = %d, want TabChecks", m.tab)
 	}
 
 	m.Update(tab)
-	if m.pane != PaneChecks {
-		t.Errorf("after 2 tabs pane = %d, want PaneChecks", m.pane)
+	if m.tab != TabFiles {
+		t.Errorf("after 2 tabs = %d, want TabFiles", m.tab)
 	}
 
 	m.Update(tab)
-	if m.pane != PaneComments {
-		t.Errorf("after 3 tabs pane = %d, want PaneComments", m.pane)
+	if m.tab != TabComments {
+		t.Errorf("after 3 tabs = %d, want TabComments", m.tab)
 	}
 
 	m.Update(tab)
-	if m.pane != PaneInfo {
-		t.Errorf("after 4 tabs pane = %d, want PaneInfo (wrap)", m.pane)
+	if m.tab != TabDescription {
+		t.Errorf("after 4 tabs = %d, want TabDescription (wrap)", m.tab)
 	}
 }
 
@@ -160,8 +160,8 @@ func TestDetailShiftTabNavigation(t *testing.T) {
 	// Shift-tab wraps backward.
 	shiftTab := tea.KeyMsg{Type: tea.KeyShiftTab}
 	m.Update(shiftTab)
-	if m.pane != PaneComments {
-		t.Errorf("after shift-tab pane = %d, want PaneComments", m.pane)
+	if m.tab != TabComments {
+		t.Errorf("after shift-tab pane = %d, want TabComments", m.tab)
 	}
 }
 
@@ -211,12 +211,8 @@ func TestDetailEnterOnFilesPane(t *testing.T) {
 	m.SetSize(120, 40)
 	m.SetDetail(testDetail())
 
-	// Switch to Files pane.
-	tab := tea.KeyMsg{Type: tea.KeyTab}
-	m.Update(tab)
-	if m.pane != PaneFiles {
-		t.Fatal("expected PaneFiles")
-	}
+	// Switch to Files tab (Description → Checks → Files)
+	m.tab = TabFiles
 
 	// Enter should produce OpenDiffMsg.
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
@@ -288,7 +284,7 @@ func TestPRDetailOpenKeyChecksPane(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
 	m.SetDetail(testDetail())
-	m.pane = PaneChecks
+	m.tab = TabChecks
 	m.scrollY = 1
 
 	o := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}}
@@ -311,7 +307,7 @@ func TestPRDetailOpenKeyInfoPane(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
 	m.SetDetail(testDetail())
-	m.pane = PaneInfo
+	m.tab = TabDescription
 
 	o := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}}
 	cmd := m.Update(o)
@@ -410,7 +406,7 @@ func TestDetailViewFilesPane(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
 	m.SetDetail(testDetail())
-	m.pane = PaneFiles
+	m.tab = TabFiles
 
 	view := m.View()
 	if view == "" {
@@ -422,7 +418,7 @@ func TestDetailViewChecksPane(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
 	m.SetDetail(testDetail())
-	m.pane = PaneChecks
+	m.tab = TabChecks
 
 	view := m.View()
 	if view == "" {
@@ -434,7 +430,7 @@ func TestDetailViewCommentsPane(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
 	m.SetDetail(testDetail())
-	m.pane = PaneComments
+	m.tab = TabComments
 
 	view := m.View()
 	if view == "" {
@@ -461,7 +457,7 @@ func TestDetailViewEmptyFiles(t *testing.T) {
 	d := testDetail()
 	d.Files = nil
 	m.SetDetail(d)
-	m.pane = PaneFiles
+	m.tab = TabFiles
 
 	view := m.View()
 	if view == "" {
@@ -475,7 +471,7 @@ func TestDetailViewEmptyChecks(t *testing.T) {
 	d := testDetail()
 	d.Checks = nil
 	m.SetDetail(d)
-	m.pane = PaneChecks
+	m.tab = TabChecks
 
 	view := m.View()
 	if view == "" {
@@ -489,7 +485,7 @@ func TestDetailViewEmptyComments(t *testing.T) {
 	d := testDetail()
 	d.Comments = nil
 	m.SetDetail(d)
-	m.pane = PaneComments
+	m.tab = TabComments
 
 	view := m.View()
 	if view == "" {
@@ -531,7 +527,7 @@ func TestCommentPaneNavigation(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
 	m.SetDetail(testDetail())
-	m.pane = PaneComments
+	m.tab = TabComments
 
 	// Start at first thread
 	if m.commentCursor != 0 {
@@ -563,7 +559,7 @@ func TestCommentPaneCollapseExpand(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
 	m.SetDetail(testDetail())
-	m.pane = PaneComments
+	m.tab = TabComments
 
 	// Initially not collapsed
 	if m.commentCollapsed[0] {
@@ -599,7 +595,7 @@ func TestCommentPaneResolve(t *testing.T) {
 	detail := testDetail()
 	detail.Comments[0].ID = "thread-1"
 	m.SetDetail(detail)
-	m.pane = PaneComments
+	m.tab = TabComments
 
 	// 'x' should produce ResolveThreadMsg for unresolved thread
 	x := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
@@ -624,7 +620,7 @@ func TestCommentPaneUnresolve(t *testing.T) {
 	detail := testDetail()
 	detail.Comments[1].ID = "thread-2" // This one is resolved
 	m.SetDetail(detail)
-	m.pane = PaneComments
+	m.tab = TabComments
 	m.commentCursor = 1 // Move to resolved thread
 
 	// 'X' should produce UnresolveThreadMsg for resolved thread
@@ -650,7 +646,7 @@ func TestCommentPaneReplyKey(t *testing.T) {
 	detail := testDetail()
 	detail.Comments[0].ID = "thread-1"
 	m.SetDetail(detail)
-	m.pane = PaneComments
+	m.tab = TabComments
 
 	// 'r' in comments pane should produce ReplyToThreadMsg
 	r := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
@@ -673,7 +669,7 @@ func TestCommentPaneViewRendering(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
 	m.SetDetail(testDetail())
-	m.pane = PaneComments
+	m.tab = TabComments
 
 	view := m.View()
 	if view == "" {
@@ -689,13 +685,13 @@ func TestCommentPaneCollapsedView(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
 	m.SetDetail(testDetail())
-	m.pane = PaneComments
+	m.tab = TabComments
 	m.commentCollapsed[0] = true
 
 	view := m.View()
-	// Collapsed view should show reply count
-	if !strings.Contains(view, "replies") {
-		t.Error("collapsed view should show reply count")
+	// Collapsed view should show preview of first comment
+	if !strings.Contains(view, "Needs error handling") {
+		t.Error("collapsed view should show comment preview")
 	}
 }
 

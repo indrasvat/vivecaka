@@ -173,3 +173,22 @@ a.prList.SetSize(a.width, contentHeight)
 ```
 - Always subtract chrome (header/footer) from content height
 - Views should render to their allocated height, not full terminal
+
+### Glamour Markdown Rendering (CRITICAL)
+```go
+// DON'T use WithAutoStyle() - it does slow terminal detection (~5 seconds!)
+renderer, _ := glamour.NewTermRenderer(
+    glamour.WithAutoStyle(),  // SLOW - avoid this
+    glamour.WithWordWrap(80),
+)
+
+// DO use WithStandardStyle() with explicit style name
+renderer, _ := glamour.NewTermRenderer(
+    glamour.WithStandardStyle("dracula"),  // FAST - use this
+    glamour.WithWordWrap(100),
+)
+```
+- `WithAutoStyle()` queries the terminal for background color which takes ~5 seconds
+- `WithStandardStyle("dark")` or `WithStandardStyle("dracula")` is instant
+- Cache the renderer globally - creating it is fast but reusing is better
+- Available styles: "dark", "light", "dracula", "tokyo-night", "pink", "ascii"
