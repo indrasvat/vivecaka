@@ -6,19 +6,19 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/indrasvat/vivecaka/internal/tui"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
 // HelpModel implements the context-aware help overlay.
 type HelpModel struct {
-	context tui.ViewState
+	context core.ViewState
 	width   int
 	height  int
-	styles  tui.Styles
+	styles  core.Styles
 }
 
 // NewHelpModel creates a new help overlay.
-func NewHelpModel(styles tui.Styles) HelpModel {
+func NewHelpModel(styles core.Styles) HelpModel {
 	return HelpModel{styles: styles}
 }
 
@@ -29,7 +29,7 @@ func (m *HelpModel) SetSize(w, h int) {
 }
 
 // SetContext sets which view the help is for.
-func (m *HelpModel) SetContext(view tui.ViewState) {
+func (m *HelpModel) SetContext(view core.ViewState) {
 	m.context = view
 }
 
@@ -117,15 +117,15 @@ func (m *HelpModel) renderSection(headingStyle, keyStyle, descStyle lipgloss.Sty
 
 func (m *HelpModel) contextName() string {
 	switch m.context {
-	case tui.ViewPRList:
+	case core.ViewPRList:
 		return "PR List"
-	case tui.ViewPRDetail:
+	case core.ViewPRDetail:
 		return "PR Detail"
-	case tui.ViewDiff:
+	case core.ViewDiff:
 		return "Diff"
-	case tui.ViewReview:
+	case core.ViewReview:
 		return "Review"
-	case tui.ViewInbox:
+	case core.ViewInbox:
 		return "Inbox"
 	default:
 		return "General"
@@ -144,7 +144,7 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 	}
 
 	switch m.context {
-	case tui.ViewPRList:
+	case core.ViewPRList:
 		left = []helpSection{
 			{
 				title: "Navigation",
@@ -178,7 +178,7 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 			global,
 		}
 
-	case tui.ViewPRDetail:
+	case core.ViewPRDetail:
 		left = []helpSection{
 			{
 				title: "Navigation",
@@ -201,7 +201,7 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 			global,
 		}
 
-	case tui.ViewDiff:
+	case core.ViewDiff:
 		left = []helpSection{
 			{
 				title: "Navigation",
@@ -224,7 +224,7 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 			global,
 		}
 
-	case tui.ViewReview:
+	case core.ViewReview:
 		left = []helpSection{
 			{
 				title: "Navigation",
@@ -237,7 +237,7 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 		}
 		right = []helpSection{global}
 
-	case tui.ViewInbox:
+	case core.ViewInbox:
 		left = []helpSection{
 			{
 				title: "Navigation",
@@ -277,22 +277,22 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 }
 
 // StatusHints returns context-aware key hints for the status bar.
-func StatusHints(view tui.ViewState, width int) string {
+func StatusHints(view core.ViewState, width int) string {
 	var hints string
 	switch view {
-	case tui.ViewPRList:
+	case core.ViewPRList:
 		hints = "j/k navigate  Enter open  c checkout  / search  ? help  q quit"
-	case tui.ViewPRDetail:
+	case core.ViewPRDetail:
 		hints = "j/k scroll  Tab pane  r review  Enter diff  Esc back  ? help"
-	case tui.ViewDiff:
+	case core.ViewDiff:
 		hints = "j/k scroll  Tab file  / search  Esc back  ? help"
-	case tui.ViewReview:
+	case core.ViewReview:
 		hints = "j/k field  Enter action  Esc back  ? help"
-	case tui.ViewInbox:
+	case core.ViewInbox:
 		hints = "j/k navigate  Tab tab  Enter open  Esc back  ? help"
-	case tui.ViewRepoSwitch:
+	case core.ViewRepoSwitch:
 		hints = "j/k navigate  Enter switch  Esc cancel"
-	case tui.ViewHelp:
+	case core.ViewHelp:
 		hints = "? or Esc to close"
 	default:
 		hints = "? help  q quit"

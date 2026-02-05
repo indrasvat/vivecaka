@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
-	"github.com/indrasvat/vivecaka/internal/tui"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
 // RepoEntry represents a repo in the switcher list.
@@ -27,12 +27,12 @@ type RepoSwitcherModel struct {
 	query    string
 	width    int
 	height   int
-	styles   tui.Styles
-	keys     tui.KeyMap
+	styles   core.Styles
+	keys     core.KeyMap
 }
 
 // NewRepoSwitcherModel creates a new repo switcher.
-func NewRepoSwitcherModel(styles tui.Styles, keys tui.KeyMap) RepoSwitcherModel {
+func NewRepoSwitcherModel(styles core.Styles, keys core.KeyMap) RepoSwitcherModel {
 	return RepoSwitcherModel{
 		styles: styles,
 		keys:   keys,

@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
-	"github.com/indrasvat/vivecaka/internal/tui"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
 // DiffViewModel implements the diff viewer.
@@ -16,8 +16,8 @@ type DiffViewModel struct {
 	diff        *domain.Diff
 	width       int
 	height      int
-	styles      tui.Styles
-	keys        tui.KeyMap
+	styles      core.Styles
+	keys        core.KeyMap
 	fileIdx     int
 	scrollY     int
 	loading     bool
@@ -26,7 +26,7 @@ type DiffViewModel struct {
 }
 
 // NewDiffViewModel creates a new diff viewer.
-func NewDiffViewModel(styles tui.Styles, keys tui.KeyMap) DiffViewModel {
+func NewDiffViewModel(styles core.Styles, keys core.KeyMap) DiffViewModel {
 	return DiffViewModel{
 		styles:  styles,
 		keys:    keys,
@@ -49,7 +49,10 @@ func (m *DiffViewModel) SetDiff(d *domain.Diff) {
 }
 
 // Message types.
-type DiffLoadedMsg struct{ Diff *domain.Diff }
+type DiffLoadedMsg struct {
+	Diff *domain.Diff
+	Err  error
+}
 
 // Update handles messages for the diff view.
 func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {

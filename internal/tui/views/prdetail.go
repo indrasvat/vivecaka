@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
-	"github.com/indrasvat/vivecaka/internal/tui"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
 // PRDetailModel implements the PR detail view.
@@ -16,8 +16,8 @@ type PRDetailModel struct {
 	detail  *domain.PRDetail
 	width   int
 	height  int
-	styles  tui.Styles
-	keys    tui.KeyMap
+	styles  core.Styles
+	keys    core.KeyMap
 	pane    DetailPane
 	scrollY int
 	loading bool
@@ -34,7 +34,7 @@ const (
 )
 
 // NewPRDetailModel creates a new PR detail view.
-func NewPRDetailModel(styles tui.Styles, keys tui.KeyMap) PRDetailModel {
+func NewPRDetailModel(styles core.Styles, keys core.KeyMap) PRDetailModel {
 	return PRDetailModel{
 		styles:  styles,
 		keys:    keys,
@@ -57,7 +57,10 @@ func (m *PRDetailModel) SetDetail(d *domain.PRDetail) {
 
 // Message types.
 type (
-	PRDetailLoadedMsg struct{ Detail *domain.PRDetail }
+	PRDetailLoadedMsg struct {
+		Detail *domain.PRDetail
+		Err    error
+	}
 	OpenDiffMsg       struct{ Number int }
 	StartReviewMsg    struct{ Number int }
 )

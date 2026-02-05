@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
-	"github.com/indrasvat/vivecaka/internal/tui"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
 // InboxTab represents filtering tabs in the Unified PR Inbox.
@@ -37,14 +37,14 @@ type InboxModel struct {
 	offset   int
 	width    int
 	height   int
-	styles   tui.Styles
-	keys     tui.KeyMap
+	styles   core.Styles
+	keys     core.KeyMap
 	loading  bool
 	username string // current user for tab filtering
 }
 
 // NewInboxModel creates a new inbox view.
-func NewInboxModel(styles tui.Styles, keys tui.KeyMap) InboxModel {
+func NewInboxModel(styles core.Styles, keys core.KeyMap) InboxModel {
 	return InboxModel{
 		styles:  styles,
 		keys:    keys,

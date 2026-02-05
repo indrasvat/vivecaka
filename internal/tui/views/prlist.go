@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
-	"github.com/indrasvat/vivecaka/internal/tui"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
 // PRListModel implements the PR list view.
@@ -20,8 +20,8 @@ type PRListModel struct {
 	offset        int
 	width         int
 	height        int
-	styles        tui.Styles
-	keys          tui.KeyMap
+	styles        core.Styles
+	keys          core.KeyMap
 	loading       bool
 	searchQuery   string
 	searching     bool
@@ -32,7 +32,7 @@ type PRListModel struct {
 }
 
 // NewPRListModel creates a new PR list view.
-func NewPRListModel(styles tui.Styles, keys tui.KeyMap) PRListModel {
+func NewPRListModel(styles core.Styles, keys core.KeyMap) PRListModel {
 	return PRListModel{
 		styles:    styles,
 		keys:      keys,
@@ -72,7 +72,10 @@ func (m *PRListModel) SelectedPR() *domain.PR {
 
 // PRListMsg types for communication with parent.
 type (
-	PRsLoadedMsg   struct{ PRs []domain.PR }
+	PRsLoadedMsg struct {
+		PRs []domain.PR
+		Err error
+	}
 	OpenPRMsg      struct{ Number int }
 	CheckoutPRMsg  struct{ Number int }
 	CopyURLMsg     struct{ URL string }

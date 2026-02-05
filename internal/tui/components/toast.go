@@ -6,7 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
-	"github.com/indrasvat/vivecaka/internal/tui"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
 // Toast represents a single notification.
@@ -19,14 +19,14 @@ type Toast struct {
 
 // ToastManager manages a stack of toast notifications.
 type ToastManager struct {
-	styles tui.Styles
+	styles core.Styles
 	toasts []Toast
 	nextID int
 	width  int
 }
 
 // NewToastManager creates a new ToastManager.
-func NewToastManager(styles tui.Styles) *ToastManager {
+func NewToastManager(styles core.Styles) *ToastManager {
 	return &ToastManager{styles: styles}
 }
 

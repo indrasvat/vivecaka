@@ -5,7 +5,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
-	"github.com/indrasvat/vivecaka/internal/tui"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
 // ReviewModel implements the review submission form.
@@ -13,8 +13,8 @@ type ReviewModel struct {
 	prNumber int
 	width    int
 	height   int
-	styles   tui.Styles
-	keys     tui.KeyMap
+	styles   core.Styles
+	keys     core.KeyMap
 	action   domain.ReviewAction
 	body     string
 	cursor   int // 0=action, 1=body, 2=submit
@@ -22,7 +22,7 @@ type ReviewModel struct {
 }
 
 // NewReviewModel creates a new review form.
-func NewReviewModel(styles tui.Styles, keys tui.KeyMap) ReviewModel {
+func NewReviewModel(styles core.Styles, keys core.KeyMap) ReviewModel {
 	return ReviewModel{
 		styles: styles,
 		keys:   keys,

@@ -5,12 +5,12 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
-	"github.com/indrasvat/vivecaka/internal/tui"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
 // Header renders the top bar showing repo info and filter state.
 type Header struct {
-	styles      tui.Styles
+	styles      core.Styles
 	repo        domain.RepoRef
 	prCount     int
 	filter      string
@@ -19,7 +19,7 @@ type Header struct {
 }
 
 // NewHeader creates a new Header component.
-func NewHeader(styles tui.Styles) *Header {
+func NewHeader(styles core.Styles) *Header {
 	return &Header{styles: styles}
 }
 

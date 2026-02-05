@@ -6,15 +6,15 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/indrasvat/vivecaka/internal/domain"
-	"github.com/indrasvat/vivecaka/internal/tui"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
-func testStyles() tui.Styles {
-	return tui.NewStyles(tui.ThemeByName("catppuccin-mocha"))
+func testStyles() core.Styles {
+	return core.NewStyles(core.ThemeByName("catppuccin-mocha"))
 }
 
-func testKeys() tui.KeyMap {
-	return tui.DefaultKeyMap()
+func testKeys() core.KeyMap {
+	return core.DefaultKeyMap()
 }
 
 func testPRs() []domain.PR {

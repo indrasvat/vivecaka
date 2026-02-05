@@ -4,12 +4,12 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/indrasvat/vivecaka/internal/tui"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
 // StatusBar renders the bottom bar with key hints and notifications.
 type StatusBar struct {
-	styles tui.Styles
+	styles core.Styles
 	hints  []string
 	msg    string
 	msgErr bool
@@ -17,7 +17,7 @@ type StatusBar struct {
 }
 
 // NewStatusBar creates a new StatusBar component.
-func NewStatusBar(styles tui.Styles) *StatusBar {
+func NewStatusBar(styles core.Styles) *StatusBar {
 	return &StatusBar{styles: styles}
 }
 

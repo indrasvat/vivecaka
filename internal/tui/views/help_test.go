@@ -4,12 +4,12 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/indrasvat/vivecaka/internal/tui"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
 func TestNewHelpModel(t *testing.T) {
 	m := NewHelpModel(testStyles())
-	if m.context != tui.ViewLoading {
+	if m.context != core.ViewLoading {
 		t.Errorf("default context = %d, want ViewLoading", m.context)
 	}
 }
@@ -24,8 +24,8 @@ func TestHelpSetSize(t *testing.T) {
 
 func TestHelpSetContext(t *testing.T) {
 	m := NewHelpModel(testStyles())
-	m.SetContext(tui.ViewPRList)
-	if m.context != tui.ViewPRList {
+	m.SetContext(core.ViewPRList)
+	if m.context != core.ViewPRList {
 		t.Errorf("context = %d, want ViewPRList", m.context)
 	}
 }
@@ -33,7 +33,7 @@ func TestHelpSetContext(t *testing.T) {
 func TestHelpEscClose(t *testing.T) {
 	m := NewHelpModel(testStyles())
 	m.SetSize(120, 40)
-	m.SetContext(tui.ViewPRList)
+	m.SetContext(core.ViewPRList)
 
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	if cmd == nil {
@@ -80,7 +80,7 @@ func TestHelpNonKeyMsg(t *testing.T) {
 func TestHelpViewPRList(t *testing.T) {
 	m := NewHelpModel(testStyles())
 	m.SetSize(120, 40)
-	m.SetContext(tui.ViewPRList)
+	m.SetContext(core.ViewPRList)
 
 	view := m.View()
 	if view == "" {
@@ -91,7 +91,7 @@ func TestHelpViewPRList(t *testing.T) {
 func TestHelpViewPRDetail(t *testing.T) {
 	m := NewHelpModel(testStyles())
 	m.SetSize(120, 40)
-	m.SetContext(tui.ViewPRDetail)
+	m.SetContext(core.ViewPRDetail)
 
 	view := m.View()
 	if view == "" {
@@ -102,7 +102,7 @@ func TestHelpViewPRDetail(t *testing.T) {
 func TestHelpViewDiff(t *testing.T) {
 	m := NewHelpModel(testStyles())
 	m.SetSize(120, 40)
-	m.SetContext(tui.ViewDiff)
+	m.SetContext(core.ViewDiff)
 
 	view := m.View()
 	if view == "" {
@@ -113,7 +113,7 @@ func TestHelpViewDiff(t *testing.T) {
 func TestHelpViewReview(t *testing.T) {
 	m := NewHelpModel(testStyles())
 	m.SetSize(120, 40)
-	m.SetContext(tui.ViewReview)
+	m.SetContext(core.ViewReview)
 
 	view := m.View()
 	if view == "" {
@@ -124,7 +124,7 @@ func TestHelpViewReview(t *testing.T) {
 func TestHelpViewInbox(t *testing.T) {
 	m := NewHelpModel(testStyles())
 	m.SetSize(120, 40)
-	m.SetContext(tui.ViewInbox)
+	m.SetContext(core.ViewInbox)
 
 	view := m.View()
 	if view == "" {
@@ -135,7 +135,7 @@ func TestHelpViewInbox(t *testing.T) {
 func TestHelpViewDefault(t *testing.T) {
 	m := NewHelpModel(testStyles())
 	m.SetSize(120, 40)
-	m.SetContext(tui.ViewLoading)
+	m.SetContext(core.ViewLoading)
 
 	view := m.View()
 	if view == "" {
@@ -146,7 +146,7 @@ func TestHelpViewDefault(t *testing.T) {
 func TestHelpViewSmall(t *testing.T) {
 	m := NewHelpModel(testStyles())
 	m.SetSize(40, 15) // Small terminal.
-	m.SetContext(tui.ViewPRList)
+	m.SetContext(core.ViewPRList)
 
 	view := m.View()
 	if view == "" {
@@ -155,15 +155,15 @@ func TestHelpViewSmall(t *testing.T) {
 }
 
 func TestStatusHints(t *testing.T) {
-	views := []tui.ViewState{
-		tui.ViewPRList,
-		tui.ViewPRDetail,
-		tui.ViewDiff,
-		tui.ViewReview,
-		tui.ViewInbox,
-		tui.ViewRepoSwitch,
-		tui.ViewHelp,
-		tui.ViewLoading,
+	views := []core.ViewState{
+		core.ViewPRList,
+		core.ViewPRDetail,
+		core.ViewDiff,
+		core.ViewReview,
+		core.ViewInbox,
+		core.ViewRepoSwitch,
+		core.ViewHelp,
+		core.ViewLoading,
 	}
 
 	for _, v := range views {
@@ -175,14 +175,14 @@ func TestStatusHints(t *testing.T) {
 }
 
 func TestStatusHintsTruncation(t *testing.T) {
-	hints := StatusHints(tui.ViewPRList, 30)
+	hints := StatusHints(core.ViewPRList, 30)
 	if len(hints) > 30 {
 		t.Errorf("hints should be truncated to width, got len=%d", len(hints))
 	}
 }
 
 func TestStatusHintsWideTerminal(t *testing.T) {
-	hints := StatusHints(tui.ViewPRList, 200)
+	hints := StatusHints(core.ViewPRList, 200)
 	if hints == "" {
 		t.Error("wide terminal hints should not be empty")
 	}

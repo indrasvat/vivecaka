@@ -1,10 +1,14 @@
 package tui
 
 import (
+	"fmt"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/indrasvat/vivecaka/internal/config"
+	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
+	"github.com/indrasvat/vivecaka/internal/tui/views"
 )
 
 func newTestApp() *App {
@@ -18,7 +22,7 @@ func TestNewAppDefaults(t *testing.T) {
 	if app.version != "test" {
 		t.Errorf("version = %q, want %q", app.version, "test")
 	}
-	if app.view != ViewLoading {
+	if app.view != core.ViewLoading {
 		t.Errorf("initial view = %d, want ViewLoading", app.view)
 	}
 }
@@ -64,17 +68,17 @@ func TestAppQuitKey(t *testing.T) {
 func TestAppHelpToggle(t *testing.T) {
 	app := newTestApp()
 	app.ready = true
-	app.view = ViewPRList
+	app.view = core.ViewPRList
 
 	// Press ? to open help.
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
 	updated, _ := app.Update(msg)
 	a := updated.(*App)
 
-	if a.view != ViewHelp {
+	if a.view != core.ViewHelp {
 		t.Errorf("view = %d, want ViewHelp", a.view)
 	}
-	if a.prevView != ViewPRList {
+	if a.prevView != core.ViewPRList {
 		t.Errorf("prevView = %d, want ViewPRList", a.prevView)
 	}
 
@@ -82,7 +86,7 @@ func TestAppHelpToggle(t *testing.T) {
 	updated, _ = a.Update(msg)
 	a = updated.(*App)
 
-	if a.view != ViewPRList {
+	if a.view != core.ViewPRList {
 		t.Errorf("view = %d, want ViewPRList after closing help", a.view)
 	}
 }
@@ -92,20 +96,20 @@ func TestAppBackNavigation(t *testing.T) {
 	app.ready = true
 
 	tests := []struct {
-		from ViewState
-		to   ViewState
+		from core.ViewState
+		to   core.ViewState
 	}{
-		{ViewHelp, ViewPRList},
-		{ViewPRDetail, ViewPRList},
-		{ViewDiff, ViewPRDetail},
-		{ViewReview, ViewPRDetail},
-		{ViewRepoSwitch, ViewPRList},
-		{ViewInbox, ViewPRList},
+		{core.ViewHelp, core.ViewPRList},
+		{core.ViewPRDetail, core.ViewPRList},
+		{core.ViewDiff, core.ViewPRDetail},
+		{core.ViewReview, core.ViewPRDetail},
+		{core.ViewRepoSwitch, core.ViewPRList},
+		{core.ViewInbox, core.ViewPRList},
 	}
 
 	for _, tt := range tests {
 		app.view = tt.from
-		app.prevView = ViewPRList // For help/repo-switch navigation.
+		app.prevView = core.ViewPRList // For help/repo-switch navigation.
 
 		msg := tea.KeyMsg{Type: tea.KeyEscape}
 		updated, _ := app.Update(msg)
@@ -122,6 +126,7 @@ func TestAppViewReady(t *testing.T) {
 	app.ready = true
 	app.width = 80
 	app.height = 24
+	app.view = core.ViewPRList
 
 	// Should render without panic.
 	view := app.View()
@@ -145,7 +150,7 @@ func TestAppViewReadyMsg(t *testing.T) {
 	updated, _ := app.Update(viewReadyMsg{})
 	a := updated.(*App)
 
-	if a.view != ViewPRList {
+	if a.view != core.ViewPRList {
 		t.Errorf("view after viewReadyMsg = %d, want ViewPRList", a.view)
 	}
 }
@@ -153,40 +158,40 @@ func TestAppViewReadyMsg(t *testing.T) {
 func TestAppRepoSwitch(t *testing.T) {
 	app := newTestApp()
 	app.ready = true
-	app.view = ViewPRList
+	app.view = core.ViewPRList
 
 	msg := tea.KeyMsg{Type: tea.KeyCtrlR}
 	updated, _ := app.Update(msg)
 	a := updated.(*App)
 
-	if a.view != ViewRepoSwitch {
+	if a.view != core.ViewRepoSwitch {
 		t.Errorf("view = %d, want ViewRepoSwitch", a.view)
 	}
-	if a.prevView != ViewPRList {
+	if a.prevView != core.ViewPRList {
 		t.Errorf("prevView = %d, want ViewPRList", a.prevView)
 	}
 
 	// Pressing Ctrl+R again shouldn't change anything (already in switcher).
 	updated, _ = a.Update(msg)
 	a = updated.(*App)
-	if a.view != ViewRepoSwitch {
+	if a.view != core.ViewRepoSwitch {
 		t.Errorf("view should stay ViewRepoSwitch, got %d", a.view)
 	}
 }
 
 func TestAppAllViewsRender(t *testing.T) {
-	views := []ViewState{
-		ViewLoading,
-		ViewPRList,
-		ViewPRDetail,
-		ViewDiff,
-		ViewReview,
-		ViewHelp,
-		ViewRepoSwitch,
-		ViewInbox,
+	allViews := []core.ViewState{
+		core.ViewLoading,
+		core.ViewPRList,
+		core.ViewPRDetail,
+		core.ViewDiff,
+		core.ViewReview,
+		core.ViewHelp,
+		core.ViewRepoSwitch,
+		core.ViewInbox,
 	}
 
-	for _, v := range views {
+	for _, v := range allViews {
 		app := newTestApp()
 		app.ready = true
 		app.width = 120
@@ -202,17 +207,17 @@ func TestAppAllViewsRender(t *testing.T) {
 
 func TestAppViewNames(t *testing.T) {
 	tests := []struct {
-		view ViewState
+		view core.ViewState
 		name string
 	}{
-		{ViewLoading, "Loading"},
-		{ViewPRList, "PR List"},
-		{ViewPRDetail, "PR Detail"},
-		{ViewDiff, "Diff"},
-		{ViewReview, "Review"},
-		{ViewHelp, "Help"},
-		{ViewRepoSwitch, "Repo Switch"},
-		{ViewInbox, "Inbox"},
+		{core.ViewLoading, "Loading"},
+		{core.ViewPRList, "PR List"},
+		{core.ViewPRDetail, "PR Detail"},
+		{core.ViewDiff, "Diff"},
+		{core.ViewReview, "Review"},
+		{core.ViewHelp, "Help"},
+		{core.ViewRepoSwitch, "Repo Switch"},
+		{core.ViewInbox, "Inbox"},
 	}
 
 	app := newTestApp()
@@ -224,61 +229,96 @@ func TestAppViewNames(t *testing.T) {
 	}
 }
 
-func TestAppStatusHints(t *testing.T) {
-	views := []ViewState{
-		ViewPRList,
-		ViewPRDetail,
-		ViewDiff,
-		ViewReview,
-		ViewInbox,
-		ViewRepoSwitch,
-		ViewHelp,
-		ViewLoading,
-	}
-
-	app := newTestApp()
-	app.width = 120
-	for _, v := range views {
-		app.view = v
-		hints := app.statusHints()
-		if hints == "" {
-			t.Errorf("statusHints(%d) should not be empty", v)
-		}
-	}
-}
-
-func TestTruncateHints(t *testing.T) {
-	long := "j/k navigate  Enter open  c checkout  / search  ? help  q quit"
-
-	// No truncation when wide enough.
-	got := truncateHints(long, 200)
-	if got != long {
-		t.Errorf("should not truncate when wide enough")
-	}
-
-	// Truncation for narrow.
-	got = truncateHints(long, 20)
-	if len(got) > 20 {
-		t.Errorf("truncated hints len=%d should be <= 20", len(got))
-	}
-
-	// Zero width doesn't truncate.
-	got = truncateHints(long, 0)
-	if got != long {
-		t.Errorf("zero width should not truncate")
-	}
-}
-
 func TestAppSmallTerminal(t *testing.T) {
 	app := newTestApp()
 	app.ready = true
 	app.width = 20
 	app.height = 5
-	app.view = ViewPRList
+	app.view = core.ViewPRList
 
 	// Should not panic.
 	view := app.View()
 	if view == "" {
 		t.Error("small terminal view should not be empty")
+	}
+}
+
+func TestAppRepoDetected(t *testing.T) {
+	app := newTestApp()
+	app.ready = true
+
+	msg := views.RepoDetectedMsg{
+		Repo: domain.RepoRef{Owner: "test", Name: "repo"},
+	}
+	updated, _ := app.Update(msg)
+	a := updated.(*App)
+
+	if a.repo.Owner != "test" || a.repo.Name != "repo" {
+		t.Errorf("repo = %v, want test/repo", a.repo)
+	}
+}
+
+func TestAppRepoDetectedError(t *testing.T) {
+	app := newTestApp()
+	app.ready = true
+
+	msg := views.RepoDetectedMsg{
+		Err: fmt.Errorf("no git remote"),
+	}
+	updated, cmd := app.Update(msg)
+	a := updated.(*App)
+
+	if a.view != core.ViewPRList {
+		t.Errorf("view after error = %d, want ViewPRList", a.view)
+	}
+	if cmd == nil {
+		t.Error("should return toast cmd on error")
+	}
+}
+
+func TestAppPRsLoaded(t *testing.T) {
+	app := newTestApp()
+	app.ready = true
+
+	msg := views.PRsLoadedMsg{
+		PRs: []domain.PR{{Number: 1, Title: "test"}},
+	}
+	updated, _ := app.Update(msg)
+	a := updated.(*App)
+
+	if a.view != core.ViewPRList {
+		t.Errorf("view = %d, want ViewPRList", a.view)
+	}
+}
+
+func TestAppOpenPR(t *testing.T) {
+	app := newTestApp()
+	app.ready = true
+	app.view = core.ViewPRList
+
+	msg := views.OpenPRMsg{Number: 42}
+	updated, _ := app.Update(msg)
+	a := updated.(*App)
+
+	if a.view != core.ViewPRDetail {
+		t.Errorf("view = %d, want ViewPRDetail", a.view)
+	}
+}
+
+func TestAppThemeCycle(t *testing.T) {
+	app := newTestApp()
+	app.ready = true
+	app.width = 120
+	app.height = 40
+	app.view = core.ViewPRList
+
+	origTheme := app.theme.Name
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'T'}}
+	updated, _ := app.Update(msg)
+	a := updated.(*App)
+
+	if a.theme.Name == origTheme {
+		t.Error("theme should have changed after T key")
 	}
 }

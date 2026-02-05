@@ -5,6 +5,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/indrasvat/vivecaka/internal/adapter/ghcli"
 	"github.com/indrasvat/vivecaka/internal/config"
 	"github.com/indrasvat/vivecaka/internal/tui"
 )
@@ -28,7 +29,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	app := tui.New(cfg, tui.WithVersion(version))
+	adapter := ghcli.New()
+
+	app := tui.New(cfg,
+		tui.WithVersion(version),
+		tui.WithReader(adapter),
+		tui.WithReviewer(adapter),
+		tui.WithWriter(adapter),
+	)
+
 	p := tea.NewProgram(app, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)

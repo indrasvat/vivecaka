@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/config"
-	"github.com/indrasvat/vivecaka/internal/tui"
+	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
 // TutorialStep represents a single step in the first-launch tutorial.
@@ -44,12 +44,12 @@ type TutorialModel struct {
 	step    int
 	width   int
 	height  int
-	styles  tui.Styles
+	styles  core.Styles
 	visible bool
 }
 
 // NewTutorialModel creates a new tutorial model.
-func NewTutorialModel(styles tui.Styles) TutorialModel {
+func NewTutorialModel(styles core.Styles) TutorialModel {
 	return TutorialModel{styles: styles}
 }
 
