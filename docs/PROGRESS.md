@@ -21,7 +21,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 
 | # | Task File | Description | Status | Depends On |
 |---|-----------|-------------|--------|------------|
-| 001 | `docs/tasks/001-fix-pr-list-sort.md` | Fix sort to actually reorder data + direction indicator | TODO | — |
+| 001 | `docs/tasks/001-fix-pr-list-sort.md` | Fix sort to actually reorder data + direction indicator | DONE | — |
 | 002 | `docs/tasks/002-clipboard-and-browser.md` | Wire y (copy URL) and o (open browser) keys | TODO | — |
 | 003 | `docs/tasks/003-pr-detail-keybindings.md` | Add d/c/o keys to PR detail + CI summary line | TODO | 002 |
 | 004 | `docs/tasks/004-fix-diff-search.md` | Make diff search actually highlight + n/N navigation | TODO | — |
@@ -218,3 +218,4 @@ Dependency chains:
 - testify listed as dep but never imported → Task 026
 - huh listed as dep but never imported → Task 011
 - 0 lint issues, all tests pass with -race
+- Task 001: PR list sort now reorders data with ▲/▼ indicator; added error handling for tutorial flag write to satisfy errcheck.

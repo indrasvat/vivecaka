@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -26,7 +27,8 @@ type PRListModel struct {
 	searchQuery   string
 	searching     bool
 	sortField     string
-	sortDesc      bool
+	sortAsc       bool
+	sortPending   bool
 	currentBranch string
 	filter        domain.ListOpts
 }
@@ -38,7 +40,7 @@ func NewPRListModel(styles core.Styles, keys core.KeyMap) PRListModel {
 		keys:      keys,
 		loading:   true,
 		sortField: "updated",
-		sortDesc:  true,
+		sortAsc:   false,
 		filter:    domain.ListOpts{State: domain.PRStateOpen},
 	}
 }
@@ -185,6 +187,13 @@ func (m *PRListModel) handleSearchKey(msg tea.KeyMsg) tea.Cmd {
 
 func (m *PRListModel) cycleSort() {
 	fields := []string{"updated", "created", "number", "title", "author"}
+	if m.sortPending {
+		m.sortAsc = !m.sortAsc
+		m.sortPending = false
+		m.applyFilter()
+		return
+	}
+
 	for i, f := range fields {
 		if f == m.sortField {
 			if i+1 < len(fields) {
@@ -195,6 +204,8 @@ func (m *PRListModel) cycleSort() {
 			break
 		}
 	}
+	m.sortAsc = false
+	m.sortPending = true
 	m.applyFilter()
 }
 
@@ -213,10 +224,22 @@ func (m *PRListModel) applyFilter() {
 		result = append(result, pr)
 	}
 
+	sort.SliceStable(result, func(i, j int) bool {
+		cmp := m.comparePR(result[i], result[j])
+		if cmp == 0 {
+			return false
+		}
+		if m.sortAsc {
+			return cmp < 0
+		}
+		return cmp > 0
+	})
+
 	m.filtered = result
 	if m.cursor >= len(m.filtered) {
 		m.cursor = max(0, len(m.filtered)-1)
 	}
+	m.ensureVisible()
 }
 
 func (m *PRListModel) visibleRows() int {
@@ -291,13 +314,21 @@ func (m *PRListModel) renderHeaderRow() string {
 	header := lipgloss.NewStyle().Foreground(t.Muted).Bold(true)
 
 	cols := m.columns()
+	ageLabel := "Age"
+	switch m.sortField {
+	case "updated":
+		ageLabel = m.sortLabel("updated", "Age")
+	case "created":
+		ageLabel = m.sortLabel("created", "Age")
+	}
+
 	return header.Render(fmt.Sprintf("  %-*s %-*s %-*s %-*s %-*s %-*s",
-		cols.num, "#",
-		cols.title, "Title",
-		cols.author, "Author",
+		cols.num, m.sortLabel("number", "#"),
+		cols.title, m.sortLabel("title", "Title"),
+		cols.author, m.sortLabel("author", "Author"),
 		cols.ci, "CI",
 		cols.review, "Review",
-		cols.age, "Age",
+		cols.age, ageLabel,
 	))
 }
 
@@ -395,6 +426,66 @@ func (m *PRListModel) renderSearchBar() string {
 	t := m.styles.Theme
 	style := lipgloss.NewStyle().Foreground(t.Info)
 	return style.Render(fmt.Sprintf("/ %s▎", m.searchQuery))
+}
+
+func (m *PRListModel) sortLabel(field, label string) string {
+	if m.sortField != field {
+		return label
+	}
+	if m.sortAsc {
+		return label + "▲"
+	}
+	return label + "▼"
+}
+
+func (m *PRListModel) comparePR(a, b domain.PR) int {
+	switch m.sortField {
+	case "updated":
+		return compareTime(a.UpdatedAt, b.UpdatedAt)
+	case "created":
+		return compareTime(nonZeroTime(a.CreatedAt, a.UpdatedAt), nonZeroTime(b.CreatedAt, b.UpdatedAt))
+	case "number":
+		return compareInt(a.Number, b.Number)
+	case "title":
+		return compareStringFold(a.Title, b.Title)
+	case "author":
+		return compareStringFold(a.Author, b.Author)
+	default:
+		return compareTime(a.UpdatedAt, b.UpdatedAt)
+	}
+}
+
+func compareTime(a, b time.Time) int {
+	switch {
+	case a.Before(b):
+		return -1
+	case a.After(b):
+		return 1
+	default:
+		return 0
+	}
+}
+
+func compareInt(a, b int) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func compareStringFold(a, b string) int {
+	return strings.Compare(strings.ToLower(a), strings.ToLower(b))
+}
+
+func nonZeroTime(primary, fallback time.Time) time.Time {
+	if primary.IsZero() {
+		return fallback
+	}
+	return primary
 }
 
 // ciIcon returns the Unicode symbol for a CI status.

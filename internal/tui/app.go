@@ -221,7 +221,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case views.TutorialDoneMsg:
-		views.MarkTutorialDone()
+		if err := views.MarkTutorialDone(); err != nil {
+			cmd := a.toasts.Add(
+				fmt.Sprintf("Failed to persist tutorial state: %v", err),
+				domain.ToastError, 5*time.Second,
+			)
+			return a, cmd
+		}
 		return a, nil
 
 	case components.DismissToastMsg:

@@ -1,6 +1,8 @@
 package views
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,11 +22,61 @@ func testKeys() core.KeyMap {
 func testPRs() []domain.PR {
 	now := time.Now()
 	return []domain.PR{
-		{Number: 142, Title: "Add plugin architecture", Author: "indrasvat", CI: domain.CIPass, Review: domain.ReviewStatus{State: domain.ReviewApproved, Approved: 2, Total: 2}, UpdatedAt: now.Add(-2 * time.Hour), Branch: domain.BranchInfo{Head: "feat/plugins"}},
-		{Number: 141, Title: "Fix diff viewer alignment", Author: "alice", CI: domain.CIFail, Review: domain.ReviewStatus{State: domain.ReviewPending, Approved: 0, Total: 1}, UpdatedAt: now.Add(-5 * time.Hour)},
-		{Number: 140, Title: "Update CI pipeline", Author: "bob", CI: domain.CIPending, UpdatedAt: now.Add(-24 * time.Hour)},
-		{Number: 139, Title: "New theme engine", Author: "indrasvat", Draft: true, UpdatedAt: now.Add(-48 * time.Hour)},
-		{Number: 138, Title: "Refactor config loader", Author: "carol", CI: domain.CIPass, Review: domain.ReviewStatus{State: domain.ReviewChangesRequested, Approved: 1, Total: 2}, UpdatedAt: now.Add(-72 * time.Hour)},
+		{
+			Number:    142,
+			Title:     "Add plugin architecture",
+			Author:    "indrasvat",
+			CI:        domain.CIPass,
+			Review:    domain.ReviewStatus{State: domain.ReviewApproved, Approved: 2, Total: 2},
+			UpdatedAt: now.Add(-2 * time.Hour),
+			CreatedAt: now.Add(-10 * time.Hour),
+			Branch:    domain.BranchInfo{Head: "feat/plugins"},
+		},
+		{
+			Number:    141,
+			Title:     "Fix diff viewer alignment",
+			Author:    "alice",
+			CI:        domain.CIFail,
+			Review:    domain.ReviewStatus{State: domain.ReviewPending, Approved: 0, Total: 1},
+			UpdatedAt: now.Add(-5 * time.Hour),
+			CreatedAt: now.Add(-12 * time.Hour),
+		},
+		{
+			Number:    140,
+			Title:     "Update CI pipeline",
+			Author:    "bob",
+			CI:        domain.CIPending,
+			UpdatedAt: now.Add(-24 * time.Hour),
+			CreatedAt: now.Add(-24 * time.Hour),
+		},
+		{
+			Number:    139,
+			Title:     "New theme engine",
+			Author:    "indrasvat",
+			Draft:     true,
+			UpdatedAt: now.Add(-48 * time.Hour),
+			CreatedAt: now.Add(-60 * time.Hour),
+		},
+		{
+			Number:    138,
+			Title:     "Refactor config loader",
+			Author:    "carol",
+			CI:        domain.CIPass,
+			Review:    domain.ReviewStatus{State: domain.ReviewChangesRequested, Approved: 1, Total: 2},
+			UpdatedAt: now.Add(-72 * time.Hour),
+			CreatedAt: now.Add(-96 * time.Hour),
+		},
+	}
+}
+
+func testPRsForSort() []domain.PR {
+	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	return []domain.PR{
+		{Number: 3, Title: "Zulu", Author: "zoe", UpdatedAt: base.Add(5 * time.Hour), CreatedAt: base.Add(-1 * time.Hour)},
+		{Number: 1, Title: "Alpha", Author: "alice", UpdatedAt: base.Add(1 * time.Hour), CreatedAt: base.Add(-5 * time.Hour)},
+		{Number: 5, Title: "Echo", Author: "mike", UpdatedAt: base.Add(3 * time.Hour), CreatedAt: base.Add(-2 * time.Hour)},
+		{Number: 2, Title: "Bravo", Author: "bob", UpdatedAt: base.Add(2 * time.Hour), CreatedAt: base.Add(-4 * time.Hour)},
+		{Number: 4, Title: "Delta", Author: "carol", UpdatedAt: base.Add(4 * time.Hour), CreatedAt: base.Add(-3 * time.Hour)},
 	}
 }
 
@@ -35,6 +87,9 @@ func TestNewPRListModel(t *testing.T) {
 	}
 	if m.sortField != "updated" {
 		t.Errorf("default sort = %q, want %q", m.sortField, "updated")
+	}
+	if m.sortAsc {
+		t.Error("default sort direction should be descending")
 	}
 }
 
@@ -193,10 +248,82 @@ func TestCycleSort(t *testing.T) {
 	if m.sortField != "created" {
 		t.Errorf("after 1st cycle = %q, want %q", m.sortField, "created")
 	}
+	if m.sortAsc {
+		t.Error("after 1st cycle sort should default to descending")
+	}
+
+	m.cycleSort()
+	if m.sortField != "created" {
+		t.Errorf("after 2nd press = %q, want %q", m.sortField, "created")
+	}
+	if !m.sortAsc {
+		t.Error("after 2nd press sort should toggle to ascending")
+	}
 
 	m.cycleSort()
 	if m.sortField != "number" {
-		t.Errorf("after 2nd cycle = %q, want %q", m.sortField, "number")
+		t.Errorf("after 3rd press = %q, want %q", m.sortField, "number")
+	}
+	if m.sortAsc {
+		t.Error("after 3rd press sort should reset to descending")
+	}
+}
+
+func TestPRListSortApplyFilter(t *testing.T) {
+	m := NewPRListModel(testStyles(), testKeys())
+	m.SetPRs(testPRsForSort())
+
+	tests := []struct {
+		name  string
+		field string
+		asc   bool
+		want  []int
+	}{
+		{name: "updated desc", field: "updated", asc: false, want: []int{3, 4, 5, 2, 1}},
+		{name: "updated asc", field: "updated", asc: true, want: []int{1, 2, 5, 4, 3}},
+		{name: "created desc", field: "created", asc: false, want: []int{3, 5, 4, 2, 1}},
+		{name: "created asc", field: "created", asc: true, want: []int{1, 2, 4, 5, 3}},
+		{name: "number asc", field: "number", asc: true, want: []int{1, 2, 3, 4, 5}},
+		{name: "number desc", field: "number", asc: false, want: []int{5, 4, 3, 2, 1}},
+		{name: "title asc", field: "title", asc: true, want: []int{1, 2, 4, 5, 3}},
+		{name: "title desc", field: "title", asc: false, want: []int{3, 5, 4, 2, 1}},
+		{name: "author asc", field: "author", asc: true, want: []int{1, 2, 4, 5, 3}},
+		{name: "author desc", field: "author", asc: false, want: []int{3, 5, 4, 2, 1}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m.sortField = tt.field
+			m.sortAsc = tt.asc
+			m.searchQuery = ""
+			m.applyFilter()
+
+			got := make([]int, 0, len(m.filtered))
+			for _, pr := range m.filtered {
+				got = append(got, pr.Number)
+			}
+
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("order = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPRListSortIndicator(t *testing.T) {
+	m := NewPRListModel(testStyles(), testKeys())
+	m.SetSize(120, 30)
+	m.SetPRs(testPRsForSort())
+
+	m.sortField = "title"
+	m.sortAsc = true
+	header := m.renderHeaderRow()
+
+	if !strings.Contains(header, "Title▲") {
+		t.Errorf("header missing sort indicator for title: %q", header)
+	}
+	if strings.Contains(header, "Author▲") {
+		t.Errorf("unexpected indicator on non-active column: %q", header)
 	}
 }
 

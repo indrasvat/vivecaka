@@ -61,8 +61,8 @@ type (
 		Detail *domain.PRDetail
 		Err    error
 	}
-	OpenDiffMsg       struct{ Number int }
-	StartReviewMsg    struct{ Number int }
+	OpenDiffMsg    struct{ Number int }
+	StartReviewMsg struct{ Number int }
 )
 
 // Update handles messages for the detail view.
