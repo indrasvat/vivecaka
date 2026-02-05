@@ -53,3 +53,9 @@ type MorePRsLoadedMsg struct {
 	HasMore bool
 	Err     error
 }
+
+// PRCountLoadedMsg is sent when the total PR count is fetched.
+type PRCountLoadedMsg struct {
+	Total int
+	Err   error
+}

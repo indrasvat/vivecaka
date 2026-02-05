@@ -40,6 +40,9 @@ type PRListModel struct {
 	perPage     int  // items per page
 	hasMore     bool // are there more PRs to load?
 	loadingMore bool // currently loading more PRs?
+
+	// Spinner animation
+	spinnerFrame int
 }
 
 // NewPRListModel creates a new PR list view.
@@ -109,10 +112,13 @@ func (m *PRListModel) PerPage() int {
 	return m.perPage
 }
 
-// SetLoadingMore marks that more PRs are being loaded.
-func (m *PRListModel) SetLoadingMore(page int) {
+// SetLoadingMore marks that more PRs are being loaded and starts the spinner.
+// Returns a command to start the spinner animation.
+func (m *PRListModel) SetLoadingMore(page int) tea.Cmd {
 	m.loadingMore = true
 	m.page = page
+	m.spinnerFrame = 0
+	return m.spinnerTick()
 }
 
 // SetFilter updates the active filter options.
@@ -175,6 +181,9 @@ type (
 	OpenBrowserMsg struct{ URL string }
 )
 
+// SpinnerTickMsg is sent to animate the loading spinner.
+type SpinnerTickMsg struct{}
+
 type quickFilter string
 
 const (
@@ -193,8 +202,20 @@ func (m *PRListModel) Update(msg tea.Msg) tea.Cmd {
 		return m.handleKey(msg)
 	case PRsLoadedMsg:
 		m.SetPRs(msg.PRs)
+	case SpinnerTickMsg:
+		if m.loadingMore {
+			m.spinnerFrame++
+			return m.spinnerTick()
+		}
 	}
 	return nil
+}
+
+// spinnerTick returns a command that sends a SpinnerTickMsg after a delay.
+func (m *PRListModel) spinnerTick() tea.Cmd {
+	return tea.Tick(80*time.Millisecond, func(t time.Time) tea.Msg {
+		return SpinnerTickMsg{}
+	})
 }
 
 func (m *PRListModel) handleKey(msg tea.KeyMsg) tea.Cmd {
@@ -446,10 +467,14 @@ func (m *PRListModel) View() string {
 		rows = append(rows, m.renderPRRow(i, m.filtered[i]))
 	}
 
-	// Loading more indicator (shows at bottom when fetching next page).
+	// Loading more indicator with animated spinner (shows at bottom when fetching next page).
 	if m.loadingMore {
-		loadingStyle := lipgloss.NewStyle().Foreground(m.styles.Theme.Muted).Italic(true)
-		rows = append(rows, loadingStyle.Render("  Loading more..."))
+		spinnerFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+		frame := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
+		spinnerStyle := lipgloss.NewStyle().Foreground(m.styles.Theme.Primary)
+		textStyle := lipgloss.NewStyle().Foreground(m.styles.Theme.Muted).Italic(true)
+		indicator := spinnerStyle.Render(frame) + textStyle.Render(" Loading more PRs...")
+		rows = append(rows, "  "+indicator)
 	}
 
 	// Search bar (replaces one row if active).

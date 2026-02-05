@@ -162,7 +162,12 @@ func (a *App) Init() tea.Cmd {
 	if a.repo.Owner != "" {
 		a.header.SetRepo(a.repo)
 		if a.listPRs != nil {
+			state := a.filterOpts.State
+			if state == "" {
+				state = domain.PRStateOpen
+			}
 			cmds = append(cmds, loadPRsCmd(a.listPRs, a.repo, a.filterOpts))
+			cmds = append(cmds, loadPRCountCmd(a.reader, a.repo, state))
 			return tea.Batch(cmds...)
 		}
 		cmds = append(cmds, func() tea.Msg { return viewReadyMsg{} })
@@ -203,6 +208,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case views.MorePRsLoadedMsg:
 		return a.handleMorePRsLoaded(msg)
+
+	case views.PRCountLoadedMsg:
+		return a.handlePRCountLoaded(msg)
 
 	case views.OpenPRMsg:
 		return a.handleOpenPR(msg)
@@ -472,9 +480,18 @@ func (a *App) handleRepoDetected(msg views.RepoDetectedMsg) (tea.Model, tea.Cmd)
 	}
 	a.repo = msg.Repo
 	a.header.SetRepo(a.repo)
+	a.header.SetTotalCount(0) // Reset total count for new repo
 
 	if a.listPRs != nil {
-		return a, loadPRsCmd(a.listPRs, a.repo, a.filterOpts)
+		// Load PRs and fetch total count in parallel
+		state := a.filterOpts.State
+		if state == "" {
+			state = domain.PRStateOpen
+		}
+		return a, tea.Batch(
+			loadPRsCmd(a.listPRs, a.repo, a.filterOpts),
+			loadPRCountCmd(a.reader, a.repo, state),
+		)
 	}
 	a.view = core.ViewPRList
 	return a, nil
@@ -522,12 +539,12 @@ func (a *App) handleLoadMorePRs(msg views.LoadMorePRsMsg) (tea.Model, tea.Cmd) {
 	if a.listPRs == nil || a.repo.Owner == "" {
 		return a, nil
 	}
-	// Mark that we're loading more
-	a.prList.SetLoadingMore(msg.Page)
+	// Mark that we're loading more and start spinner
+	spinnerCmd := a.prList.SetLoadingMore(msg.Page)
 	// Create opts with pagination
 	opts := a.filterOpts
 	opts.Page = msg.Page
-	return a, loadMorePRsCmd(a.listPRs, a.repo, opts, msg.Page)
+	return a, tea.Batch(spinnerCmd, loadMorePRsCmd(a.listPRs, a.repo, opts, msg.Page))
 }
 
 func (a *App) handleMorePRsLoaded(msg views.MorePRsLoadedMsg) (tea.Model, tea.Cmd) {
@@ -544,6 +561,15 @@ func (a *App) handleMorePRsLoaded(msg views.MorePRsLoadedMsg) (tea.Model, tea.Cm
 	a.prList.AppendPRs(msg.PRs, msg.HasMore)
 	// Update header count to show total loaded PRs
 	a.header.SetPRCount(a.prList.TotalPRs())
+	return a, nil
+}
+
+func (a *App) handlePRCountLoaded(msg views.PRCountLoadedMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		// Silently ignore count errors - not critical
+		return a, nil
+	}
+	a.header.SetTotalCount(msg.Total)
 	return a, nil
 }
 
@@ -624,10 +650,18 @@ func (a *App) handleCheckoutDone(msg views.CheckoutDoneMsg) (tea.Model, tea.Cmd)
 func (a *App) handleSwitchRepo(msg views.SwitchRepoMsg) (tea.Model, tea.Cmd) {
 	a.repo = msg.Repo
 	a.header.SetRepo(a.repo)
+	a.header.SetTotalCount(0) // Reset total count for new repo
 	a.view = core.ViewPRList
 
 	if a.listPRs != nil {
-		return a, loadPRsCmd(a.listPRs, a.repo, a.filterOpts)
+		state := a.filterOpts.State
+		if state == "" {
+			state = domain.PRStateOpen
+		}
+		return a, tea.Batch(
+			loadPRsCmd(a.listPRs, a.repo, a.filterOpts),
+			loadPRCountCmd(a.reader, a.repo, state),
+		)
 	}
 	return a, nil
 }

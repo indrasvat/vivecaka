@@ -37,6 +37,9 @@ func (m *mockReader) GetChecks(_ context.Context, _ domain.RepoRef, _ int) ([]do
 func (m *mockReader) GetComments(_ context.Context, _ domain.RepoRef, _ int) ([]domain.CommentThread, error) {
 	return m.comments, m.commentsErr
 }
+func (m *mockReader) GetPRCount(_ context.Context, _ domain.RepoRef, _ domain.PRState) (int, error) {
+	return len(m.prs), m.err
+}
 
 type mockReviewer struct {
 	err error

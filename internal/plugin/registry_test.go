@@ -46,6 +46,9 @@ func (m *mockReaderPlugin) GetChecks(_ context.Context, _ domain.RepoRef, _ int)
 func (m *mockReaderPlugin) GetComments(_ context.Context, _ domain.RepoRef, _ int) ([]domain.CommentThread, error) {
 	return nil, nil
 }
+func (m *mockReaderPlugin) GetPRCount(_ context.Context, _ domain.RepoRef, _ domain.PRState) (int, error) {
+	return 0, nil
+}
 
 // mockReviewerPlugin implements Plugin + domain.PRReviewer.
 type mockReviewerPlugin struct {

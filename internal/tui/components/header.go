@@ -13,6 +13,7 @@ type Header struct {
 	styles      core.Styles
 	repo        domain.RepoRef
 	prCount     int
+	totalCount  int // total PRs available (0 = unknown)
 	filter      string
 	refreshSecs int
 	width       int
@@ -26,8 +27,11 @@ func NewHeader(styles core.Styles) *Header {
 // SetRepo updates the displayed repository.
 func (h *Header) SetRepo(repo domain.RepoRef) { h.repo = repo }
 
-// SetPRCount updates the displayed PR count.
+// SetPRCount updates the displayed loaded PR count.
 func (h *Header) SetPRCount(n int) { h.prCount = n }
+
+// SetTotalCount updates the displayed total PR count.
+func (h *Header) SetTotalCount(n int) { h.totalCount = n }
 
 // SetFilter updates the displayed filter name.
 func (h *Header) SetFilter(f string) { h.filter = f }
@@ -55,7 +59,15 @@ func (h *Header) View() string {
 
 	brand := brandStyle.Render(" vivecaka")
 	repo := repoStyle.Render(h.repo.String())
-	count := countStyle.Render(fmt.Sprintf("%d open", h.prCount))
+
+	// Format count: show "loaded/total" when total is known
+	var countText string
+	if h.totalCount > 0 {
+		countText = fmt.Sprintf("%d/%d open", h.prCount, h.totalCount)
+	} else {
+		countText = fmt.Sprintf("%d open", h.prCount)
+	}
+	count := countStyle.Render(countText)
 
 	// Determine filter label
 	filterLabel := "All PRs"

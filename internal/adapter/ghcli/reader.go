@@ -71,6 +71,39 @@ type ghFile struct {
 	Deletions int    `json:"deletions"`
 }
 
+// GetPRCount fetches the total number of open PRs for a repo via GraphQL.
+func (a *Adapter) GetPRCount(ctx context.Context, repo domain.RepoRef, state domain.PRState) (int, error) {
+	// Map state to GraphQL enum
+	gqlState := "OPEN"
+	switch state {
+	case domain.PRStateClosed:
+		gqlState = "CLOSED"
+	case domain.PRStateMerged:
+		gqlState = "MERGED"
+	}
+
+	query := fmt.Sprintf(`query { repository(owner: %q, name: %q) { pullRequests(states: %s) { totalCount } } }`,
+		repo.Owner, repo.Name, gqlState)
+
+	args := []string{"api", "graphql", "-f", "query=" + query}
+
+	var result struct {
+		Data struct {
+			Repository struct {
+				PullRequests struct {
+					TotalCount int `json:"totalCount"`
+				} `json:"pullRequests"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+
+	if err := ghJSON(ctx, &result, args...); err != nil {
+		return 0, fmt.Errorf("getting PR count: %w", err)
+	}
+
+	return result.Data.Repository.PullRequests.TotalCount, nil
+}
+
 // ListPRs fetches PRs via gh pr list --json.
 // Supports pagination via opts.Page and opts.PerPage.
 // Page is 1-based. For page > 1, we fetch page*perPage items and return only items for that page.

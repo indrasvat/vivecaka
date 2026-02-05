@@ -48,6 +48,14 @@ func loadMorePRsCmd(uc *usecase.ListPRs, repo domain.RepoRef, opts domain.ListOp
 	}
 }
 
+// loadPRCountCmd fetches the total PR count for a repo.
+func loadPRCountCmd(reader domain.PRReader, repo domain.RepoRef, state domain.PRState) tea.Cmd {
+	return func() tea.Msg {
+		count, err := reader.GetPRCount(context.Background(), repo, state)
+		return views.PRCountLoadedMsg{Total: count, Err: err}
+	}
+}
+
 // loadPRDetailCmd fetches full PR detail with timeout.
 func loadPRDetailCmd(uc *usecase.GetPRDetail, repo domain.RepoRef, number int) tea.Cmd {
 	return func() tea.Msg {
