@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/indrasvat/vivecaka/internal/adapter/ghcli"
@@ -9,6 +10,9 @@ import (
 	"github.com/indrasvat/vivecaka/internal/tui/views"
 	"github.com/indrasvat/vivecaka/internal/usecase"
 )
+
+// Default timeout for gh CLI operations.
+const ghTimeout = 15 * time.Second
 
 // detectRepoCmd detects the current repo from git remote.
 func detectRepoCmd() tea.Cmd {
@@ -34,10 +38,12 @@ func loadPRsCmd(uc *usecase.ListPRs, repo domain.RepoRef, opts domain.ListOpts) 
 	}
 }
 
-// loadPRDetailCmd fetches full PR detail.
+// loadPRDetailCmd fetches full PR detail with timeout.
 func loadPRDetailCmd(uc *usecase.GetPRDetail, repo domain.RepoRef, number int) tea.Cmd {
 	return func() tea.Msg {
-		detail, err := uc.Execute(context.Background(), repo, number)
+		ctx, cancel := context.WithTimeout(context.Background(), ghTimeout)
+		defer cancel()
+		detail, err := uc.Execute(ctx, repo, number)
 		return views.PRDetailLoadedMsg{Detail: detail, Err: err}
 	}
 }

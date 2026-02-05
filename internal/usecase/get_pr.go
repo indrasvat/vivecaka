@@ -18,28 +18,19 @@ func NewGetPRDetail(reader domain.PRReader) *GetPRDetail {
 	return &GetPRDetail{reader: reader}
 }
 
-// Execute fetches a PR, its checks, and comments in parallel using errgroup.
-// Partial failures are tolerated: checks or comments may be empty if their fetch fails.
+// Execute fetches a PR and its comments in parallel using errgroup.
+// Note: Checks are already included in GetPR via statusCheckRollup, no separate call needed.
+// Partial failures are tolerated: comments may be empty if the fetch fails.
 func (uc *GetPRDetail) Execute(ctx context.Context, repo domain.RepoRef, number int) (*domain.PRDetail, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	var detail *domain.PRDetail
-	var checks []domain.Check
 	var comments []domain.CommentThread
 
 	g.Go(func() error {
 		var err error
 		detail, err = uc.reader.GetPR(ctx, repo, number)
 		return err // This is required - no detail means failure.
-	})
-
-	g.Go(func() error {
-		var err error
-		checks, err = uc.reader.GetChecks(ctx, repo, number)
-		if err != nil {
-			checks = nil // Tolerate failure.
-		}
-		return nil
 	})
 
 	g.Go(func() error {
@@ -55,7 +46,7 @@ func (uc *GetPRDetail) Execute(ctx context.Context, repo domain.RepoRef, number 
 		return nil, err
 	}
 
-	detail.Checks = checks
+	// Checks are already populated by GetPR from statusCheckRollup.
 	detail.Comments = comments
 	return detail, nil
 }

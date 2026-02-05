@@ -101,14 +101,16 @@ func TestListPRsExecuteError(t *testing.T) {
 // --- GetPRDetail tests ---
 
 func TestGetPRDetailExecute(t *testing.T) {
+	// Checks are now included in the detail returned by GetPR (from statusCheckRollup).
+	// GetChecks is no longer called separately.
 	detail := &domain.PRDetail{
-		PR:   domain.PR{Number: 42, Title: "Test PR"},
-		Body: "Description",
+		PR:     domain.PR{Number: 42, Title: "Test PR"},
+		Body:   "Description",
+		Checks: []domain.Check{{Name: "ci", Status: domain.CIPass}},
 	}
-	checks := []domain.Check{{Name: "ci", Status: domain.CIPass}}
 	comments := []domain.CommentThread{{ID: "t1"}}
 
-	reader := &mockReader{detail: detail, checks: checks, comments: comments}
+	reader := &mockReader{detail: detail, comments: comments}
 	uc := NewGetPRDetail(reader)
 
 	got, err := uc.Execute(context.Background(), testRepo, 42)
@@ -127,12 +129,13 @@ func TestGetPRDetailExecute(t *testing.T) {
 }
 
 func TestGetPRDetailPartialFailure(t *testing.T) {
+	// Checks are now part of GetPR response, only comments failure is tolerated.
 	detail := &domain.PRDetail{
-		PR: domain.PR{Number: 42, Title: "Test PR"},
+		PR:     domain.PR{Number: 42, Title: "Test PR"},
+		Checks: []domain.Check{{Name: "ci", Status: domain.CIPass}},
 	}
 	reader := &mockReader{
 		detail:      detail,
-		checksErr:   errors.New("checks failed"),
 		commentsErr: errors.New("comments failed"),
 	}
 	uc := NewGetPRDetail(reader)
@@ -144,9 +147,13 @@ func TestGetPRDetailPartialFailure(t *testing.T) {
 	if got.Number != 42 {
 		t.Errorf("PR number = %d, want 42", got.Number)
 	}
-	// Checks and comments should be nil due to tolerated failures.
-	if got.Checks != nil {
-		t.Errorf("checks should be nil on failure, got %v", got.Checks)
+	// Checks come from GetPR (statusCheckRollup), so they should be present.
+	if len(got.Checks) != 1 {
+		t.Errorf("checks should be present, got %v", got.Checks)
+	}
+	// Comments should be nil due to tolerated failure.
+	if got.Comments != nil {
+		t.Errorf("comments should be nil on failure, got %v", got.Comments)
 	}
 }
 
