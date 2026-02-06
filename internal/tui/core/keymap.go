@@ -136,6 +136,70 @@ func DefaultKeyMap() KeyMap {
 	}
 }
 
+// ApplyOverrides applies keybinding overrides from a string map.
+// Keys are binding names (e.g., "quit", "search"), values are key strings (e.g., "ctrl+q").
+func (k *KeyMap) ApplyOverrides(overrides map[string]string) {
+	for name, keyStr := range overrides {
+		binding := k.bindingByName(name)
+		if binding != nil {
+			binding.SetKeys(keyStr)
+		}
+	}
+}
+
+func (k *KeyMap) bindingByName(name string) *key.Binding {
+	switch name {
+	case "quit":
+		return &k.Quit
+	case "help":
+		return &k.Help
+	case "repo_switch":
+		return &k.RepoSwitch
+	case "refresh":
+		return &k.Refresh
+	case "theme_cycle":
+		return &k.ThemeCycle
+	case "up":
+		return &k.Up
+	case "down":
+		return &k.Down
+	case "page_up":
+		return &k.PageUp
+	case "page_down":
+		return &k.PageDown
+	case "half_page_up":
+		return &k.HalfPageUp
+	case "half_page_down":
+		return &k.HalfPageDown
+	case "top":
+		return &k.Top
+	case "bottom":
+		return &k.Bottom
+	case "enter":
+		return &k.Enter
+	case "back":
+		return &k.Back
+	case "tab":
+		return &k.Tab
+	case "shift_tab":
+		return &k.ShiftTab
+	case "search":
+		return &k.Search
+	case "filter":
+		return &k.Filter
+	case "sort":
+		return &k.Sort
+	case "yank":
+		return &k.Yank
+	case "open":
+		return &k.Open
+	case "checkout":
+		return &k.Checkout
+	default:
+		return nil
+	}
+}
+
 // ShortHelp returns the key bindings for the condensed help view.
 func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{k.Up, k.Down, k.Enter, k.Back, k.Help, k.Quit}

@@ -50,6 +50,46 @@ func TestShortHelpNotEmpty(t *testing.T) {
 	}
 }
 
+func TestApplyOverrides(t *testing.T) {
+	km := DefaultKeyMap()
+
+	// Override quit to ctrl+q.
+	km.ApplyOverrides(map[string]string{
+		"quit":   "ctrl+q",
+		"search": "ctrl+f",
+	})
+
+	// Verify quit was overridden.
+	quitKeys := km.Quit.Keys()
+	foundQuit := false
+	for _, k := range quitKeys {
+		if k == "ctrl+q" {
+			foundQuit = true
+		}
+	}
+	if !foundQuit {
+		t.Errorf("expected quit to include ctrl+q, got %v", quitKeys)
+	}
+
+	// Verify search was overridden.
+	searchKeys := km.Search.Keys()
+	foundSearch := false
+	for _, k := range searchKeys {
+		if k == "ctrl+f" {
+			foundSearch = true
+		}
+	}
+	if !foundSearch {
+		t.Errorf("expected search to include ctrl+f, got %v", searchKeys)
+	}
+}
+
+func TestApplyOverridesUnknown(t *testing.T) {
+	km := DefaultKeyMap()
+	// Should not panic on unknown key name.
+	km.ApplyOverrides(map[string]string{"nonexistent": "x"})
+}
+
 func TestFullHelpNotEmpty(t *testing.T) {
 	km := DefaultKeyMap()
 	full := km.FullHelp()

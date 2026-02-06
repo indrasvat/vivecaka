@@ -1,6 +1,6 @@
 # Task 024: Config Enhancements (Keybinding Overrides, Adaptive Colors, Notifications)
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 

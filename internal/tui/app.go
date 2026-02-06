@@ -114,6 +114,11 @@ func New(cfg *config.Config, opts ...Option) *App {
 	styles := core.NewStyles(theme)
 	keys := core.DefaultKeyMap()
 
+	// Apply keybinding overrides from config.
+	if len(cfg.Keybindings) > 0 {
+		keys.ApplyOverrides(cfg.Keybindings)
+	}
+
 	a := &App{
 		cfg:    cfg,
 		view:   core.ViewBanner,
