@@ -3,6 +3,9 @@ package ghcli
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/indrasvat/vivecaka/internal/domain"
 )
 
@@ -25,20 +28,12 @@ const sampleDiff = `diff --git a/main.go b/main.go
 func TestParseDiffBasic(t *testing.T) {
 	diff := ParseDiff(sampleDiff)
 
-	if len(diff.Files) != 1 {
-		t.Fatalf("got %d files, want 1", len(diff.Files))
-	}
+	require.Len(t, diff.Files, 1)
 
 	f := diff.Files[0]
-	if f.Path != "main.go" {
-		t.Errorf("file path = %q, want %q", f.Path, "main.go")
-	}
-	if f.OldPath != "" {
-		t.Errorf("old path = %q, want empty (no rename)", f.OldPath)
-	}
-	if len(f.Hunks) != 2 {
-		t.Fatalf("got %d hunks, want 2", len(f.Hunks))
-	}
+	assert.Equal(t, "main.go", f.Path)
+	assert.Empty(t, f.OldPath, "old path should be empty (no rename)")
+	require.Len(t, f.Hunks, 2)
 
 	// First hunk: 1 addition among context lines.
 	h1 := f.Hunks[0]
@@ -46,27 +41,19 @@ func TestParseDiffBasic(t *testing.T) {
 	for _, l := range h1.Lines {
 		if l.Type == domain.DiffAdd {
 			addCount++
-			if l.Content != `import "os"` {
-				t.Errorf("added line content = %q, want %q", l.Content, `import "os"`)
-			}
+			assert.Equal(t, `import "os"`, l.Content)
 		}
 	}
-	if addCount != 1 {
-		t.Errorf("hunk 1: %d additions, want 1", addCount)
-	}
+	assert.Equal(t, 1, addCount, "hunk 1 should have 1 addition")
 
 	// Second hunk starts at old line 10.
 	h2 := f.Hunks[1]
-	if len(h2.Lines) == 0 {
-		t.Fatal("hunk 2 has no lines")
-	}
+	assert.NotEmpty(t, h2.Lines, "hunk 2 should have lines")
 }
 
 func TestParseDiffEmpty(t *testing.T) {
 	diff := ParseDiff("")
-	if len(diff.Files) != 0 {
-		t.Errorf("empty diff should have 0 files, got %d", len(diff.Files))
-	}
+	assert.Empty(t, diff.Files, "empty diff should have 0 files")
 }
 
 func TestParseDiffMultipleFiles(t *testing.T) {
@@ -86,15 +73,9 @@ diff --git a/b.go b/b.go
 +func B() {}
 `
 	diff := ParseDiff(raw)
-	if len(diff.Files) != 2 {
-		t.Fatalf("got %d files, want 2", len(diff.Files))
-	}
-	if diff.Files[0].Path != "a.go" {
-		t.Errorf("file 0 path = %q, want %q", diff.Files[0].Path, "a.go")
-	}
-	if diff.Files[1].Path != "b.go" {
-		t.Errorf("file 1 path = %q, want %q", diff.Files[1].Path, "b.go")
-	}
+	require.Len(t, diff.Files, 2)
+	assert.Equal(t, "a.go", diff.Files[0].Path)
+	assert.Equal(t, "b.go", diff.Files[1].Path)
 }
 
 func TestParseDiffRename(t *testing.T) {
@@ -107,16 +88,10 @@ func TestParseDiffRename(t *testing.T) {
 +func New() {}
 `
 	diff := ParseDiff(raw)
-	if len(diff.Files) != 1 {
-		t.Fatalf("got %d files, want 1", len(diff.Files))
-	}
+	require.Len(t, diff.Files, 1)
 	f := diff.Files[0]
-	if f.Path != "new.go" {
-		t.Errorf("path = %q, want %q", f.Path, "new.go")
-	}
-	if f.OldPath != "old.go" {
-		t.Errorf("old path = %q, want %q", f.OldPath, "old.go")
-	}
+	assert.Equal(t, "new.go", f.Path)
+	assert.Equal(t, "old.go", f.OldPath)
 }
 
 func TestParseDiffLineNumbers(t *testing.T) {
@@ -130,26 +105,17 @@ func TestParseDiffLineNumbers(t *testing.T) {
  }
 `
 	diff := ParseDiff(raw)
-	if len(diff.Files) != 1 {
-		t.Fatalf("got %d files, want 1", len(diff.Files))
-	}
+	require.Len(t, diff.Files, 1)
 	lines := diff.Files[0].Hunks[0].Lines
 
 	// First context line should be old=5, new=5.
-	if lines[0].OldNum != 5 || lines[0].NewNum != 5 {
-		t.Errorf("first context: old=%d new=%d, want old=5 new=5", lines[0].OldNum, lines[0].NewNum)
-	}
+	assert.Equal(t, 5, lines[0].OldNum, "first context old")
+	assert.Equal(t, 5, lines[0].NewNum, "first context new")
 
 	// Addition should be new=6, old=0.
-	if lines[1].Type != domain.DiffAdd {
-		t.Fatalf("line 1 type = %v, want DiffAdd", lines[1].Type)
-	}
-	if lines[1].NewNum != 6 {
-		t.Errorf("add line new=%d, want 6", lines[1].NewNum)
-	}
-	if lines[1].OldNum != 0 {
-		t.Errorf("add line old=%d, want 0", lines[1].OldNum)
-	}
+	require.Equal(t, domain.DiffAdd, lines[1].Type)
+	assert.Equal(t, 6, lines[1].NewNum, "add line new")
+	assert.Equal(t, 0, lines[1].OldNum, "add line old")
 }
 
 func TestParseDiffNoNewlineMarker(t *testing.T) {
@@ -171,9 +137,7 @@ func TestParseDiffNoNewlineMarker(t *testing.T) {
 			realLines++
 		}
 	}
-	if realLines != 2 {
-		t.Errorf("got %d real lines, want 2", realLines)
-	}
+	assert.Equal(t, 2, realLines, "should have 2 real lines")
 }
 
 func TestParseRangeStart(t *testing.T) {
@@ -188,8 +152,7 @@ func TestParseRangeStart(t *testing.T) {
 		{"100", 100},
 	}
 	for _, tt := range tests {
-		if got := parseRangeStart(tt.input); got != tt.want {
-			t.Errorf("parseRangeStart(%q) = %d, want %d", tt.input, got, tt.want)
-		}
+		got := parseRangeStart(tt.input)
+		assert.Equal(t, tt.want, got)
 	}
 }

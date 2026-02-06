@@ -1,0 +1,34 @@
+diff --git a/internal/auth/middleware.go b/internal/auth/middleware.go
+new file mode 100644
+--- /dev/null
++++ b/internal/auth/middleware.go
+@@ -0,0 +1,15 @@
++package auth
++
++import "net/http"
++
++// Middleware provides authentication middleware.
++func Middleware(next http.Handler) http.Handler {
++	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		token := r.Header.Get("Authorization")
++		if token == "" {
++			http.Error(w, "unauthorized", http.StatusUnauthorized)
++			return
++		}
++		next.ServeHTTP(w, r)
++	})
++}
+diff --git a/cmd/server/main.go b/cmd/server/main.go
+--- a/cmd/server/main.go
++++ b/cmd/server/main.go
+@@ -10,6 +10,8 @@ import (
+ 	"log"
+ 	"net/http"
++	"github.com/owner/repo/internal/auth"
+ )
+
+ func main() {
+-	http.ListenAndServe(":8080", nil)
++	mux := http.NewServeMux()
++	http.ListenAndServe(":8080", auth.Middleware(mux))
+ }

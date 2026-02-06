@@ -1,11 +1,12 @@
 package views
 
 import (
-	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testRepoEntries() []RepoEntry {
@@ -19,47 +20,30 @@ func testRepoEntries() []RepoEntry {
 
 func TestNewRepoSwitcherModel(t *testing.T) {
 	m := NewRepoSwitcherModel(testStyles(), testKeys())
-	if len(m.favorites) != 0 {
-		t.Error("favorites should be empty initially")
-	}
-	if len(m.visible) != 0 {
-		t.Error("visible should be empty initially")
-	}
+	assert.Empty(t, m.favorites, "favorites should be empty initially")
+	assert.Empty(t, m.visible, "visible should be empty initially")
 }
 
 func TestRepoSwitcherSetRepos(t *testing.T) {
 	m := NewRepoSwitcherModel(testStyles(), testKeys())
 	m.SetRepos(testRepoEntries())
 
-	if len(m.favorites) != 4 {
-		t.Errorf("favorites len = %d, want 4", len(m.favorites))
-	}
+	assert.Len(t, m.favorites, 4)
 	// All should be marked as favorites.
 	for _, f := range m.favorites {
-		if !f.Favorite {
-			t.Errorf("repo %s should be marked favorite", f.Repo.String())
-		}
-		if f.Section != SectionFavorite {
-			t.Errorf("repo %s section = %d, want SectionFavorite", f.Repo.String(), f.Section)
-		}
+		assert.True(t, f.Favorite, "repo %s should be marked favorite", f.Repo.String())
+		assert.Equal(t, SectionFavorite, f.Section, "repo %s section should be SectionFavorite", f.Repo.String())
 	}
-	if len(m.visible) != 4 {
-		t.Errorf("visible len = %d, want 4", len(m.visible))
-	}
-	if m.cursor != 0 {
-		t.Errorf("cursor = %d, want 0", m.cursor)
-	}
-	if m.query != "" {
-		t.Errorf("query = %q, want empty", m.query)
-	}
+	assert.Len(t, m.visible, 4)
+	assert.Equal(t, 0, m.cursor)
+	assert.Empty(t, m.query)
 }
 
 func TestRepoSwitcherSetSize(t *testing.T) {
 	m := NewRepoSwitcherModel(testStyles(), testKeys())
 	m.SetSize(100, 30)
-	if m.width != 100 || m.height != 30 {
-		t.Errorf("size = %dx%d, want 100x30", m.width, m.height)
-	}
+	assert.Equal(t, 100, m.width)
+	assert.Equal(t, 30, m.height)
 }
 
 func TestRepoSwitcherNavigation(t *testing.T) {
@@ -69,28 +53,20 @@ func TestRepoSwitcherNavigation(t *testing.T) {
 
 	down := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
 	m.Update(down)
-	if m.cursor != 1 {
-		t.Errorf("cursor after j = %d, want 1", m.cursor)
-	}
+	assert.Equal(t, 1, m.cursor)
 
 	up := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
 	m.Update(up)
-	if m.cursor != 0 {
-		t.Errorf("cursor after k = %d, want 0", m.cursor)
-	}
+	assert.Equal(t, 0, m.cursor)
 
 	// Can't go below 0.
 	m.Update(up)
-	if m.cursor != 0 {
-		t.Errorf("cursor should stay at 0, got %d", m.cursor)
-	}
+	assert.Equal(t, 0, m.cursor, "cursor should stay at 0")
 
 	// Go to end.
 	m.cursor = 3
 	m.Update(down)
-	if m.cursor != 3 {
-		t.Errorf("cursor at end should stay at 3, got %d", m.cursor)
-	}
+	assert.Equal(t, 3, m.cursor, "cursor at end should stay at 3")
 }
 
 func TestRepoSwitcherFuzzySearch(t *testing.T) {
@@ -103,15 +79,9 @@ func TestRepoSwitcherFuzzySearch(t *testing.T) {
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 
-	if m.query != "dot" {
-		t.Errorf("query = %q, want %q", m.query, "dot")
-	}
-	if len(m.visible) != 1 {
-		t.Errorf("visible = %d, want 1", len(m.visible))
-	}
-	if m.visible[0].Repo.Name != "dotfiles" {
-		t.Errorf("visible[0] = %q, want dotfiles", m.visible[0].Repo.Name)
-	}
+	assert.Equal(t, "dot", m.query)
+	require.Len(t, m.visible, 1)
+	assert.Equal(t, "dotfiles", m.visible[0].Repo.Name)
 }
 
 func TestRepoSwitcherSearchBackspace(t *testing.T) {
@@ -120,14 +90,10 @@ func TestRepoSwitcherSearchBackspace(t *testing.T) {
 	m.SetRepos(testRepoEntries())
 
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'z'}})
-	if len(m.visible) != 0 {
-		t.Errorf("visible for 'z' = %d, want 0", len(m.visible))
-	}
+	assert.Empty(t, m.visible)
 
 	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
-	if len(m.visible) != 4 {
-		t.Errorf("after backspace visible = %d, want 4", len(m.visible))
-	}
+	assert.Len(t, m.visible, 4)
 }
 
 func TestRepoSwitcherSearchBackspaceEmpty(t *testing.T) {
@@ -137,9 +103,7 @@ func TestRepoSwitcherSearchBackspaceEmpty(t *testing.T) {
 
 	// Backspace on empty query is safe.
 	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
-	if m.query != "" {
-		t.Errorf("query should stay empty, got %q", m.query)
-	}
+	assert.Empty(t, m.query, "query should stay empty")
 }
 
 func TestRepoSwitcherSelect(t *testing.T) {
@@ -150,18 +114,12 @@ func TestRepoSwitcherSelect(t *testing.T) {
 	// Move to second entry and select.
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd == nil {
-		t.Fatal("Enter should produce a command")
-	}
+	require.NotNil(t, cmd, "Enter should produce a command")
 
 	msg := cmd()
 	sw, ok := msg.(SwitchRepoMsg)
-	if !ok {
-		t.Fatalf("expected SwitchRepoMsg, got %T", msg)
-	}
-	if sw.Repo.Name != "dotfiles" {
-		t.Errorf("selected repo = %q, want dotfiles", sw.Repo.Name)
-	}
+	require.True(t, ok, "expected SwitchRepoMsg, got %T", msg)
+	assert.Equal(t, "dotfiles", sw.Repo.Name)
 }
 
 func TestRepoSwitcherSelectEmpty(t *testing.T) {
@@ -170,9 +128,7 @@ func TestRepoSwitcherSelectEmpty(t *testing.T) {
 	m.SetRepos(nil)
 
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd != nil {
-		t.Error("Enter on empty list should not produce a command")
-	}
+	assert.Nil(t, cmd, "Enter on empty list should not produce a command")
 }
 
 func TestRepoSwitcherEscape(t *testing.T) {
@@ -181,14 +137,11 @@ func TestRepoSwitcherEscape(t *testing.T) {
 	m.SetRepos(testRepoEntries())
 
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEscape})
-	if cmd == nil {
-		t.Fatal("Escape should produce a command")
-	}
+	require.NotNil(t, cmd, "Escape should produce a command")
 
 	msg := cmd()
-	if _, ok := msg.(CloseRepoSwitcherMsg); !ok {
-		t.Errorf("expected CloseRepoSwitcherMsg, got %T", msg)
-	}
+	_, ok := msg.(CloseRepoSwitcherMsg)
+	assert.True(t, ok, "expected CloseRepoSwitcherMsg, got %T", msg)
 }
 
 func TestRepoSwitcherView(t *testing.T) {
@@ -197,21 +150,10 @@ func TestRepoSwitcherView(t *testing.T) {
 	m.SetRepos(testRepoEntries())
 
 	view := m.View()
-	if view == "" {
-		t.Error("view should not be empty")
-	}
-	// Should contain section header.
-	if !strings.Contains(view, "FAVORITES") {
-		t.Error("view should contain FAVORITES section header")
-	}
-	// Should contain title.
-	if !strings.Contains(view, "Switch Repository") {
-		t.Error("view should contain title")
-	}
-	// Should contain star.
-	if !strings.Contains(view, "★") {
-		t.Error("view should contain star for favorites")
-	}
+	assert.NotEmpty(t, view, "view should not be empty")
+	assert.Contains(t, view, "FAVORITES", "view should contain FAVORITES section header")
+	assert.Contains(t, view, "Switch Repository", "view should contain title")
+	assert.Contains(t, view, "★", "view should contain star for favorites")
 }
 
 func TestRepoSwitcherViewEmpty(t *testing.T) {
@@ -220,12 +162,8 @@ func TestRepoSwitcherViewEmpty(t *testing.T) {
 	m.SetRepos(nil)
 
 	view := m.View()
-	if view == "" {
-		t.Error("empty view should not be empty string")
-	}
-	if !strings.Contains(view, "No repos matching query") {
-		t.Error("empty view should show no-match message")
-	}
+	assert.NotEmpty(t, view, "empty view should not be empty string")
+	assert.Contains(t, view, "No repos matching query", "empty view should show no-match message")
 }
 
 func TestRepoSwitcherViewSmall(t *testing.T) {
@@ -234,9 +172,7 @@ func TestRepoSwitcherViewSmall(t *testing.T) {
 	m.SetRepos(testRepoEntries())
 
 	view := m.View()
-	if view == "" {
-		t.Error("small view should not be empty")
-	}
+	assert.NotEmpty(t, view, "small view should not be empty")
 }
 
 func TestRepoSwitcherCursorClamp(t *testing.T) {
@@ -251,9 +187,7 @@ func TestRepoSwitcherCursorClamp(t *testing.T) {
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 
-	if m.cursor >= len(m.visible) {
-		t.Errorf("cursor %d >= visible len %d", m.cursor, len(m.visible))
-	}
+	assert.Less(t, m.cursor, len(m.visible))
 }
 
 func TestFuzzyMatch(t *testing.T) {
@@ -271,9 +205,8 @@ func TestFuzzyMatch(t *testing.T) {
 		{"anything", "", true},
 	}
 	for _, tt := range tests {
-		if got := fuzzyMatch(tt.text, tt.query); got != tt.want {
-			t.Errorf("fuzzyMatch(%q, %q) = %v, want %v", tt.text, tt.query, got, tt.want)
-		}
+		got := fuzzyMatch(tt.text, tt.query)
+		assert.Equal(t, tt.want, got, "fuzzyMatch(%q, %q)", tt.text, tt.query)
 	}
 }
 
@@ -282,9 +215,7 @@ func TestRepoSwitcherNonKeyMsg(t *testing.T) {
 	m.SetSize(100, 30)
 
 	cmd := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	if cmd != nil {
-		t.Error("non-key messages should return nil cmd")
-	}
+	assert.Nil(t, cmd, "non-key messages should return nil cmd")
 }
 
 func TestRepoSwitcherMergeDiscovered(t *testing.T) {
@@ -301,12 +232,8 @@ func TestRepoSwitcherMergeDiscovered(t *testing.T) {
 		{Owner: "other", Name: "lib"},
 	})
 
-	if len(m.discovered) != 2 {
-		t.Errorf("discovered = %d, want 2 (deduped)", len(m.discovered))
-	}
-	if len(m.visible) != 3 {
-		t.Errorf("visible = %d, want 3 (1 fav + 2 disc)", len(m.visible))
-	}
+	assert.Len(t, m.discovered, 2, "deduped discovered")
+	assert.Len(t, m.visible, 3, "1 fav + 2 disc")
 }
 
 func TestRepoSwitcherSetCurrentRepo(t *testing.T) {
@@ -317,11 +244,11 @@ func TestRepoSwitcherSetCurrentRepo(t *testing.T) {
 	m.SetCurrentRepo(domain.RepoRef{Owner: "indrasvat", Name: "dotfiles"})
 
 	for _, v := range m.visible {
-		if v.Repo.Name == "dotfiles" && !v.Current {
-			t.Error("dotfiles should be marked current")
+		if v.Repo.Name == "dotfiles" {
+			assert.True(t, v.Current, "dotfiles should be marked current")
 		}
-		if v.Repo.Name == "vivecaka" && v.Current {
-			t.Error("vivecaka should not be current anymore")
+		if v.Repo.Name == "vivecaka" {
+			assert.False(t, v.Current, "vivecaka should not be current anymore")
 		}
 	}
 }
@@ -341,29 +268,17 @@ func TestRepoSwitcherToggleFavorite(t *testing.T) {
 
 	// Press 's' to toggle favorite.
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	if cmd == nil {
-		t.Fatal("s should produce a command")
-	}
+	require.NotNil(t, cmd, "s should produce a command")
 
 	msg := cmd()
 	toggle, ok := msg.(ToggleFavoriteMsg)
-	if !ok {
-		t.Fatalf("expected ToggleFavoriteMsg, got %T", msg)
-	}
-	if toggle.Repo.Name != "backend" {
-		t.Errorf("toggle repo = %q, want backend", toggle.Repo.Name)
-	}
-	if !toggle.Favorite {
-		t.Error("toggle should mark as favorite")
-	}
+	require.True(t, ok, "expected ToggleFavoriteMsg, got %T", msg)
+	assert.Equal(t, "backend", toggle.Repo.Name)
+	assert.True(t, toggle.Favorite, "toggle should mark as favorite")
 
 	// Backend should now be in favorites.
-	if len(m.favorites) != 2 {
-		t.Errorf("favorites = %d, want 2", len(m.favorites))
-	}
-	if len(m.discovered) != 0 {
-		t.Errorf("discovered = %d, want 0", len(m.discovered))
-	}
+	assert.Len(t, m.favorites, 2)
+	assert.Empty(t, m.discovered)
 }
 
 func TestRepoSwitcherToggleFavoriteRemove(t *testing.T) {
@@ -376,26 +291,16 @@ func TestRepoSwitcherToggleFavoriteRemove(t *testing.T) {
 
 	// Cursor on first entry (acme/frontend), press 's' to unfavorite.
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	if cmd == nil {
-		t.Fatal("s should produce a command")
-	}
+	require.NotNil(t, cmd, "s should produce a command")
 
 	msg := cmd()
 	toggle, ok := msg.(ToggleFavoriteMsg)
-	if !ok {
-		t.Fatalf("expected ToggleFavoriteMsg, got %T", msg)
-	}
-	if toggle.Favorite {
-		t.Error("toggle should mark as NOT favorite")
-	}
+	require.True(t, ok, "expected ToggleFavoriteMsg, got %T", msg)
+	assert.False(t, toggle.Favorite, "toggle should mark as NOT favorite")
 
 	// Frontend should move to discovered.
-	if len(m.favorites) != 1 {
-		t.Errorf("favorites = %d, want 1", len(m.favorites))
-	}
-	if len(m.discovered) != 1 {
-		t.Errorf("discovered = %d, want 1", len(m.discovered))
-	}
+	assert.Len(t, m.favorites, 1)
+	assert.Len(t, m.discovered, 1)
 }
 
 func TestRepoSwitcherGhostEntry(t *testing.T) {
@@ -408,39 +313,26 @@ func TestRepoSwitcherGhostEntry(t *testing.T) {
 		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
 
-	if len(m.visible) != 1 {
-		t.Errorf("visible = %d, want 1 (ghost)", len(m.visible))
-	}
-	if m.visible[0].Section != SectionGhost {
-		t.Error("entry should be ghost section")
-	}
+	require.Len(t, m.visible, 1, "ghost entry")
+	assert.Equal(t, SectionGhost, m.visible[0].Section, "entry should be ghost section")
 
 	// Enter on ghost should emit ValidateRepoRequestMsg.
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd == nil {
-		t.Fatal("Enter on ghost should produce a command")
-	}
+	require.NotNil(t, cmd, "Enter on ghost should produce a command")
 	msg := cmd()
-	if val, ok := msg.(ValidateRepoRequestMsg); !ok {
-		t.Fatalf("expected ValidateRepoRequestMsg, got %T", msg)
-	} else if val.Repo.Owner != "acme" || val.Repo.Name != "newrepo" {
-		t.Errorf("validate repo = %s, want acme/newrepo", val.Repo.String())
-	}
+	val, ok := msg.(ValidateRepoRequestMsg)
+	require.True(t, ok, "expected ValidateRepoRequestMsg, got %T", msg)
+	assert.Equal(t, "acme", val.Repo.Owner)
+	assert.Equal(t, "newrepo", val.Repo.Name)
 }
 
 func TestRepoSwitcherNeedsDiscovery(t *testing.T) {
 	m := NewRepoSwitcherModel(testStyles(), testKeys())
-	if !m.NeedsDiscovery() {
-		t.Error("should need discovery initially")
-	}
+	assert.True(t, m.NeedsDiscovery(), "should need discovery initially")
 	m.SetDiscovering()
-	if m.NeedsDiscovery() {
-		t.Error("should not need discovery while discovering")
-	}
+	assert.False(t, m.NeedsDiscovery(), "should not need discovery while discovering")
 	m.MergeDiscovered(nil)
-	if m.NeedsDiscovery() {
-		t.Error("should not need discovery after merge")
-	}
+	assert.False(t, m.NeedsDiscovery(), "should not need discovery after merge")
 }
 
 func TestRepoSwitcherFavorites(t *testing.T) {
@@ -448,9 +340,7 @@ func TestRepoSwitcherFavorites(t *testing.T) {
 	m.SetRepos(testRepoEntries())
 
 	favs := m.Favorites()
-	if len(favs) != 4 {
-		t.Errorf("Favorites() = %d, want 4", len(favs))
-	}
+	assert.Len(t, favs, 4)
 }
 
 func TestRepoSwitcherViewSections(t *testing.T) {
@@ -464,12 +354,8 @@ func TestRepoSwitcherViewSections(t *testing.T) {
 	})
 
 	view := m.View()
-	if !strings.Contains(view, "FAVORITES") {
-		t.Error("view should contain FAVORITES header")
-	}
-	if !strings.Contains(view, "YOUR REPOS") {
-		t.Error("view should contain YOUR REPOS header")
-	}
+	assert.Contains(t, view, "FAVORITES", "view should contain FAVORITES header")
+	assert.Contains(t, view, "YOUR REPOS", "view should contain YOUR REPOS header")
 }
 
 func TestRepoSwitcherSToggleDoesNotFilterWhenQueryEmpty(t *testing.T) {
@@ -479,12 +365,8 @@ func TestRepoSwitcherSToggleDoesNotFilterWhenQueryEmpty(t *testing.T) {
 
 	// Press 's' with empty query — should toggle, not search for "s".
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	if cmd == nil {
-		t.Fatal("s with empty query should toggle favorite, not search")
-	}
-	if m.query != "" {
-		t.Errorf("query should still be empty, got %q", m.query)
-	}
+	require.NotNil(t, cmd, "s with empty query should toggle favorite, not search")
+	assert.Empty(t, m.query, "query should still be empty")
 }
 
 func TestRepoSwitcherSAppendsWhenQueryNonEmpty(t *testing.T) {
@@ -496,7 +378,5 @@ func TestRepoSwitcherSAppendsWhenQueryNonEmpty(t *testing.T) {
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
 
-	if m.query != "as" {
-		t.Errorf("query = %q, want %q", m.query, "as")
-	}
+	assert.Equal(t, "as", m.query)
 }

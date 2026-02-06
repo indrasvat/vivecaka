@@ -1,6 +1,10 @@
 package domain
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestRepoRefString(t *testing.T) {
 	tests := []struct {
@@ -12,9 +16,8 @@ func TestRepoRefString(t *testing.T) {
 		{RepoRef{}, "/"},
 	}
 	for _, tt := range tests {
-		if got := tt.ref.String(); got != tt.want {
-			t.Errorf("RepoRef%+v.String() = %q, want %q", tt.ref, got, tt.want)
-		}
+		got := tt.ref.String()
+		assert.Equal(t, tt.want, got)
 	}
 }
 
@@ -28,9 +31,8 @@ func TestPRStateString(t *testing.T) {
 		{PRStateMerged, "merged"},
 	}
 	for _, tt := range tests {
-		if got := tt.s.String(); got != tt.want {
-			t.Errorf("PRState(%q).String() = %q, want %q", string(tt.s), got, tt.want)
-		}
+		got := tt.s.String()
+		assert.Equal(t, tt.want, got)
 	}
 }
 
@@ -46,9 +48,8 @@ func TestCIStatusString(t *testing.T) {
 		{CINone, "none"},
 	}
 	for _, tt := range tests {
-		if got := tt.s.String(); got != tt.want {
-			t.Errorf("CIStatus(%q).String() = %q, want %q", string(tt.s), got, tt.want)
-		}
+		got := tt.s.String()
+		assert.Equal(t, tt.want, got)
 	}
 }
 
@@ -63,8 +64,7 @@ func TestReviewStateString(t *testing.T) {
 		{ReviewNone, "none"},
 	}
 	for _, tt := range tests {
-		if got := tt.s.String(); got != tt.want {
-			t.Errorf("ReviewState(%q).String() = %q, want %q", string(tt.s), got, tt.want)
-		}
+		got := tt.s.String()
+		assert.Equal(t, tt.want, got)
 	}
 }

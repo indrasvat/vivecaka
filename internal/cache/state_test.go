@@ -4,6 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/indrasvat/vivecaka/internal/domain"
 )
 
@@ -25,27 +28,17 @@ func TestSaveAndLoadRepoState(t *testing.T) {
 		},
 	}
 
-	if err := SaveRepoState(repo, state); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
+	err := SaveRepoState(repo, state)
+	require.NoError(t, err)
 
 	loaded, err := LoadRepoState(repo)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
+	require.NoError(t, err)
 
-	if loaded.LastSort != "author" {
-		t.Errorf("expected sort 'author', got %q", loaded.LastSort)
-	}
-	if !loaded.LastSortAsc {
-		t.Error("expected sort asc to be true")
-	}
-	if loaded.LastFilter.CI != domain.CIPass {
-		t.Errorf("expected CI filter, got %v", loaded.LastFilter.CI)
-	}
-	if _, ok := loaded.LastViewedPRs[42]; !ok {
-		t.Error("expected PR 42 in last viewed")
-	}
+	assert.Equal(t, "author", loaded.LastSort)
+	assert.True(t, loaded.LastSortAsc)
+	assert.Equal(t, domain.CIPass, loaded.LastFilter.CI)
+	_, ok := loaded.LastViewedPRs[42]
+	assert.True(t, ok, "expected PR 42 in last viewed")
 }
 
 func TestLoadRepoStateMissing(t *testing.T) {
@@ -54,24 +47,17 @@ func TestLoadRepoStateMissing(t *testing.T) {
 
 	repo := domain.RepoRef{Owner: "missing", Name: "repo"}
 	state, err := LoadRepoState(repo)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if state.LastSort != "" {
-		t.Errorf("expected empty sort, got %q", state.LastSort)
-	}
+	require.NoError(t, err)
+	assert.Empty(t, state.LastSort)
 }
 
 func TestMarkPRViewed(t *testing.T) {
 	state := RepoState{}
 	state.MarkPRViewed(42)
 
-	if state.LastViewedPRs == nil {
-		t.Fatal("expected non-nil map")
-	}
-	if _, ok := state.LastViewedPRs[42]; !ok {
-		t.Error("expected PR 42 in map")
-	}
+	assert.NotNil(t, state.LastViewedPRs, "expected non-nil map")
+	_, ok := state.LastViewedPRs[42]
+	assert.True(t, ok, "expected PR 42 in map")
 }
 
 func TestIsUnread(t *testing.T) {
@@ -81,17 +67,11 @@ func TestIsUnread(t *testing.T) {
 	}
 
 	// Updated after viewed → unread.
-	if !state.IsUnread(42, viewed.Add(time.Hour)) {
-		t.Error("expected unread")
-	}
+	assert.True(t, state.IsUnread(42, viewed.Add(time.Hour)), "expected unread")
 
 	// Updated before viewed → not unread.
-	if state.IsUnread(42, viewed.Add(-time.Hour)) {
-		t.Error("expected not unread")
-	}
+	assert.False(t, state.IsUnread(42, viewed.Add(-time.Hour)), "expected not unread")
 
 	// Never viewed → not unread (avoids flood on first use).
-	if state.IsUnread(99, time.Now()) {
-		t.Error("expected not unread for unknown PR")
-	}
+	assert.False(t, state.IsUnread(99, time.Now()), "expected not unread for unknown PR")
 }

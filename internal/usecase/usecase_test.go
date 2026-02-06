@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // --- Mock implementations ---
@@ -83,12 +85,8 @@ func TestListPRsExecute(t *testing.T) {
 	uc := NewListPRs(reader)
 
 	got, err := uc.Execute(context.Background(), testRepo, domain.ListOpts{})
-	if err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-	if len(got) != 2 {
-		t.Fatalf("got %d PRs, want 2", len(got))
-	}
+	require.NoError(t, err)
+	require.Len(t, got, 2)
 }
 
 func TestListPRsExecuteError(t *testing.T) {
@@ -96,9 +94,7 @@ func TestListPRsExecuteError(t *testing.T) {
 	uc := NewListPRs(reader)
 
 	_, err := uc.Execute(context.Background(), testRepo, domain.ListOpts{})
-	if err == nil {
-		t.Fatal("Execute() should return error")
-	}
+	require.Error(t, err)
 }
 
 // --- GetPRDetail tests ---
@@ -117,18 +113,10 @@ func TestGetPRDetailExecute(t *testing.T) {
 	uc := NewGetPRDetail(reader)
 
 	got, err := uc.Execute(context.Background(), testRepo, 42)
-	if err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-	if got.Number != 42 {
-		t.Errorf("PR number = %d, want 42", got.Number)
-	}
-	if len(got.Checks) != 1 {
-		t.Errorf("checks count = %d, want 1", len(got.Checks))
-	}
-	if len(got.Comments) != 1 {
-		t.Errorf("comments count = %d, want 1", len(got.Comments))
-	}
+	require.NoError(t, err)
+	assert.Equal(t, 42, got.Number)
+	assert.Len(t, got.Checks, 1)
+	assert.Len(t, got.Comments, 1)
 }
 
 func TestGetPRDetailPartialFailure(t *testing.T) {
@@ -144,20 +132,12 @@ func TestGetPRDetailPartialFailure(t *testing.T) {
 	uc := NewGetPRDetail(reader)
 
 	got, err := uc.Execute(context.Background(), testRepo, 42)
-	if err != nil {
-		t.Fatalf("Execute() should tolerate partial failures, got error = %v", err)
-	}
-	if got.Number != 42 {
-		t.Errorf("PR number = %d, want 42", got.Number)
-	}
+	require.NoError(t, err, "Execute() should tolerate partial failures")
+	assert.Equal(t, 42, got.Number)
 	// Checks come from GetPR (statusCheckRollup), so they should be present.
-	if len(got.Checks) != 1 {
-		t.Errorf("checks should be present, got %v", got.Checks)
-	}
+	assert.Len(t, got.Checks, 1, "checks should be present")
 	// Comments should be nil due to tolerated failure.
-	if got.Comments != nil {
-		t.Errorf("comments should be nil on failure, got %v", got.Comments)
-	}
+	assert.Nil(t, got.Comments, "comments should be nil on failure")
 }
 
 func TestGetPRDetailMainFailure(t *testing.T) {
@@ -165,9 +145,7 @@ func TestGetPRDetailMainFailure(t *testing.T) {
 	uc := NewGetPRDetail(reader)
 
 	_, err := uc.Execute(context.Background(), testRepo, 42)
-	if err == nil {
-		t.Fatal("Execute() should return error when main PR fetch fails")
-	}
+	require.Error(t, err, "Execute() should return error when main PR fetch fails")
 }
 
 // --- ReviewPR tests ---
@@ -180,9 +158,7 @@ func TestReviewPRExecute(t *testing.T) {
 		Action: domain.ReviewActionApprove,
 		Body:   "LGTM",
 	})
-	if err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestReviewPRInvalidAction(t *testing.T) {
@@ -192,13 +168,9 @@ func TestReviewPRInvalidAction(t *testing.T) {
 	err := uc.Execute(context.Background(), testRepo, 42, domain.Review{
 		Action: "invalid",
 	})
-	if err == nil {
-		t.Fatal("Execute() should return error for invalid action")
-	}
+	require.Error(t, err, "Execute() should return error for invalid action")
 	var ve *domain.ValidationError
-	if !errors.As(err, &ve) {
-		t.Errorf("error should be ValidationError, got %T", err)
-	}
+	assert.ErrorAs(t, err, &ve, "error should be ValidationError")
 }
 
 func TestReviewPRRequestChangesRequiresBody(t *testing.T) {
@@ -209,9 +181,7 @@ func TestReviewPRRequestChangesRequiresBody(t *testing.T) {
 		Action: domain.ReviewActionRequestChanges,
 		Body:   "",
 	})
-	if err == nil {
-		t.Fatal("Execute() should require body for request_changes")
-	}
+	require.Error(t, err, "Execute() should require body for request_changes")
 }
 
 // --- CheckoutPR tests ---
@@ -221,12 +191,8 @@ func TestCheckoutPRExecute(t *testing.T) {
 	uc := NewCheckoutPR(writer)
 
 	branch, err := uc.Execute(context.Background(), testRepo, 42)
-	if err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-	if branch != "feat/test-branch" {
-		t.Errorf("branch = %q, want %q", branch, "feat/test-branch")
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "feat/test-branch", branch)
 }
 
 func TestCheckoutPRError(t *testing.T) {
@@ -234,9 +200,7 @@ func TestCheckoutPRError(t *testing.T) {
 	uc := NewCheckoutPR(writer)
 
 	_, err := uc.Execute(context.Background(), testRepo, 42)
-	if err == nil {
-		t.Fatal("Execute() should return error")
-	}
+	require.Error(t, err)
 }
 
 // --- AddComment tests ---
@@ -252,9 +216,7 @@ func TestAddCommentExecute(t *testing.T) {
 		Side:     "RIGHT",
 		CommitID: "abc123",
 	})
-	if err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestAddCommentMissingPath(t *testing.T) {
@@ -264,9 +226,7 @@ func TestAddCommentMissingPath(t *testing.T) {
 		Line: 10,
 		Body: "comment",
 	})
-	if err == nil {
-		t.Fatal("Execute() should require path")
-	}
+	require.Error(t, err, "Execute() should require path")
 }
 
 func TestAddCommentMissingBody(t *testing.T) {
@@ -276,9 +236,7 @@ func TestAddCommentMissingBody(t *testing.T) {
 		Path: "main.go",
 		Line: 10,
 	})
-	if err == nil {
-		t.Fatal("Execute() should require body")
-	}
+	require.Error(t, err, "Execute() should require body")
 }
 
 func TestAddCommentInvalidLine(t *testing.T) {
@@ -289,9 +247,7 @@ func TestAddCommentInvalidLine(t *testing.T) {
 		Line: 0,
 		Body: "comment",
 	})
-	if err == nil {
-		t.Fatal("Execute() should require positive line number")
-	}
+	require.Error(t, err, "Execute() should require positive line number")
 }
 
 // --- ResolveThread tests ---
@@ -301,18 +257,14 @@ func TestResolveThreadExecute(t *testing.T) {
 	uc := NewResolveThread(reviewer)
 
 	err := uc.Execute(context.Background(), testRepo, "thread-123")
-	if err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestResolveThreadEmptyID(t *testing.T) {
 	uc := NewResolveThread(&mockReviewer{})
 
 	err := uc.Execute(context.Background(), testRepo, "")
-	if err == nil {
-		t.Fatal("Execute() should require thread ID")
-	}
+	require.Error(t, err, "Execute() should require thread ID")
 }
 
 // Verify the use case doesn't import any TUI-specific packages.

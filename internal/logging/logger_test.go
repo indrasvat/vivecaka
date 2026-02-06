@@ -5,13 +5,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInitDisabled(t *testing.T) {
 	// When debug=false, Init should be a no-op.
-	if err := Init(false); err != nil {
-		t.Fatalf("Init(false): %v", err)
-	}
+	err := Init(false)
+	require.NoError(t, err)
 	// Log should discard.
 	Log.Info("this should not appear anywhere")
 }
@@ -20,9 +22,8 @@ func TestInitEnabled(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", tmp)
 
-	if err := Init(true); err != nil {
-		t.Fatalf("Init(true): %v", err)
-	}
+	err := Init(true)
+	require.NoError(t, err)
 	defer Close()
 
 	// Log a message.
@@ -30,25 +31,16 @@ func TestInitEnabled(t *testing.T) {
 
 	// Verify file was created.
 	path := LogPath()
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("log file not found: %v", err)
-	}
+	_, err = os.Stat(path)
+	require.NoError(t, err, "log file should exist")
 
 	// Verify content.
 	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read log: %v", err)
-	}
+	require.NoError(t, err)
 	content := string(data)
-	if !strings.Contains(content, "logger initialized") {
-		t.Error("expected 'logger initialized' in log")
-	}
-	if !strings.Contains(content, "test message") {
-		t.Error("expected 'test message' in log")
-	}
-	if !strings.Contains(content, "key=value") {
-		t.Error("expected 'key=value' in log")
-	}
+	assert.Contains(t, content, "logger initialized")
+	assert.Contains(t, content, "test message")
+	assert.Contains(t, content, "key=value")
 }
 
 func TestLogPath(t *testing.T) {
@@ -57,17 +49,13 @@ func TestLogPath(t *testing.T) {
 
 	path := LogPath()
 	expected := filepath.Join(tmp, "vivecaka", "debug.log")
-	if path != expected {
-		t.Errorf("expected %q, got %q", expected, path)
-	}
+	assert.Equal(t, expected, path)
 }
 
 func TestLogPathDefault(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "")
 	path := LogPath()
-	if !strings.Contains(path, ".local/state/vivecaka/debug.log") {
-		t.Errorf("unexpected path: %s", path)
-	}
+	assert.Contains(t, path, ".local/state/vivecaka/debug.log")
 }
 
 func TestRotation(t *testing.T) {
@@ -75,34 +63,26 @@ func TestRotation(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", tmp)
 
 	path := LogPath()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	err := os.MkdirAll(filepath.Dir(path), 0o755)
+	require.NoError(t, err)
 
 	// Create a large log file that exceeds maxLogSize.
 	largeData := strings.Repeat("x", maxLogSize+100)
-	if err := os.WriteFile(path, []byte(largeData), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	err = os.WriteFile(path, []byte(largeData), 0o644)
+	require.NoError(t, err)
 
 	// Init should rotate.
-	if err := Init(true); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
+	err = Init(true)
+	require.NoError(t, err)
 	defer Close()
 
 	// Old file should be rotated.
 	rotated := path + ".1"
-	if _, err := os.Stat(rotated); err != nil {
-		t.Error("rotated file not found")
-	}
+	_, err = os.Stat(rotated)
+	assert.NoError(t, err, "rotated file should exist")
 
 	// New log file should be small (just the init message).
 	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Size() > 1000 {
-		t.Errorf("expected small new log, got %d bytes", info.Size())
-	}
+	require.NoError(t, err)
+	assert.LessOrEqual(t, info.Size(), int64(1000), "expected small new log")
 }

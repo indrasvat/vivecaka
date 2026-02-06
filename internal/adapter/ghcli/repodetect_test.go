@@ -2,6 +2,8 @@ package ghcli
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestParseRemoteURL(t *testing.T) {
@@ -82,19 +84,12 @@ func TestParseRemoteURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ref, ok := ParseRemoteURL(tt.url)
-			if ok != tt.ok {
-				t.Errorf("ok = %v, want %v", ok, tt.ok)
-				return
-			}
+			assert.Equal(t, tt.ok, ok)
 			if !ok {
 				return
 			}
-			if ref.Owner != tt.owner {
-				t.Errorf("owner = %q, want %q", ref.Owner, tt.owner)
-			}
-			if ref.Name != tt.repo {
-				t.Errorf("name = %q, want %q", ref.Name, tt.repo)
-			}
+			assert.Equal(t, tt.owner, ref.Owner)
+			assert.Equal(t, tt.repo, ref.Name)
 		})
 	}
 }

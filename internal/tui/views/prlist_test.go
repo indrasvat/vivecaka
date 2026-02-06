@@ -1,14 +1,14 @@
 package views
 
 import (
-	"reflect"
-	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/indrasvat/vivecaka/internal/tui/core"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testStyles() core.Styles {
@@ -87,27 +87,17 @@ func testPRsForSort() []domain.PR {
 
 func TestNewPRListModel(t *testing.T) {
 	m := NewPRListModel(testStyles(), testKeys())
-	if !m.loading {
-		t.Error("new model should be in loading state")
-	}
-	if m.sortField != "updated" {
-		t.Errorf("default sort = %q, want %q", m.sortField, "updated")
-	}
-	if m.sortAsc {
-		t.Error("default sort direction should be descending")
-	}
+	assert.True(t, m.loading, "new model should be in loading state")
+	assert.Equal(t, "updated", m.sortField)
+	assert.False(t, m.sortAsc, "default sort direction should be descending")
 }
 
 func TestSetPRs(t *testing.T) {
 	m := NewPRListModel(testStyles(), testKeys())
 	m.SetPRs(testPRs())
 
-	if m.loading {
-		t.Error("loading should be false after SetPRs")
-	}
-	if len(m.filtered) != 5 {
-		t.Errorf("filtered len = %d, want 5", len(m.filtered))
-	}
+	assert.False(t, m.loading, "loading should be false after SetPRs")
+	assert.Len(t, m.filtered, 5)
 }
 
 func TestSelectedPR(t *testing.T) {
@@ -115,21 +105,16 @@ func TestSelectedPR(t *testing.T) {
 	m.SetPRs(testPRs())
 
 	pr := m.SelectedPR()
-	if pr == nil {
-		t.Fatal("SelectedPR() should not be nil")
-	}
-	if pr.Number != 142 {
-		t.Errorf("selected PR number = %d, want 142", pr.Number)
-	}
+	require.NotNil(t, pr)
+	assert.Equal(t, 142, pr.Number)
 }
 
 func TestSelectedPREmpty(t *testing.T) {
 	m := NewPRListModel(testStyles(), testKeys())
 	m.SetPRs(nil)
 
-	if pr := m.SelectedPR(); pr != nil {
-		t.Error("SelectedPR() should be nil for empty list")
-	}
+	pr := m.SelectedPR()
+	assert.Nil(t, pr, "SelectedPR() should be nil for empty list")
 }
 
 func TestNavigationDown(t *testing.T) {
@@ -140,9 +125,7 @@ func TestNavigationDown(t *testing.T) {
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
 	m.Update(msg)
 
-	if m.cursor != 1 {
-		t.Errorf("cursor after j = %d, want 1", m.cursor)
-	}
+	assert.Equal(t, 1, m.cursor)
 }
 
 func TestNavigationUp(t *testing.T) {
@@ -154,9 +137,7 @@ func TestNavigationUp(t *testing.T) {
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
 	m.Update(msg)
 
-	if m.cursor != 1 {
-		t.Errorf("cursor after k = %d, want 1", m.cursor)
-	}
+	assert.Equal(t, 1, m.cursor)
 }
 
 func TestNavigationBounds(t *testing.T) {
@@ -167,17 +148,13 @@ func TestNavigationBounds(t *testing.T) {
 	// Already at top, going up should stay.
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
 	m.Update(msg)
-	if m.cursor != 0 {
-		t.Errorf("cursor at top after k = %d, want 0", m.cursor)
-	}
+	assert.Equal(t, 0, m.cursor)
 
 	// Go to bottom.
 	m.cursor = 4
 	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
 	m.Update(msg)
-	if m.cursor != 4 {
-		t.Errorf("cursor at bottom after j = %d, want 4", m.cursor)
-	}
+	assert.Equal(t, 4, m.cursor)
 }
 
 func TestTopBottom(t *testing.T) {
@@ -189,16 +166,12 @@ func TestTopBottom(t *testing.T) {
 	// G = bottom
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}}
 	m.Update(msg)
-	if m.cursor != 4 {
-		t.Errorf("cursor after G = %d, want 4", m.cursor)
-	}
+	assert.Equal(t, 4, m.cursor)
 
 	// g = top
 	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}
 	m.Update(msg)
-	if m.cursor != 0 {
-		t.Errorf("cursor after g = %d, want 0", m.cursor)
-	}
+	assert.Equal(t, 0, m.cursor)
 }
 
 func TestSearchFilter(t *testing.T) {
@@ -209,12 +182,8 @@ func TestSearchFilter(t *testing.T) {
 	m.searchQuery = "alice"
 	m.applyFilter()
 
-	if len(m.filtered) != 1 {
-		t.Errorf("filtered count after search = %d, want 1", len(m.filtered))
-	}
-	if m.filtered[0].Author != "alice" {
-		t.Errorf("filtered[0].Author = %q, want %q", m.filtered[0].Author, "alice")
-	}
+	require.Len(t, m.filtered, 1)
+	assert.Equal(t, "alice", m.filtered[0].Author)
 }
 
 func TestSearchFilterByTitle(t *testing.T) {
@@ -224,9 +193,7 @@ func TestSearchFilterByTitle(t *testing.T) {
 	m.searchQuery = "plugin"
 	m.applyFilter()
 
-	if len(m.filtered) != 1 {
-		t.Errorf("filtered count = %d, want 1", len(m.filtered))
-	}
+	assert.Len(t, m.filtered, 1)
 }
 
 func TestSearchFilterCaseInsensitive(t *testing.T) {
@@ -236,42 +203,26 @@ func TestSearchFilterCaseInsensitive(t *testing.T) {
 	m.searchQuery = "ALICE"
 	m.applyFilter()
 
-	if len(m.filtered) != 1 {
-		t.Errorf("case-insensitive search: filtered count = %d, want 1", len(m.filtered))
-	}
+	assert.Len(t, m.filtered, 1)
 }
 
 func TestCycleSort(t *testing.T) {
 	m := NewPRListModel(testStyles(), testKeys())
 	m.SetPRs(testPRs())
 
-	if m.sortField != "updated" {
-		t.Fatalf("initial sort = %q", m.sortField)
-	}
+	require.Equal(t, "updated", m.sortField)
 
 	m.cycleSort()
-	if m.sortField != "created" {
-		t.Errorf("after 1st cycle = %q, want %q", m.sortField, "created")
-	}
-	if m.sortAsc {
-		t.Error("after 1st cycle sort should default to descending")
-	}
+	assert.Equal(t, "created", m.sortField)
+	assert.False(t, m.sortAsc, "after 1st cycle sort should default to descending")
 
 	m.cycleSort()
-	if m.sortField != "created" {
-		t.Errorf("after 2nd press = %q, want %q", m.sortField, "created")
-	}
-	if !m.sortAsc {
-		t.Error("after 2nd press sort should toggle to ascending")
-	}
+	assert.Equal(t, "created", m.sortField)
+	assert.True(t, m.sortAsc, "after 2nd press sort should toggle to ascending")
 
 	m.cycleSort()
-	if m.sortField != "number" {
-		t.Errorf("after 3rd press = %q, want %q", m.sortField, "number")
-	}
-	if m.sortAsc {
-		t.Error("after 3rd press sort should reset to descending")
-	}
+	assert.Equal(t, "number", m.sortField)
+	assert.False(t, m.sortAsc, "after 3rd press sort should reset to descending")
 }
 
 func TestPRListSortApplyFilter(t *testing.T) {
@@ -308,9 +259,7 @@ func TestPRListSortApplyFilter(t *testing.T) {
 				got = append(got, pr.Number)
 			}
 
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("order = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -324,12 +273,8 @@ func TestPRListSortIndicator(t *testing.T) {
 	m.sortAsc = true
 	header := m.renderColumnHeaders()
 
-	if !strings.Contains(header, "Title▲") {
-		t.Errorf("header missing sort indicator for title: %q", header)
-	}
-	if strings.Contains(header, "Author▲") {
-		t.Errorf("unexpected indicator on non-active column: %q", header)
-	}
+	assert.Contains(t, header, "Title▲")
+	assert.NotContains(t, header, "Author▲")
 }
 
 func TestCurrentBranch(t *testing.T) {
@@ -337,9 +282,7 @@ func TestCurrentBranch(t *testing.T) {
 	m.SetPRs(testPRs())
 	m.SetCurrentBranch("feat/plugins")
 
-	if m.currentBranch != "feat/plugins" {
-		t.Errorf("currentBranch = %q, want %q", m.currentBranch, "feat/plugins")
-	}
+	assert.Equal(t, "feat/plugins", m.currentBranch)
 }
 
 func TestPRListQuickFilterMyPRs(t *testing.T) {
@@ -349,28 +292,19 @@ func TestPRListQuickFilterMyPRs(t *testing.T) {
 	m.SetPRs(testPRs())
 
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
-	if len(m.filtered) != 2 {
-		t.Errorf("filtered len = %d, want 2", len(m.filtered))
-	}
+	assert.Len(t, m.filtered, 2)
 	for _, pr := range m.filtered {
-		if pr.Author != "indrasvat" {
-			t.Errorf("unexpected author %q in My PRs filter", pr.Author)
-		}
+		assert.Equal(t, "indrasvat", pr.Author, "unexpected author in My PRs filter")
 	}
-	if cmd == nil {
-		t.Fatal("expected filter change command")
-	}
-	if msg, ok := cmd().(PRListFilterMsg); !ok {
-		t.Errorf("expected PRListFilterMsg, got %T", msg)
-	} else if msg.Label != "My PRs" {
-		t.Errorf("filter label = %q, want My PRs", msg.Label)
-	}
+	require.NotNil(t, cmd, "expected filter change command")
+	msg := cmd()
+	filterMsg, ok := msg.(PRListFilterMsg)
+	require.True(t, ok, "expected PRListFilterMsg, got %T", msg)
+	assert.Equal(t, "My PRs", filterMsg.Label)
 
 	// Toggle off.
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
-	if len(m.filtered) != 5 {
-		t.Errorf("filtered len after toggle off = %d, want 5", len(m.filtered))
-	}
+	assert.Len(t, m.filtered, 5)
 }
 
 func TestPRListQuickFilterNeedsReview(t *testing.T) {
@@ -380,20 +314,15 @@ func TestPRListQuickFilterNeedsReview(t *testing.T) {
 	m.SetPRs(testPRs())
 
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
-	if len(m.filtered) != 1 {
-		t.Errorf("filtered len = %d, want 1", len(m.filtered))
+	require.Len(t, m.filtered, 1)
+	if len(m.filtered) == 1 {
+		assert.NotEqual(t, "indrasvat", m.filtered[0].Author, "needs review filter should exclude user's own PRs")
 	}
-	if len(m.filtered) == 1 && m.filtered[0].Author == "indrasvat" {
-		t.Error("needs review filter should exclude user's own PRs")
-	}
-	if cmd == nil {
-		t.Fatal("expected filter change command")
-	}
-	if msg, ok := cmd().(PRListFilterMsg); !ok {
-		t.Errorf("expected PRListFilterMsg, got %T", msg)
-	} else if msg.Label != "Needs Review" {
-		t.Errorf("filter label = %q, want Needs Review", msg.Label)
-	}
+	require.NotNil(t, cmd, "expected filter change command")
+	msg := cmd()
+	filterMsg, ok := msg.(PRListFilterMsg)
+	require.True(t, ok, "expected PRListFilterMsg, got %T", msg)
+	assert.Equal(t, "Needs Review", filterMsg.Label)
 }
 
 func TestPRListOpenFilterKey(t *testing.T) {
@@ -402,12 +331,9 @@ func TestPRListOpenFilterKey(t *testing.T) {
 	m.SetPRs(testPRs())
 
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
-	if cmd == nil {
-		t.Fatal("expected command for filter key")
-	}
-	if _, ok := cmd().(OpenFilterMsg); !ok {
-		t.Fatalf("expected OpenFilterMsg, got %T", cmd())
-	}
+	require.NotNil(t, cmd, "expected command for filter key")
+	_, ok := cmd().(OpenFilterMsg)
+	require.True(t, ok, "expected OpenFilterMsg, got %T", cmd())
 }
 
 func TestViewLoading(t *testing.T) {
@@ -415,9 +341,7 @@ func TestViewLoading(t *testing.T) {
 	m.SetSize(80, 24)
 
 	view := m.View()
-	if view == "" {
-		t.Error("loading view should not be empty")
-	}
+	assert.NotEmpty(t, view, "loading view should not be empty")
 }
 
 func TestViewEmpty(t *testing.T) {
@@ -426,9 +350,7 @@ func TestViewEmpty(t *testing.T) {
 	m.SetPRs(nil)
 
 	view := m.View()
-	if view == "" {
-		t.Error("empty view should not be empty string")
-	}
+	assert.NotEmpty(t, view, "empty view should not be empty string")
 }
 
 func TestViewWithData(t *testing.T) {
@@ -437,9 +359,7 @@ func TestViewWithData(t *testing.T) {
 	m.SetPRs(testPRs())
 
 	view := m.View()
-	if view == "" {
-		t.Error("view with data should not be empty")
-	}
+	assert.NotEmpty(t, view, "view with data should not be empty")
 }
 
 func TestCIIcon(t *testing.T) {
@@ -454,9 +374,8 @@ func TestCIIcon(t *testing.T) {
 		{domain.CINone, "—"},
 	}
 	for _, tt := range tests {
-		if got := ciIcon(tt.status); got != tt.want {
-			t.Errorf("ciIcon(%q) = %q, want %q", tt.status, got, tt.want)
-		}
+		got := ciIcon(tt.status)
+		assert.Equal(t, tt.want, got)
 	}
 }
 
@@ -471,9 +390,8 @@ func TestReviewText(t *testing.T) {
 		{domain.ReviewStatus{State: domain.ReviewNone}, "—"},
 	}
 	for _, tt := range tests {
-		if got := reviewText(tt.status); got != tt.want {
-			t.Errorf("reviewText(%+v) = %q, want %q", tt.status, got, tt.want)
-		}
+		got := reviewText(tt.status)
+		assert.Equal(t, tt.want, got)
 	}
 }
 
@@ -489,8 +407,7 @@ func TestRelativeTime(t *testing.T) {
 		{now.Add(-48 * time.Hour), "2d"},
 	}
 	for _, tt := range tests {
-		if got := relativeTime(tt.t); got != tt.want {
-			t.Errorf("relativeTime(%v ago) = %q, want %q", time.Since(tt.t), got, tt.want)
-		}
+		got := relativeTime(tt.t)
+		assert.Equal(t, tt.want, got)
 	}
 }

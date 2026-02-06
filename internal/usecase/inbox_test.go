@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // mockInboxReader is a test double that returns different PRs per repo.
@@ -62,24 +64,16 @@ func TestGetInboxPRs_MultiRepo(t *testing.T) {
 
 	uc := NewGetInboxPRs(reader)
 	prs, err := uc.Execute(context.Background(), []domain.RepoRef{repoA, repoB})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(prs) != 3 {
-		t.Fatalf("expected 3 PRs, got %d", len(prs))
-	}
+	require.NoError(t, err)
+	require.Len(t, prs, 3)
 
 	// Verify repos are annotated.
 	repoSet := make(map[string]int)
 	for _, pr := range prs {
 		repoSet[pr.Repo.String()]++
 	}
-	if repoSet["org/alpha"] != 2 {
-		t.Errorf("expected 2 PRs from org/alpha, got %d", repoSet["org/alpha"])
-	}
-	if repoSet["org/beta"] != 1 {
-		t.Errorf("expected 1 PR from org/beta, got %d", repoSet["org/beta"])
-	}
+	assert.Equal(t, 2, repoSet["org/alpha"])
+	assert.Equal(t, 1, repoSet["org/beta"])
 }
 
 func TestGetInboxPRs_PartialFailure(t *testing.T) {
@@ -100,25 +94,15 @@ func TestGetInboxPRs_PartialFailure(t *testing.T) {
 
 	uc := NewGetInboxPRs(reader)
 	prs, err := uc.Execute(context.Background(), []domain.RepoRef{repoA, repoB})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 	// Should still get PRs from the successful repo.
-	if len(prs) != 1 {
-		t.Fatalf("expected 1 PR, got %d", len(prs))
-	}
-	if prs[0].Repo.String() != "org/alpha" {
-		t.Errorf("expected repo org/alpha, got %s", prs[0].Repo.String())
-	}
+	require.Len(t, prs, 1)
+	assert.Equal(t, "org/alpha", prs[0].Repo.String())
 }
 
 func TestGetInboxPRs_EmptyRepos(t *testing.T) {
 	uc := NewGetInboxPRs(&mockInboxReader{})
 	prs, err := uc.Execute(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(prs) != 0 {
-		t.Errorf("expected empty, got %d", len(prs))
-	}
+	require.NoError(t, err)
+	assert.Empty(t, prs)
 }

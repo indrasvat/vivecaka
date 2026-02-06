@@ -5,6 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/indrasvat/vivecaka/internal/domain"
 )
 
@@ -22,33 +25,21 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 
 	// Save.
-	if err := Save(repo, prs); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
+	err := Save(repo, prs)
+	require.NoError(t, err)
 
 	// Verify file exists.
 	path := CachePath(repo)
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("cache file not found: %v", err)
-	}
+	_, err = os.Stat(path)
+	require.NoError(t, err, "cache file should exist")
 
 	// Load.
 	loaded, updated, err := Load(repo)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if updated.IsZero() {
-		t.Fatal("expected non-zero updated time")
-	}
-	if len(loaded) != 2 {
-		t.Fatalf("expected 2 PRs, got %d", len(loaded))
-	}
-	if loaded[0].Title != "First PR" {
-		t.Errorf("expected 'First PR', got %q", loaded[0].Title)
-	}
-	if loaded[1].Author != "bob" {
-		t.Errorf("expected 'bob', got %q", loaded[1].Author)
-	}
+	require.NoError(t, err)
+	assert.False(t, updated.IsZero(), "expected non-zero updated time")
+	require.Len(t, loaded, 2)
+	assert.Equal(t, "First PR", loaded[0].Title)
+	assert.Equal(t, "bob", loaded[1].Author)
 }
 
 func TestLoadMissing(t *testing.T) {
@@ -57,15 +48,9 @@ func TestLoadMissing(t *testing.T) {
 
 	repo := domain.RepoRef{Owner: "nonexistent", Name: "repo"}
 	prs, updated, err := Load(repo)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if prs != nil {
-		t.Errorf("expected nil PRs, got %d", len(prs))
-	}
-	if !updated.IsZero() {
-		t.Errorf("expected zero time")
-	}
+	require.NoError(t, err)
+	assert.Nil(t, prs, "expected nil PRs")
+	assert.True(t, updated.IsZero(), "expected zero time")
 }
 
 func TestIsStale(t *testing.T) {
@@ -75,24 +60,17 @@ func TestIsStale(t *testing.T) {
 	repo := domain.RepoRef{Owner: "test", Name: "stale"}
 
 	// No cache → stale.
-	if !IsStale(repo, time.Hour) {
-		t.Error("expected stale for missing cache")
-	}
+	assert.True(t, IsStale(repo, time.Hour), "expected stale for missing cache")
 
 	// Save cache.
-	if err := Save(repo, []domain.PR{{Number: 1}}); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
+	err := Save(repo, []domain.PR{{Number: 1}})
+	require.NoError(t, err)
 
 	// Fresh with large TTL.
-	if IsStale(repo, time.Hour) {
-		t.Error("expected fresh with 1h TTL")
-	}
+	assert.False(t, IsStale(repo, time.Hour), "expected fresh with 1h TTL")
 
 	// Stale with tiny TTL.
-	if !IsStale(repo, time.Nanosecond) {
-		t.Error("expected stale with 1ns TTL")
-	}
+	assert.True(t, IsStale(repo, time.Nanosecond), "expected stale with 1ns TTL")
 }
 
 func TestSaveOverwrite(t *testing.T) {
@@ -102,20 +80,15 @@ func TestSaveOverwrite(t *testing.T) {
 	repo := domain.RepoRef{Owner: "test", Name: "overwrite"}
 
 	// Save initial.
-	if err := Save(repo, []domain.PR{{Number: 1, Title: "Old"}}); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
+	err := Save(repo, []domain.PR{{Number: 1, Title: "Old"}})
+	require.NoError(t, err)
 
 	// Overwrite.
-	if err := Save(repo, []domain.PR{{Number: 2, Title: "New"}}); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
+	err = Save(repo, []domain.PR{{Number: 2, Title: "New"}})
+	require.NoError(t, err)
 
 	loaded, _, err := Load(repo)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if len(loaded) != 1 || loaded[0].Title != "New" {
-		t.Errorf("expected overwritten PR, got %v", loaded)
-	}
+	require.NoError(t, err)
+	require.Len(t, loaded, 1)
+	assert.Equal(t, "New", loaded[0].Title)
 }

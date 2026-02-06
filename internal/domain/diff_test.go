@@ -1,6 +1,10 @@
 package domain
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestDiffLineTypeString(t *testing.T) {
 	tests := []struct {
@@ -12,8 +16,7 @@ func TestDiffLineTypeString(t *testing.T) {
 		{DiffContext, "context"},
 	}
 	for _, tt := range tests {
-		if got := tt.t.String(); got != tt.want {
-			t.Errorf("DiffLineType(%q).String() = %q, want %q", string(tt.t), got, tt.want)
-		}
+		got := tt.t.String()
+		assert.Equal(t, tt.want, got)
 	}
 }

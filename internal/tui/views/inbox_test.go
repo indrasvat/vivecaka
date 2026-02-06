@@ -6,6 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testInboxPRs() []InboxPR {
@@ -32,40 +34,29 @@ func testInboxPRs() []InboxPR {
 
 func TestNewInboxModel(t *testing.T) {
 	m := NewInboxModel(testStyles(), testKeys())
-	if !m.loading {
-		t.Error("should be loading initially")
-	}
-	if m.tab != InboxAll {
-		t.Errorf("default tab = %d, want InboxAll", m.tab)
-	}
+	assert.True(t, m.loading, "should be loading initially")
+	assert.Equal(t, InboxAll, m.tab)
 }
 
 func TestInboxSetPRs(t *testing.T) {
 	m := NewInboxModel(testStyles(), testKeys())
 	m.SetPRs(testInboxPRs())
 
-	if m.loading {
-		t.Error("should not be loading after SetPRs")
-	}
-	if len(m.filtered) != 4 {
-		t.Errorf("filtered = %d, want 4", len(m.filtered))
-	}
+	assert.False(t, m.loading, "should not be loading after SetPRs")
+	assert.Len(t, m.filtered, 4)
 }
 
 func TestInboxSetSize(t *testing.T) {
 	m := NewInboxModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
-	if m.width != 120 || m.height != 40 {
-		t.Errorf("size = %dx%d, want 120x40", m.width, m.height)
-	}
+	assert.Equal(t, 120, m.width)
+	assert.Equal(t, 40, m.height)
 }
 
 func TestInboxSetUsername(t *testing.T) {
 	m := NewInboxModel(testStyles(), testKeys())
 	m.SetUsername("indrasvat")
-	if m.username != "indrasvat" {
-		t.Errorf("username = %q, want %q", m.username, "indrasvat")
-	}
+	assert.Equal(t, "indrasvat", m.username)
 }
 
 func TestInboxTabNavigation(t *testing.T) {
@@ -77,24 +68,16 @@ func TestInboxTabNavigation(t *testing.T) {
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 
 	m.Update(tab)
-	if m.tab != InboxAssigned {
-		t.Errorf("after 1 tab = %d, want InboxAssigned", m.tab)
-	}
+	assert.Equal(t, InboxAssigned, m.tab)
 
 	m.Update(tab)
-	if m.tab != InboxReviewRequested {
-		t.Errorf("after 2 tabs = %d, want InboxReviewRequested", m.tab)
-	}
+	assert.Equal(t, InboxReviewRequested, m.tab)
 
 	m.Update(tab)
-	if m.tab != InboxMyPRs {
-		t.Errorf("after 3 tabs = %d, want InboxMyPRs", m.tab)
-	}
+	assert.Equal(t, InboxMyPRs, m.tab)
 
 	m.Update(tab)
-	if m.tab != InboxAll {
-		t.Errorf("after 4 tabs = %d, want InboxAll (wrap)", m.tab)
-	}
+	assert.Equal(t, InboxAll, m.tab, "should wrap to InboxAll")
 }
 
 func TestInboxShiftTab(t *testing.T) {
@@ -104,9 +87,7 @@ func TestInboxShiftTab(t *testing.T) {
 
 	shiftTab := tea.KeyMsg{Type: tea.KeyShiftTab}
 	m.Update(shiftTab)
-	if m.tab != InboxMyPRs {
-		t.Errorf("after shift-tab = %d, want InboxMyPRs", m.tab)
-	}
+	assert.Equal(t, InboxMyPRs, m.tab)
 }
 
 func TestInboxTabAllFilter(t *testing.T) {
@@ -116,9 +97,7 @@ func TestInboxTabAllFilter(t *testing.T) {
 	m.SetPRs(testInboxPRs())
 
 	// All tab shows everything.
-	if len(m.filtered) != 4 {
-		t.Errorf("All tab: filtered = %d, want 4", len(m.filtered))
-	}
+	assert.Len(t, m.filtered, 4)
 }
 
 func TestInboxTabMyPRs(t *testing.T) {
@@ -131,13 +110,9 @@ func TestInboxTabMyPRs(t *testing.T) {
 	m.tab = InboxMyPRs
 	m.applyFilter()
 
-	if len(m.filtered) != 2 {
-		t.Errorf("My PRs tab: filtered = %d, want 2", len(m.filtered))
-	}
+	assert.Len(t, m.filtered, 2)
 	for _, pr := range m.filtered {
-		if pr.Author != "indrasvat" {
-			t.Errorf("My PRs should only have indrasvat, got %q", pr.Author)
-		}
+		assert.Equal(t, "indrasvat", pr.Author, "My PRs should only have indrasvat")
 	}
 }
 
@@ -153,9 +128,7 @@ func TestInboxTabReviewRequested(t *testing.T) {
 
 	// PRs with pending review that are NOT authored by indrasvat.
 	// PR#10 (alice, pending) and PR#5 (bob, pending) should appear.
-	if len(m.filtered) != 2 {
-		t.Errorf("Review Requested tab: filtered = %d, want 2", len(m.filtered))
-	}
+	assert.Len(t, m.filtered, 2)
 }
 
 func TestInboxTabEmptyUsername(t *testing.T) {
@@ -166,9 +139,7 @@ func TestInboxTabEmptyUsername(t *testing.T) {
 
 	m.tab = InboxMyPRs
 	m.applyFilter()
-	if len(m.filtered) != 0 {
-		t.Errorf("My PRs with no username: filtered = %d, want 0", len(m.filtered))
-	}
+	assert.Empty(t, m.filtered)
 }
 
 func TestInboxNavigation(t *testing.T) {
@@ -178,15 +149,11 @@ func TestInboxNavigation(t *testing.T) {
 
 	down := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
 	m.Update(down)
-	if m.cursor != 1 {
-		t.Errorf("cursor after j = %d, want 1", m.cursor)
-	}
+	assert.Equal(t, 1, m.cursor)
 
 	up := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
 	m.Update(up)
-	if m.cursor != 0 {
-		t.Errorf("cursor after k = %d, want 0", m.cursor)
-	}
+	assert.Equal(t, 0, m.cursor)
 }
 
 func TestInboxNavigationBounds(t *testing.T) {
@@ -196,16 +163,12 @@ func TestInboxNavigationBounds(t *testing.T) {
 
 	up := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
 	m.Update(up)
-	if m.cursor != 0 {
-		t.Errorf("cursor should stay at 0, got %d", m.cursor)
-	}
+	assert.Equal(t, 0, m.cursor, "cursor should stay at 0")
 
 	m.cursor = 3
 	down := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
 	m.Update(down)
-	if m.cursor != 3 {
-		t.Errorf("cursor at end should stay at 3, got %d", m.cursor)
-	}
+	assert.Equal(t, 3, m.cursor, "cursor at end should stay at 3")
 }
 
 func TestInboxEnter(t *testing.T) {
@@ -215,21 +178,13 @@ func TestInboxEnter(t *testing.T) {
 
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
 	cmd := m.Update(enter)
-	if cmd == nil {
-		t.Fatal("Enter should produce a command")
-	}
+	require.NotNil(t, cmd, "Enter should produce a command")
 
 	msg := cmd()
 	open, ok := msg.(OpenInboxPRMsg)
-	if !ok {
-		t.Fatalf("expected OpenInboxPRMsg, got %T", msg)
-	}
-	if open.Number != 10 {
-		t.Errorf("Number = %d, want 10", open.Number)
-	}
-	if open.Repo.Name != "webapp" {
-		t.Errorf("Repo = %q, want webapp", open.Repo.Name)
-	}
+	require.True(t, ok, "expected OpenInboxPRMsg, got %T", msg)
+	assert.Equal(t, 10, open.Number)
+	assert.Equal(t, "webapp", open.Repo.Name)
 }
 
 func TestInboxBack(t *testing.T) {
@@ -239,14 +194,11 @@ func TestInboxBack(t *testing.T) {
 
 	back := tea.KeyMsg{Type: tea.KeyEscape}
 	cmd := m.Update(back)
-	if cmd == nil {
-		t.Fatal("Back should produce a command")
-	}
+	require.NotNil(t, cmd, "Back should produce a command")
 
 	msg := cmd()
-	if _, ok := msg.(CloseInboxMsg); !ok {
-		t.Errorf("expected CloseInboxMsg, got %T", msg)
-	}
+	_, ok := msg.(CloseInboxMsg)
+	assert.True(t, ok, "expected CloseInboxMsg, got %T", msg)
 }
 
 func TestInboxPRsLoadedMsg(t *testing.T) {
@@ -254,9 +206,7 @@ func TestInboxPRsLoadedMsg(t *testing.T) {
 	m.SetSize(120, 40)
 
 	m.Update(InboxPRsLoadedMsg{PRs: testInboxPRs()})
-	if m.loading {
-		t.Error("should not be loading after InboxPRsLoadedMsg")
-	}
+	assert.False(t, m.loading, "should not be loading after InboxPRsLoadedMsg")
 }
 
 func TestInboxViewLoading(t *testing.T) {
@@ -264,9 +214,7 @@ func TestInboxViewLoading(t *testing.T) {
 	m.SetSize(80, 24)
 
 	view := m.View()
-	if view == "" {
-		t.Error("loading view should not be empty")
-	}
+	assert.NotEmpty(t, view, "loading view should not be empty")
 }
 
 func TestInboxViewWithData(t *testing.T) {
@@ -275,9 +223,7 @@ func TestInboxViewWithData(t *testing.T) {
 	m.SetPRs(testInboxPRs())
 
 	view := m.View()
-	if view == "" {
-		t.Error("view with data should not be empty")
-	}
+	assert.NotEmpty(t, view, "view with data should not be empty")
 }
 
 func TestInboxViewEmptyTab(t *testing.T) {
@@ -289,9 +235,7 @@ func TestInboxViewEmptyTab(t *testing.T) {
 	// No username, so My PRs should be empty.
 
 	view := m.View()
-	if view == "" {
-		t.Error("empty tab view should not be empty string")
-	}
+	assert.NotEmpty(t, view, "empty tab view should not be empty string")
 }
 
 func TestPrioritySort(t *testing.T) {
@@ -299,9 +243,7 @@ func TestPrioritySort(t *testing.T) {
 	PrioritySort(prs, "indrasvat", 7)
 
 	// First should be review-requested (PR#10 alice, pending, not by indrasvat).
-	if prs[0].Number != 10 {
-		t.Errorf("first PR after sort = #%d, want #10 (review requested)", prs[0].Number)
-	}
+	assert.Equal(t, 10, prs[0].Number, "first PR after sort should be #10 (review requested)")
 }
 
 func TestPrioritySortEmpty(t *testing.T) {

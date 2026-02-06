@@ -5,6 +5,9 @@ import (
 	"errors"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHookManagerOnAndEmit(t *testing.T) {
@@ -16,12 +19,9 @@ func TestHookManagerOnAndEmit(t *testing.T) {
 		return nil
 	})
 
-	if err := hm.Emit(context.Background(), HookBeforeFetch, nil); err != nil {
-		t.Fatalf("Emit() error = %v", err)
-	}
-	if !called {
-		t.Error("handler was not called")
-	}
+	err := hm.Emit(context.Background(), HookBeforeFetch, nil)
+	require.NoError(t, err)
+	assert.True(t, called, "handler was not called")
 }
 
 func TestHookManagerEmitOrdering(t *testing.T) {
@@ -36,17 +36,12 @@ func TestHookManagerEmitOrdering(t *testing.T) {
 		})
 	}
 
-	if err := hm.Emit(context.Background(), HookAfterFetch, nil); err != nil {
-		t.Fatalf("Emit() error = %v", err)
-	}
+	err := hm.Emit(context.Background(), HookAfterFetch, nil)
+	require.NoError(t, err)
 
-	if len(order) != 5 {
-		t.Fatalf("expected 5 calls, got %d", len(order))
-	}
+	require.Len(t, order, 5)
 	for i, v := range order {
-		if v != i {
-			t.Errorf("order[%d] = %d, want %d", i, v, i)
-		}
+		assert.Equal(t, i, v)
 	}
 }
 
@@ -65,20 +60,15 @@ func TestHookManagerEmitErrorStopsChain(t *testing.T) {
 	})
 
 	err := hm.Emit(context.Background(), HookBeforeRender, nil)
-	if !errors.Is(err, sentinel) {
-		t.Errorf("Emit() error = %v, want %v", err, sentinel)
-	}
-	if callCount != 1 {
-		t.Errorf("callCount = %d, want 1 (second handler should not run)", callCount)
-	}
+	assert.ErrorIs(t, err, sentinel)
+	assert.Equal(t, 1, callCount, "second handler should not run")
 }
 
 func TestHookManagerEmitNoHandlers(t *testing.T) {
 	hm := NewHookManager()
 
-	if err := hm.Emit(context.Background(), HookOnPRSelect, nil); err != nil {
-		t.Errorf("Emit() with no handlers should return nil, got %v", err)
-	}
+	err := hm.Emit(context.Background(), HookOnPRSelect, nil)
+	assert.NoError(t, err, "Emit() with no handlers should return nil")
 }
 
 func TestHookManagerEmitPassesData(t *testing.T) {
@@ -91,12 +81,9 @@ func TestHookManagerEmitPassesData(t *testing.T) {
 	})
 
 	payload := "test-data"
-	if err := hm.Emit(context.Background(), HookOnViewChange, payload); err != nil {
-		t.Fatalf("Emit() error = %v", err)
-	}
-	if received != payload {
-		t.Errorf("handler received %v, want %v", received, payload)
-	}
+	err := hm.Emit(context.Background(), HookOnViewChange, payload)
+	require.NoError(t, err)
+	assert.Equal(t, payload, received)
 }
 
 func TestHookManagerConcurrentAccess(t *testing.T) {
@@ -136,12 +123,8 @@ func TestHookPointConstants(t *testing.T) {
 	}
 	seen := make(map[HookPoint]bool)
 	for _, p := range points {
-		if seen[p] {
-			t.Errorf("duplicate HookPoint value: %q", p)
-		}
+		assert.False(t, seen[p], "duplicate HookPoint value: %q", p)
 		seen[p] = true
-		if string(p) == "" {
-			t.Error("HookPoint should not be empty string")
-		}
+		assert.NotEmpty(t, string(p), "HookPoint should not be empty string")
 	}
 }

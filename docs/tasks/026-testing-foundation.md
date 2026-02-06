@@ -1,6 +1,6 @@
 # Task 026: Testing Foundation (testify Migration, Adapter Fixtures)
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 

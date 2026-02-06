@@ -1,11 +1,13 @@
 package views
 
 import (
-	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/indrasvat/vivecaka/internal/domain"
 )
 
@@ -55,73 +57,49 @@ func testDetail() *domain.PRDetail {
 
 func TestNewPRDetailModel(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
-	if !m.loading {
-		t.Error("new model should be in loading state")
-	}
-	if m.tab != TabDescription {
-		t.Errorf("default pane = %d, want TabDescription", m.tab)
-	}
+	assert.True(t, m.loading, "new model should be in loading state")
+	assert.Equal(t, TabDescription, m.tab)
 }
 
 func TestSetDetail(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetDetail(testDetail())
 
-	if m.loading {
-		t.Error("loading should be false after SetDetail")
-	}
-	if m.detail.Number != 42 {
-		t.Errorf("detail.Number = %d, want 42", m.detail.Number)
-	}
-	if m.pendingNum != 0 {
-		t.Errorf("pendingNum = %d, want 0", m.pendingNum)
-	}
+	assert.False(t, m.loading, "loading should be false after SetDetail")
+	assert.Equal(t, 42, m.detail.Number)
+	assert.Equal(t, 0, m.pendingNum)
 }
 
 func TestDetailStartLoading(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	cmd := m.StartLoading(99)
 
-	if !m.loading {
-		t.Error("StartLoading should set loading = true")
-	}
-	if m.pendingNum != 99 {
-		t.Errorf("pendingNum = %d, want 99", m.pendingNum)
-	}
+	assert.True(t, m.loading, "StartLoading should set loading = true")
+	assert.Equal(t, 99, m.pendingNum)
 
 	view := m.View()
-	if !strings.Contains(view, "Loading PR #99") {
-		t.Errorf("loading view should include PR number, got %q", view)
-	}
-	if cmd == nil {
-		t.Error("StartLoading should return a spinner command")
-	}
+	assert.Contains(t, view, "Loading PR #99")
+	assert.NotNil(t, cmd, "StartLoading should return a spinner command")
 }
 
 func TestDetailSpinnerTick(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	cmd := m.StartLoading(1)
-	if cmd == nil {
-		t.Fatal("StartLoading should return a spinner command")
-	}
+	require.NotNil(t, cmd, "StartLoading should return a spinner command")
+
 	first := m.spinner.View()
 	msg := cmd()
 	next := m.Update(msg)
 	second := m.spinner.View()
-	if first == second {
-		t.Errorf("spinner frame should advance, got %q", second)
-	}
-	if next == nil {
-		t.Error("spinner tick should return a follow-up command")
-	}
+	assert.NotEqual(t, first, second, "spinner frame should advance")
+	assert.NotNil(t, next, "spinner tick should return a follow-up command")
 }
 
 func TestDetailSetSize(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
-	if m.width != 120 || m.height != 40 {
-		t.Errorf("size = %dx%d, want 120x40", m.width, m.height)
-	}
+	assert.Equal(t, 120, m.width)
+	assert.Equal(t, 40, m.height)
 }
 
 func TestDetailTabNavigation(t *testing.T) {
@@ -132,24 +110,16 @@ func TestDetailTabNavigation(t *testing.T) {
 	// Tab forward through all tabs: Description → Checks → Files → Comments → Description
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	m.Update(tab)
-	if m.tab != TabChecks {
-		t.Errorf("after 1 tab = %d, want TabChecks", m.tab)
-	}
+	assert.Equal(t, TabChecks, m.tab)
 
 	m.Update(tab)
-	if m.tab != TabFiles {
-		t.Errorf("after 2 tabs = %d, want TabFiles", m.tab)
-	}
+	assert.Equal(t, TabFiles, m.tab)
 
 	m.Update(tab)
-	if m.tab != TabComments {
-		t.Errorf("after 3 tabs = %d, want TabComments", m.tab)
-	}
+	assert.Equal(t, TabComments, m.tab)
 
 	m.Update(tab)
-	if m.tab != TabDescription {
-		t.Errorf("after 4 tabs = %d, want TabDescription (wrap)", m.tab)
-	}
+	assert.Equal(t, TabDescription, m.tab)
 }
 
 func TestDetailShiftTabNavigation(t *testing.T) {
@@ -160,9 +130,7 @@ func TestDetailShiftTabNavigation(t *testing.T) {
 	// Shift-tab wraps backward.
 	shiftTab := tea.KeyMsg{Type: tea.KeyShiftTab}
 	m.Update(shiftTab)
-	if m.tab != TabComments {
-		t.Errorf("after shift-tab pane = %d, want TabComments", m.tab)
-	}
+	assert.Equal(t, TabComments, m.tab)
 }
 
 func TestDetailScrolling(t *testing.T) {
@@ -172,21 +140,15 @@ func TestDetailScrolling(t *testing.T) {
 
 	down := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
 	m.Update(down)
-	if m.scrollY != 1 {
-		t.Errorf("scrollY after j = %d, want 1", m.scrollY)
-	}
+	assert.Equal(t, 1, m.scrollY)
 
 	up := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
 	m.Update(up)
-	if m.scrollY != 0 {
-		t.Errorf("scrollY after k = %d, want 0", m.scrollY)
-	}
+	assert.Equal(t, 0, m.scrollY)
 
 	// Up at 0 stays at 0.
 	m.Update(up)
-	if m.scrollY != 0 {
-		t.Errorf("scrollY shouldn't go below 0, got %d", m.scrollY)
-	}
+	assert.Equal(t, 0, m.scrollY)
 }
 
 func TestDetailScrollResetsOnTabSwitch(t *testing.T) {
@@ -201,9 +163,7 @@ func TestDetailScrollResetsOnTabSwitch(t *testing.T) {
 
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	m.Update(tab)
-	if m.scrollY != 0 {
-		t.Errorf("scrollY should reset on tab switch, got %d", m.scrollY)
-	}
+	assert.Equal(t, 0, m.scrollY, "scrollY should reset on tab switch")
 }
 
 func TestDetailEnterOnFilesPane(t *testing.T) {
@@ -217,16 +177,12 @@ func TestDetailEnterOnFilesPane(t *testing.T) {
 	// Enter should produce OpenDiffMsg.
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
 	cmd := m.Update(enter)
-	if cmd == nil {
-		t.Fatal("Enter on Files pane should produce a command")
-	}
+	require.NotNil(t, cmd, "Enter on Files pane should produce a command")
 
 	msg := cmd()
-	if diff, ok := msg.(OpenDiffMsg); !ok {
-		t.Errorf("expected OpenDiffMsg, got %T", msg)
-	} else if diff.Number != 42 {
-		t.Errorf("OpenDiffMsg.Number = %d, want 42", diff.Number)
-	}
+	diff, ok := msg.(OpenDiffMsg)
+	require.True(t, ok, "expected OpenDiffMsg, got %T", msg)
+	assert.Equal(t, 42, diff.Number)
 }
 
 func TestDetailEnterOnInfoPane(t *testing.T) {
@@ -237,9 +193,7 @@ func TestDetailEnterOnInfoPane(t *testing.T) {
 	// Enter on Info pane does nothing special.
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
 	cmd := m.Update(enter)
-	if cmd != nil {
-		t.Error("Enter on Info pane should not produce a command")
-	}
+	assert.Nil(t, cmd, "Enter on Info pane should not produce a command")
 }
 
 func TestPRDetailDiffKey(t *testing.T) {
@@ -249,16 +203,12 @@ func TestPRDetailDiffKey(t *testing.T) {
 
 	d := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}
 	cmd := m.Update(d)
-	if cmd == nil {
-		t.Fatal("'d' key should produce a command")
-	}
+	require.NotNil(t, cmd, "'d' key should produce a command")
 
 	msg := cmd()
-	if diff, ok := msg.(OpenDiffMsg); !ok {
-		t.Errorf("expected OpenDiffMsg, got %T", msg)
-	} else if diff.Number != 42 {
-		t.Errorf("OpenDiffMsg.Number = %d, want 42", diff.Number)
-	}
+	diff, ok := msg.(OpenDiffMsg)
+	require.True(t, ok, "expected OpenDiffMsg, got %T", msg)
+	assert.Equal(t, 42, diff.Number)
 }
 
 func TestPRDetailCheckoutKey(t *testing.T) {
@@ -268,21 +218,13 @@ func TestPRDetailCheckoutKey(t *testing.T) {
 
 	c := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
 	cmd := m.Update(c)
-	if cmd == nil {
-		t.Fatal("'c' key should produce a command")
-	}
+	require.NotNil(t, cmd, "'c' key should produce a command")
 
 	msg := cmd()
-	if checkout, ok := msg.(CheckoutPRMsg); !ok {
-		t.Errorf("expected CheckoutPRMsg, got %T", msg)
-	} else {
-		if checkout.Number != 42 {
-			t.Errorf("CheckoutPRMsg.Number = %d, want 42", checkout.Number)
-		}
-		if checkout.Branch != "feat/plugins" {
-			t.Errorf("CheckoutPRMsg.Branch = %q, want %q", checkout.Branch, "feat/plugins")
-		}
-	}
+	checkout, ok := msg.(CheckoutPRMsg)
+	require.True(t, ok, "expected CheckoutPRMsg, got %T", msg)
+	assert.Equal(t, 42, checkout.Number)
+	assert.Equal(t, "feat/plugins", checkout.Branch)
 }
 
 func TestPRDetailOpenKeyChecksPane(t *testing.T) {
@@ -294,18 +236,12 @@ func TestPRDetailOpenKeyChecksPane(t *testing.T) {
 
 	o := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}}
 	cmd := m.Update(o)
-	if cmd == nil {
-		t.Fatal("'o' key should produce a command on checks pane")
-	}
+	require.NotNil(t, cmd, "'o' key should produce a command on checks pane")
 
 	msg := cmd()
 	open, ok := msg.(OpenBrowserMsg)
-	if !ok {
-		t.Fatalf("expected OpenBrowserMsg, got %T", msg)
-	}
-	if open.URL != "https://example.com/checks/lint" {
-		t.Errorf("OpenBrowserMsg.URL = %q, want lint URL", open.URL)
-	}
+	require.True(t, ok, "expected OpenBrowserMsg, got %T", msg)
+	assert.Equal(t, "https://example.com/checks/lint", open.URL)
 }
 
 func TestPRDetailOpenKeyInfoPane(t *testing.T) {
@@ -316,18 +252,12 @@ func TestPRDetailOpenKeyInfoPane(t *testing.T) {
 
 	o := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}}
 	cmd := m.Update(o)
-	if cmd == nil {
-		t.Fatal("'o' key should produce a command on info pane")
-	}
+	require.NotNil(t, cmd, "'o' key should produce a command on info pane")
 
 	msg := cmd()
 	open, ok := msg.(OpenBrowserMsg)
-	if !ok {
-		t.Fatalf("expected OpenBrowserMsg, got %T", msg)
-	}
-	if open.URL != "https://example.com/pr/42" {
-		t.Errorf("OpenBrowserMsg.URL = %q, want PR URL", open.URL)
-	}
+	require.True(t, ok, "expected OpenBrowserMsg, got %T", msg)
+	assert.Equal(t, "https://example.com/pr/42", open.URL)
 }
 
 func TestDetailReviewKey(t *testing.T) {
@@ -338,25 +268,18 @@ func TestDetailReviewKey(t *testing.T) {
 	// 'r' should produce StartReviewMsg.
 	r := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
 	cmd := m.Update(r)
-	if cmd == nil {
-		t.Fatal("'r' key should produce a command")
-	}
+	require.NotNil(t, cmd, "'r' key should produce a command")
 
 	msg := cmd()
-	if rev, ok := msg.(StartReviewMsg); !ok {
-		t.Errorf("expected StartReviewMsg, got %T", msg)
-	} else if rev.Number != 42 {
-		t.Errorf("StartReviewMsg.Number = %d, want 42", rev.Number)
-	}
+	rev, ok := msg.(StartReviewMsg)
+	require.True(t, ok, "expected StartReviewMsg, got %T", msg)
+	assert.Equal(t, 42, rev.Number)
 }
 
 func TestPRDetailFormatCheckSummary(t *testing.T) {
 	detail := testDetail()
 	got := formatCheckSummary(detail.Checks)
-	want := "1/3 passing, 1 failing, 1 pending"
-	if got != want {
-		t.Errorf("summary = %q, want %q", got, want)
-	}
+	assert.Equal(t, "1/3 passing, 1 failing, 1 pending", got)
 }
 
 func TestDetailReviewKeyNoDetail(t *testing.T) {
@@ -366,9 +289,7 @@ func TestDetailReviewKeyNoDetail(t *testing.T) {
 
 	r := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
 	cmd := m.Update(r)
-	if cmd != nil {
-		t.Error("'r' with no detail should not produce a command")
-	}
+	assert.Nil(t, cmd, "'r' with no detail should not produce a command")
 }
 
 func TestDetailLoadedMsg(t *testing.T) {
@@ -378,12 +299,8 @@ func TestDetailLoadedMsg(t *testing.T) {
 	detail := testDetail()
 	m.Update(PRDetailLoadedMsg{Detail: detail})
 
-	if m.loading {
-		t.Error("should not be loading after PRDetailLoadedMsg")
-	}
-	if m.detail != detail {
-		t.Error("detail should be set from message")
-	}
+	assert.False(t, m.loading, "should not be loading after PRDetailLoadedMsg")
+	assert.Equal(t, detail, m.detail)
 }
 
 func TestDetailViewLoading(t *testing.T) {
@@ -391,9 +308,7 @@ func TestDetailViewLoading(t *testing.T) {
 	m.SetSize(80, 24)
 
 	view := m.View()
-	if view == "" {
-		t.Error("loading view should not be empty")
-	}
+	assert.NotEmpty(t, view, "loading view should not be empty")
 }
 
 func TestDetailViewInfoPane(t *testing.T) {
@@ -402,9 +317,7 @@ func TestDetailViewInfoPane(t *testing.T) {
 	m.SetDetail(testDetail())
 
 	view := m.View()
-	if view == "" {
-		t.Error("info pane view should not be empty")
-	}
+	assert.NotEmpty(t, view, "info pane view should not be empty")
 }
 
 func TestDetailViewFilesPane(t *testing.T) {
@@ -414,9 +327,7 @@ func TestDetailViewFilesPane(t *testing.T) {
 	m.tab = TabFiles
 
 	view := m.View()
-	if view == "" {
-		t.Error("files pane view should not be empty")
-	}
+	assert.NotEmpty(t, view, "files pane view should not be empty")
 }
 
 func TestDetailViewChecksPane(t *testing.T) {
@@ -426,9 +337,7 @@ func TestDetailViewChecksPane(t *testing.T) {
 	m.tab = TabChecks
 
 	view := m.View()
-	if view == "" {
-		t.Error("checks pane view should not be empty")
-	}
+	assert.NotEmpty(t, view, "checks pane view should not be empty")
 }
 
 func TestDetailViewCommentsPane(t *testing.T) {
@@ -438,9 +347,7 @@ func TestDetailViewCommentsPane(t *testing.T) {
 	m.tab = TabComments
 
 	view := m.View()
-	if view == "" {
-		t.Error("comments pane view should not be empty")
-	}
+	assert.NotEmpty(t, view, "comments pane view should not be empty")
 }
 
 func TestDetailViewNoBody(t *testing.T) {
@@ -451,9 +358,7 @@ func TestDetailViewNoBody(t *testing.T) {
 	m.SetDetail(d)
 
 	view := m.View()
-	if view == "" {
-		t.Error("view with no body should not be empty")
-	}
+	assert.NotEmpty(t, view, "view with no body should not be empty")
 }
 
 func TestDetailViewEmptyFiles(t *testing.T) {
@@ -465,9 +370,7 @@ func TestDetailViewEmptyFiles(t *testing.T) {
 	m.tab = TabFiles
 
 	view := m.View()
-	if view == "" {
-		t.Error("empty files pane view should not be empty")
-	}
+	assert.NotEmpty(t, view, "empty files pane view should not be empty")
 }
 
 func TestDetailViewEmptyChecks(t *testing.T) {
@@ -479,9 +382,7 @@ func TestDetailViewEmptyChecks(t *testing.T) {
 	m.tab = TabChecks
 
 	view := m.View()
-	if view == "" {
-		t.Error("empty checks pane view should not be empty")
-	}
+	assert.NotEmpty(t, view, "empty checks pane view should not be empty")
 }
 
 func TestDetailViewEmptyComments(t *testing.T) {
@@ -493,9 +394,7 @@ func TestDetailViewEmptyComments(t *testing.T) {
 	m.tab = TabComments
 
 	view := m.View()
-	if view == "" {
-		t.Error("empty comments pane view should not be empty")
-	}
+	assert.NotEmpty(t, view, "empty comments pane view should not be empty")
 }
 
 func TestDetailViewSmallHeight(t *testing.T) {
@@ -504,26 +403,18 @@ func TestDetailViewSmallHeight(t *testing.T) {
 	m.SetDetail(testDetail())
 
 	view := m.View()
-	if view == "" {
-		t.Error("small height view should not be empty")
-	}
+	assert.NotEmpty(t, view, "small height view should not be empty")
 }
 
 func TestRenderMarkdownBold(t *testing.T) {
 	out := renderMarkdown("**bold**", 40)
-	if !strings.Contains(out, "bold") {
-		t.Errorf("rendered markdown should contain text, got %q", out)
-	}
+	assert.Contains(t, out, "bold")
 }
 
 func TestRenderMarkdownList(t *testing.T) {
 	out := renderMarkdown("- item", 40)
-	if !strings.Contains(out, "item") {
-		t.Errorf("rendered list should contain item, got %q", out)
-	}
-	if !strings.Contains(out, "•") {
-		t.Errorf("rendered list should include bullet, got %q", out)
-	}
+	assert.Contains(t, out, "item")
+	assert.Contains(t, out, "•")
 }
 
 // Comment pane tests
@@ -535,29 +426,21 @@ func TestCommentPaneNavigation(t *testing.T) {
 	m.tab = TabComments
 
 	// Start at first thread
-	if m.commentCursor != 0 {
-		t.Errorf("initial cursor = %d, want 0", m.commentCursor)
-	}
+	assert.Equal(t, 0, m.commentCursor)
 
 	// Navigate down
 	down := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
 	m.Update(down)
-	if m.commentCursor != 1 {
-		t.Errorf("cursor after j = %d, want 1", m.commentCursor)
-	}
+	assert.Equal(t, 1, m.commentCursor)
 
 	// Navigate up
 	up := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
 	m.Update(up)
-	if m.commentCursor != 0 {
-		t.Errorf("cursor after k = %d, want 0", m.commentCursor)
-	}
+	assert.Equal(t, 0, m.commentCursor)
 
 	// Can't go below 0
 	m.Update(up)
-	if m.commentCursor != 0 {
-		t.Errorf("cursor after k at 0 = %d, want 0", m.commentCursor)
-	}
+	assert.Equal(t, 0, m.commentCursor)
 }
 
 func TestCommentPaneCollapseExpand(t *testing.T) {
@@ -567,31 +450,23 @@ func TestCommentPaneCollapseExpand(t *testing.T) {
 	m.tab = TabComments
 
 	// Initially not collapsed
-	if m.commentCollapsed[0] {
-		t.Error("thread should not be collapsed initially")
-	}
+	assert.False(t, m.commentCollapsed[0], "thread should not be collapsed initially")
 
 	// Collapse with Space
 	space := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
 	m.Update(space)
-	if !m.commentCollapsed[0] {
-		t.Error("thread should be collapsed after Space")
-	}
+	assert.True(t, m.commentCollapsed[0], "thread should be collapsed after Space")
 
 	// Expand again
 	m.Update(space)
-	if m.commentCollapsed[0] {
-		t.Error("thread should be expanded after second Space")
-	}
+	assert.False(t, m.commentCollapsed[0], "thread should be expanded after second Space")
 
 	// Collapse with za
 	z := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'z'}}
 	a := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
 	m.Update(z)
 	m.Update(a)
-	if !m.commentCollapsed[0] {
-		t.Error("thread should be collapsed after za")
-	}
+	assert.True(t, m.commentCollapsed[0], "thread should be collapsed after za")
 }
 
 func TestCommentPaneResolve(t *testing.T) {
@@ -605,18 +480,12 @@ func TestCommentPaneResolve(t *testing.T) {
 	// 'x' should produce ResolveThreadMsg for unresolved thread
 	x := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
 	cmd := m.Update(x)
-	if cmd == nil {
-		t.Fatal("'x' key should produce a command")
-	}
+	require.NotNil(t, cmd, "'x' key should produce a command")
 
 	msg := cmd()
 	resolve, ok := msg.(ResolveThreadMsg)
-	if !ok {
-		t.Fatalf("expected ResolveThreadMsg, got %T", msg)
-	}
-	if resolve.ThreadID != "thread-1" {
-		t.Errorf("ThreadID = %q, want thread-1", resolve.ThreadID)
-	}
+	require.True(t, ok, "expected ResolveThreadMsg, got %T", msg)
+	assert.Equal(t, "thread-1", resolve.ThreadID)
 }
 
 func TestCommentPaneUnresolve(t *testing.T) {
@@ -631,18 +500,12 @@ func TestCommentPaneUnresolve(t *testing.T) {
 	// 'X' should produce UnresolveThreadMsg for resolved thread
 	X := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}}
 	cmd := m.Update(X)
-	if cmd == nil {
-		t.Fatal("'X' key should produce a command")
-	}
+	require.NotNil(t, cmd, "'X' key should produce a command")
 
 	msg := cmd()
 	unresolve, ok := msg.(UnresolveThreadMsg)
-	if !ok {
-		t.Fatalf("expected UnresolveThreadMsg, got %T", msg)
-	}
-	if unresolve.ThreadID != "thread-2" {
-		t.Errorf("ThreadID = %q, want thread-2", unresolve.ThreadID)
-	}
+	require.True(t, ok, "expected UnresolveThreadMsg, got %T", msg)
+	assert.Equal(t, "thread-2", unresolve.ThreadID)
 }
 
 func TestCommentPaneReplyKey(t *testing.T) {
@@ -656,18 +519,12 @@ func TestCommentPaneReplyKey(t *testing.T) {
 	// 'r' in comments pane should produce ReplyToThreadMsg
 	r := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
 	cmd := m.Update(r)
-	if cmd == nil {
-		t.Fatal("'r' key should produce a command in comments pane")
-	}
+	require.NotNil(t, cmd, "'r' key should produce a command in comments pane")
 
 	msg := cmd()
 	reply, ok := msg.(ReplyToThreadMsg)
-	if !ok {
-		t.Fatalf("expected ReplyToThreadMsg, got %T", msg)
-	}
-	if reply.ThreadID != "thread-1" {
-		t.Errorf("ThreadID = %q, want thread-1", reply.ThreadID)
-	}
+	require.True(t, ok, "expected ReplyToThreadMsg, got %T", msg)
+	assert.Equal(t, "thread-1", reply.ThreadID)
 }
 
 func TestCommentPaneViewRendering(t *testing.T) {
@@ -677,13 +534,9 @@ func TestCommentPaneViewRendering(t *testing.T) {
 	m.tab = TabComments
 
 	view := m.View()
-	if view == "" {
-		t.Error("comments pane view should not be empty")
-	}
+	assert.NotEmpty(t, view, "comments pane view should not be empty")
 	// Should contain thread info
-	if !strings.Contains(view, "plugin.go") {
-		t.Error("view should contain file path")
-	}
+	assert.Contains(t, view, "plugin.go")
 }
 
 func TestCommentPaneCollapsedView(t *testing.T) {
@@ -695,9 +548,7 @@ func TestCommentPaneCollapsedView(t *testing.T) {
 
 	view := m.View()
 	// Collapsed view should show preview of first comment
-	if !strings.Contains(view, "Needs error handling") {
-		t.Error("collapsed view should show comment preview")
-	}
+	assert.Contains(t, view, "Needs error handling")
 }
 
 func TestGetPRNumber(t *testing.T) {
@@ -705,20 +556,14 @@ func TestGetPRNumber(t *testing.T) {
 	m.SetSize(120, 40)
 
 	// No detail set
-	if m.GetPRNumber() != 0 {
-		t.Error("GetPRNumber should return 0 when no detail")
-	}
+	assert.Equal(t, 0, m.GetPRNumber(), "GetPRNumber should return 0 when no detail")
 
 	// After setting detail
 	m.SetDetail(testDetail())
-	if m.GetPRNumber() != 42 {
-		t.Errorf("GetPRNumber = %d, want 42", m.GetPRNumber())
-	}
+	assert.Equal(t, 42, m.GetPRNumber())
 
 	// When loading
 	m.detail = nil
 	m.pendingNum = 123
-	if m.GetPRNumber() != 123 {
-		t.Errorf("GetPRNumber (pending) = %d, want 123", m.GetPRNumber())
-	}
+	assert.Equal(t, 123, m.GetPRNumber())
 }

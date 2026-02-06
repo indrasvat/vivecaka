@@ -7,6 +7,9 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/indrasvat/vivecaka/internal/domain"
 )
 
@@ -95,98 +98,77 @@ func TestRegistryRegister(t *testing.T) {
 	reg := NewRegistry()
 	p := &mockPlugin{name: "test-plugin"}
 
-	if err := reg.Register(p); err != nil {
-		t.Fatalf("Register() error = %v", err)
-	}
+	err := reg.Register(p)
+	require.NoError(t, err)
 }
 
 func TestRegistryDuplicateReturnsError(t *testing.T) {
 	reg := NewRegistry()
 	p := &mockPlugin{name: "dup"}
 
-	if err := reg.Register(p); err != nil {
-		t.Fatalf("first Register() error = %v", err)
-	}
-	if err := reg.Register(p); err == nil {
-		t.Fatal("second Register() with same name should return error")
-	}
+	err := reg.Register(p)
+	require.NoError(t, err)
+	err = reg.Register(p)
+	assert.Error(t, err, "second Register() with same name should return error")
 }
 
 func TestRegistryAutoDiscoverReader(t *testing.T) {
 	reg := NewRegistry()
 	p := &mockReaderPlugin{mockPlugin: mockPlugin{name: "reader"}}
 
-	if err := reg.Register(p); err != nil {
-		t.Fatalf("Register() error = %v", err)
-	}
+	err := reg.Register(p)
+	require.NoError(t, err)
 
 	readers := reg.GetReaders()
-	if len(readers) != 1 {
-		t.Fatalf("GetReaders() len = %d, want 1", len(readers))
-	}
+	assert.Len(t, readers, 1)
 }
 
 func TestRegistryAutoDiscoverReviewer(t *testing.T) {
 	reg := NewRegistry()
 	p := &mockReviewerPlugin{mockPlugin: mockPlugin{name: "reviewer"}}
 
-	if err := reg.Register(p); err != nil {
-		t.Fatalf("Register() error = %v", err)
-	}
+	err := reg.Register(p)
+	require.NoError(t, err)
 
 	reviewers := reg.GetReviewers()
-	if len(reviewers) != 1 {
-		t.Fatalf("GetReviewers() len = %d, want 1", len(reviewers))
-	}
+	assert.Len(t, reviewers, 1)
 }
 
 func TestRegistryAutoDiscoverWriter(t *testing.T) {
 	reg := NewRegistry()
 	p := &mockWriterPlugin{mockPlugin: mockPlugin{name: "writer"}}
 
-	if err := reg.Register(p); err != nil {
-		t.Fatalf("Register() error = %v", err)
-	}
+	err := reg.Register(p)
+	require.NoError(t, err)
 
 	writers := reg.GetWriters()
-	if len(writers) != 1 {
-		t.Fatalf("GetWriters() len = %d, want 1", len(writers))
-	}
+	assert.Len(t, writers, 1)
 }
 
 func TestRegistryNoCapabilities(t *testing.T) {
 	reg := NewRegistry()
 	p := &mockPlugin{name: "bare"}
 
-	if err := reg.Register(p); err != nil {
-		t.Fatalf("Register() error = %v", err)
-	}
+	err := reg.Register(p)
+	require.NoError(t, err)
 
-	if got := len(reg.GetReaders()); got != 0 {
-		t.Errorf("GetReaders() len = %d, want 0", got)
-	}
-	if got := len(reg.GetReviewers()); got != 0 {
-		t.Errorf("GetReviewers() len = %d, want 0", got)
-	}
-	if got := len(reg.GetWriters()); got != 0 {
-		t.Errorf("GetWriters() len = %d, want 0", got)
-	}
+	assert.Empty(t, reg.GetReaders())
+	assert.Empty(t, reg.GetReviewers())
+	assert.Empty(t, reg.GetWriters())
 }
 
 func TestRegistryUnregister(t *testing.T) {
 	reg := NewRegistry()
 	p := &mockPlugin{name: "removeme"}
 
-	if err := reg.Register(p); err != nil {
-		t.Fatalf("Register() error = %v", err)
-	}
+	err := reg.Register(p)
+	require.NoError(t, err)
 
 	reg.Unregister("removeme")
 
 	// Should be able to re-register with same name after unregister.
-	if err := reg.Register(p); err != nil {
-		t.Fatalf("re-Register() after Unregister() error = %v", err)
-	}
+	err = reg.Register(p)
+	require.NoError(t, err)
 }
 
 func TestRegistryAutoDiscoverAllCapabilities(t *testing.T) {
@@ -200,26 +182,17 @@ func TestRegistryAutoDiscoverAllCapabilities(t *testing.T) {
 		},
 	}
 
-	if err := reg.Register(p); err != nil {
-		t.Fatalf("Register() error = %v", err)
-	}
+	err := reg.Register(p)
+	require.NoError(t, err)
 
-	if got := len(reg.GetReaders()); got != 1 {
-		t.Errorf("GetReaders() len = %d, want 1", got)
-	}
-	if got := len(reg.GetReviewers()); got != 1 {
-		t.Errorf("GetReviewers() len = %d, want 1", got)
-	}
-	if got := len(reg.GetWriters()); got != 1 {
-		t.Errorf("GetWriters() len = %d, want 1", got)
-	}
+	assert.Len(t, reg.GetReaders(), 1)
+	assert.Len(t, reg.GetReviewers(), 1)
+	assert.Len(t, reg.GetWriters(), 1)
 }
 
 func TestRegistryHooksNotNil(t *testing.T) {
 	reg := NewRegistry()
-	if reg.Hooks() == nil {
-		t.Fatal("Hooks() returned nil")
-	}
+	assert.NotNil(t, reg.Hooks())
 }
 
 func TestRegistryConcurrentAccess(t *testing.T) {

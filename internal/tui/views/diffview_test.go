@@ -1,13 +1,14 @@
 package views
 
 import (
-	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/muesli/termenv"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testDiff() *domain.Diff {
@@ -73,20 +74,15 @@ func testDiffWithHunks() *domain.Diff {
 
 func TestNewDiffViewModel(t *testing.T) {
 	m := NewDiffViewModel(testStyles(), testKeys())
-	if !m.loading {
-		t.Error("new model should be in loading state")
-	}
-	if m.diff != nil {
-		t.Error("diff should be nil initially")
-	}
+	assert.True(t, m.loading, "new model should be in loading state")
+	assert.Nil(t, m.diff, "diff should be nil initially")
 }
 
 func TestDiffSetSize(t *testing.T) {
 	m := NewDiffViewModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
-	if m.width != 120 || m.height != 40 {
-		t.Errorf("size = %dx%d, want 120x40", m.width, m.height)
-	}
+	assert.Equal(t, 120, m.width)
+	assert.Equal(t, 40, m.height)
 }
 
 func TestDiffSetDiff(t *testing.T) {
@@ -94,18 +90,10 @@ func TestDiffSetDiff(t *testing.T) {
 	d := testDiff()
 	m.SetDiff(d)
 
-	if m.loading {
-		t.Error("loading should be false after SetDiff")
-	}
-	if m.diff != d {
-		t.Error("diff should be set")
-	}
-	if m.fileIdx != 0 {
-		t.Errorf("fileIdx = %d, want 0", m.fileIdx)
-	}
-	if m.scrollY != 0 {
-		t.Errorf("scrollY = %d, want 0", m.scrollY)
-	}
+	assert.False(t, m.loading, "loading should be false after SetDiff")
+	assert.Equal(t, d, m.diff, "diff should be set")
+	assert.Equal(t, 0, m.fileIdx)
+	assert.Equal(t, 0, m.scrollY)
 }
 
 func TestDiffLoadedMsg(t *testing.T) {
@@ -115,12 +103,8 @@ func TestDiffLoadedMsg(t *testing.T) {
 	d := testDiff()
 	m.Update(DiffLoadedMsg{Diff: d})
 
-	if m.loading {
-		t.Error("should not be loading after DiffLoadedMsg")
-	}
-	if m.diff != d {
-		t.Error("diff should be set from message")
-	}
+	assert.False(t, m.loading, "should not be loading after DiffLoadedMsg")
+	assert.Equal(t, d, m.diff, "diff should be set from message")
 }
 
 func TestDiffScrollDown(t *testing.T) {
@@ -130,9 +114,7 @@ func TestDiffScrollDown(t *testing.T) {
 
 	down := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
 	m.Update(down)
-	if m.scrollY != 1 {
-		t.Errorf("scrollY after j = %d, want 1", m.scrollY)
-	}
+	assert.Equal(t, 1, m.scrollY)
 }
 
 func TestDiffScrollUp(t *testing.T) {
@@ -143,16 +125,12 @@ func TestDiffScrollUp(t *testing.T) {
 	m.scrollY = 3
 	up := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
 	m.Update(up)
-	if m.scrollY != 2 {
-		t.Errorf("scrollY after k = %d, want 2", m.scrollY)
-	}
+	assert.Equal(t, 2, m.scrollY)
 
 	// Can't go below 0.
 	m.scrollY = 0
 	m.Update(up)
-	if m.scrollY != 0 {
-		t.Errorf("scrollY shouldn't go below 0, got %d", m.scrollY)
-	}
+	assert.Equal(t, 0, m.scrollY, "scrollY shouldn't go below 0")
 }
 
 func TestDiffHalfPageScroll(t *testing.T) {
@@ -163,22 +141,16 @@ func TestDiffHalfPageScroll(t *testing.T) {
 	// Half page down.
 	ctrlD := tea.KeyMsg{Type: tea.KeyCtrlD}
 	m.Update(ctrlD)
-	if m.scrollY != 10 {
-		t.Errorf("scrollY after Ctrl+d = %d, want 10", m.scrollY)
-	}
+	assert.Equal(t, 10, m.scrollY)
 
 	// Half page up.
 	ctrlU := tea.KeyMsg{Type: tea.KeyCtrlU}
 	m.Update(ctrlU)
-	if m.scrollY != 0 {
-		t.Errorf("scrollY after Ctrl+u = %d, want 0", m.scrollY)
-	}
+	assert.Equal(t, 0, m.scrollY)
 
 	// Half page up at 0 stays at 0.
 	m.Update(ctrlU)
-	if m.scrollY != 0 {
-		t.Errorf("scrollY shouldn't go below 0 with Ctrl+u, got %d", m.scrollY)
-	}
+	assert.Equal(t, 0, m.scrollY, "scrollY shouldn't go below 0 with Ctrl+u")
 }
 
 func TestDiffFileNavigation(t *testing.T) {
@@ -186,60 +158,42 @@ func TestDiffFileNavigation(t *testing.T) {
 	m.SetSize(120, 40)
 	m.SetDiff(testDiff())
 
-	if m.fileIdx != 0 {
-		t.Fatalf("initial fileIdx = %d, want 0", m.fileIdx)
-	}
+	require.Equal(t, 0, m.fileIdx)
 
 	// { } still navigate files from content pane.
 	next := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'}'}}
 	m.Update(next)
-	if m.fileIdx != 1 {
-		t.Errorf("fileIdx after } = %d, want 1", m.fileIdx)
-	}
+	assert.Equal(t, 1, m.fileIdx)
 
 	prev := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'{'}}
 	m.Update(prev)
-	if m.fileIdx != 0 {
-		t.Errorf("fileIdx after { = %d, want 0", m.fileIdx)
-	}
+	assert.Equal(t, 0, m.fileIdx)
 
 	// Tab toggles focus to tree pane.
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	m.Update(tab)
-	if !m.treeFocus {
-		t.Error("expected treeFocus after Tab")
-	}
+	assert.True(t, m.treeFocus, "expected treeFocus after Tab")
 
 	// In tree pane, j/k navigate files.
 	down := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
 	m.Update(down)
-	if m.fileIdx != 1 {
-		t.Errorf("fileIdx after j in tree = %d, want 1", m.fileIdx)
-	}
+	assert.Equal(t, 1, m.fileIdx)
 
 	up := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
 	m.Update(up)
-	if m.fileIdx != 0 {
-		t.Errorf("fileIdx after k in tree = %d, want 0", m.fileIdx)
-	}
+	assert.Equal(t, 0, m.fileIdx)
 
 	// Enter selects file and returns focus to content.
 	m.Update(down) // go to file 1
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
 	m.Update(enter)
-	if m.treeFocus {
-		t.Error("expected content focus after Enter in tree")
-	}
-	if m.fileIdx != 1 {
-		t.Errorf("fileIdx after Enter = %d, want 1", m.fileIdx)
-	}
+	assert.False(t, m.treeFocus, "expected content focus after Enter in tree")
+	assert.Equal(t, 1, m.fileIdx)
 
 	// Shift-tab also toggles focus.
 	shiftTab := tea.KeyMsg{Type: tea.KeyShiftTab}
 	m.Update(shiftTab)
-	if !m.treeFocus {
-		t.Error("expected treeFocus after Shift-Tab")
-	}
+	assert.True(t, m.treeFocus, "expected treeFocus after Shift-Tab")
 }
 
 func TestDiffFileNavResetsScroll(t *testing.T) {
@@ -251,9 +205,7 @@ func TestDiffFileNavResetsScroll(t *testing.T) {
 	// Use } to navigate to next file (resets scroll).
 	next := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'}'}}
 	m.Update(next)
-	if m.scrollY != 0 {
-		t.Errorf("scrollY should reset on file switch, got %d", m.scrollY)
-	}
+	assert.Equal(t, 0, m.scrollY, "scrollY should reset on file switch")
 }
 
 func TestDiffHunkNavigation(t *testing.T) {
@@ -261,21 +213,15 @@ func TestDiffHunkNavigation(t *testing.T) {
 	m.SetSize(120, 10)
 	m.SetDiff(testDiffWithHunks())
 
-	if m.scrollY != 0 {
-		t.Fatalf("initial scrollY = %d, want 0", m.scrollY)
-	}
+	require.Equal(t, 0, m.scrollY)
 
 	next := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{']'}}
 	m.Update(next)
-	if m.scrollY != 2 {
-		t.Errorf("scrollY after ] = %d, want 2", m.scrollY)
-	}
+	assert.Equal(t, 2, m.scrollY)
 
 	prev := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'['}}
 	m.Update(prev)
-	if m.scrollY != 0 {
-		t.Errorf("scrollY after [ = %d, want 0", m.scrollY)
-	}
+	assert.Equal(t, 0, m.scrollY)
 }
 
 func TestDiffFileJump(t *testing.T) {
@@ -286,18 +232,12 @@ func TestDiffFileJump(t *testing.T) {
 
 	next := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'}'}}
 	m.Update(next)
-	if m.fileIdx != 1 {
-		t.Errorf("fileIdx after } = %d, want 1", m.fileIdx)
-	}
-	if m.scrollY != 0 {
-		t.Errorf("scrollY after } = %d, want 0", m.scrollY)
-	}
+	assert.Equal(t, 1, m.fileIdx)
+	assert.Equal(t, 0, m.scrollY)
 
 	prev := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'{'}}
 	m.Update(prev)
-	if m.fileIdx != 0 {
-		t.Errorf("fileIdx after { = %d, want 0", m.fileIdx)
-	}
+	assert.Equal(t, 0, m.fileIdx)
 }
 
 func TestDiffTopBottomNavigation(t *testing.T) {
@@ -309,15 +249,11 @@ func TestDiffTopBottomNavigation(t *testing.T) {
 	g := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}
 	m.Update(g)
 	m.Update(g)
-	if m.scrollY != 0 {
-		t.Errorf("scrollY after gg = %d, want 0", m.scrollY)
-	}
+	assert.Equal(t, 0, m.scrollY)
 
 	G := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}}
 	m.Update(G)
-	if m.scrollY != 3 {
-		t.Errorf("scrollY after G = %d, want 3", m.scrollY)
-	}
+	assert.Equal(t, 3, m.scrollY)
 }
 
 func TestDiffCollapseToggle(t *testing.T) {
@@ -330,15 +266,11 @@ func TestDiffCollapseToggle(t *testing.T) {
 
 	m.Update(z)
 	m.Update(a)
-	if !m.isCollapsed(m.fileIdx) {
-		t.Error("expected file to be collapsed after za")
-	}
+	assert.True(t, m.isCollapsed(m.fileIdx), "expected file to be collapsed after za")
 
 	m.Update(z)
 	m.Update(a)
-	if m.isCollapsed(m.fileIdx) {
-		t.Error("expected file to expand after za again")
-	}
+	assert.False(t, m.isCollapsed(m.fileIdx), "expected file to expand after za again")
 }
 
 func TestDiffSearch(t *testing.T) {
@@ -349,42 +281,26 @@ func TestDiffSearch(t *testing.T) {
 	// Enter search mode.
 	slash := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
 	m.Update(slash)
-	if !m.searching {
-		t.Error("should be in search mode after /")
-	}
-	if m.searchQuery != "" {
-		t.Errorf("searchQuery should be empty, got %q", m.searchQuery)
-	}
+	assert.True(t, m.searching, "should be in search mode after /")
+	assert.Equal(t, "", m.searchQuery)
 
 	// Type query.
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
-	if m.searchQuery != "sync" {
-		t.Errorf("searchQuery = %q, want %q", m.searchQuery, "sync")
-	}
-	if len(m.searchMatches) != 2 {
-		t.Errorf("searchMatches = %d, want 2", len(m.searchMatches))
-	}
-	if m.currentMatch < 0 {
-		t.Error("currentMatch should be set when matches exist")
-	}
+	assert.Equal(t, "sync", m.searchQuery)
+	assert.Len(t, m.searchMatches, 2)
+	assert.GreaterOrEqual(t, m.currentMatch, 0, "currentMatch should be set when matches exist")
 
 	// Backspace.
 	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
-	if m.searchQuery != "syn" {
-		t.Errorf("searchQuery after backspace = %q, want %q", m.searchQuery, "syn")
-	}
+	assert.Equal(t, "syn", m.searchQuery)
 
 	// Enter confirms search.
 	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if m.searching {
-		t.Error("should exit search mode on Enter")
-	}
-	if m.searchQuery != "syn" {
-		t.Errorf("query should be preserved after Enter, got %q", m.searchQuery)
-	}
+	assert.False(t, m.searching, "should exit search mode on Enter")
+	assert.Equal(t, "syn", m.searchQuery, "query should be preserved after Enter")
 }
 
 func TestDiffSearchEscape(t *testing.T) {
@@ -398,18 +314,10 @@ func TestDiffSearchEscape(t *testing.T) {
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 
 	m.Update(tea.KeyMsg{Type: tea.KeyEscape})
-	if m.searching {
-		t.Error("should exit search mode on Escape")
-	}
-	if m.searchQuery != "" {
-		t.Errorf("query should be cleared on Escape, got %q", m.searchQuery)
-	}
-	if len(m.searchMatches) != 0 {
-		t.Errorf("searchMatches should be cleared on Escape, got %d", len(m.searchMatches))
-	}
-	if m.currentMatch != -1 {
-		t.Errorf("currentMatch should reset on Escape, got %d", m.currentMatch)
-	}
+	assert.False(t, m.searching, "should exit search mode on Escape")
+	assert.Equal(t, "", m.searchQuery, "query should be cleared on Escape")
+	assert.Empty(t, m.searchMatches, "searchMatches should be cleared on Escape")
+	assert.Equal(t, -1, m.currentMatch, "currentMatch should reset on Escape")
 }
 
 func TestDiffSearchBackspaceEmpty(t *testing.T) {
@@ -422,9 +330,7 @@ func TestDiffSearchBackspaceEmpty(t *testing.T) {
 
 	// Backspace on empty query is safe.
 	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
-	if m.searchQuery != "" {
-		t.Errorf("backspace on empty should stay empty, got %q", m.searchQuery)
-	}
+	assert.Equal(t, "", m.searchQuery, "backspace on empty should stay empty")
 }
 
 func TestDiffSearchNavigation(t *testing.T) {
@@ -434,19 +340,13 @@ func TestDiffSearchNavigation(t *testing.T) {
 
 	m.searchQuery = "sync"
 	m.updateSearchMatches()
-	if len(m.searchMatches) == 0 {
-		t.Fatal("expected matches for sync")
-	}
+	require.NotEmpty(t, m.searchMatches, "expected matches for sync")
 
 	first := m.currentMatch
 	m.nextMatch()
-	if m.currentMatch == first {
-		t.Error("nextMatch should advance currentMatch")
-	}
+	assert.NotEqual(t, first, m.currentMatch, "nextMatch should advance currentMatch")
 	m.prevMatch()
-	if m.currentMatch != first {
-		t.Errorf("prevMatch should return to first, got %d", m.currentMatch)
-	}
+	assert.Equal(t, first, m.currentMatch, "prevMatch should return to first")
 }
 
 func TestDiffApplyHighlights(t *testing.T) {
@@ -465,12 +365,8 @@ func TestDiffApplyHighlights(t *testing.T) {
 	}
 
 	got := applyHighlights(text, matches, base, match)
-	if !strings.Contains(got, "\x1b[") {
-		t.Error("expected highlight ANSI sequence in output")
-	}
-	if !strings.Contains(got, "sync") {
-		t.Error("expected highlighted text to contain sync")
-	}
+	assert.Contains(t, got, "\x1b[", "expected highlight ANSI sequence in output")
+	assert.Contains(t, got, "sync", "expected highlighted text to contain sync")
 }
 
 func TestDiffViewLoading(t *testing.T) {
@@ -478,9 +374,7 @@ func TestDiffViewLoading(t *testing.T) {
 	m.SetSize(80, 24)
 
 	view := m.View()
-	if view == "" {
-		t.Error("loading view should not be empty")
-	}
+	assert.NotEmpty(t, view, "loading view should not be empty")
 }
 
 func TestDiffViewNoFiles(t *testing.T) {
@@ -489,9 +383,7 @@ func TestDiffViewNoFiles(t *testing.T) {
 	m.SetDiff(&domain.Diff{Files: nil})
 
 	view := m.View()
-	if view == "" {
-		t.Error("no-files view should not be empty")
-	}
+	assert.NotEmpty(t, view, "no-files view should not be empty")
 }
 
 func TestDiffViewWithData(t *testing.T) {
@@ -500,9 +392,7 @@ func TestDiffViewWithData(t *testing.T) {
 	m.SetDiff(testDiff())
 
 	view := m.View()
-	if view == "" {
-		t.Error("diff view with data should not be empty")
-	}
+	assert.NotEmpty(t, view, "diff view with data should not be empty")
 }
 
 func TestDiffViewSearchBar(t *testing.T) {
@@ -513,9 +403,7 @@ func TestDiffViewSearchBar(t *testing.T) {
 	m.searchQuery = "test"
 
 	view := m.View()
-	if view == "" {
-		t.Error("view with search bar should not be empty")
-	}
+	assert.NotEmpty(t, view, "view with search bar should not be empty")
 }
 
 func TestDiffViewScrollClamp(t *testing.T) {
@@ -526,9 +414,7 @@ func TestDiffViewScrollClamp(t *testing.T) {
 	// Set scroll way past content.
 	m.scrollY = 9999
 	view := m.View()
-	if view == "" {
-		t.Error("view with clamped scroll should not be empty")
-	}
+	assert.NotEmpty(t, view, "view with clamped scroll should not be empty")
 }
 
 func TestDiffViewSmallHeight(t *testing.T) {
@@ -537,9 +423,7 @@ func TestDiffViewSmallHeight(t *testing.T) {
 	m.SetDiff(testDiff())
 
 	view := m.View()
-	if view == "" {
-		t.Error("small height view should not be empty")
-	}
+	assert.NotEmpty(t, view, "small height view should not be empty")
 }
 
 func TestDiffFileBarTruncation(t *testing.T) {
@@ -554,9 +438,7 @@ func TestDiffFileBarTruncation(t *testing.T) {
 
 	// Should not panic even with long paths.
 	view := m.View()
-	if view == "" {
-		t.Error("view with long paths should not be empty")
-	}
+	assert.NotEmpty(t, view, "view with long paths should not be empty")
 }
 
 func TestDiffSyntaxHighlighting(t *testing.T) {
@@ -588,16 +470,10 @@ func TestDiffSyntaxHighlighting(t *testing.T) {
 
 	view := m.View()
 	// Syntax highlighted output should contain ANSI escape sequences
-	if !strings.Contains(view, "\x1b[") {
-		t.Error("expected ANSI escape sequences from syntax highlighting")
-	}
+	assert.Contains(t, view, "\x1b[", "expected ANSI escape sequences from syntax highlighting")
 	// Should contain the code keywords
-	if !strings.Contains(view, "func") {
-		t.Error("expected 'func' keyword in output")
-	}
-	if !strings.Contains(view, "main") {
-		t.Error("expected 'main' in output")
-	}
+	assert.Contains(t, view, "func", "expected 'func' keyword in output")
+	assert.Contains(t, view, "main", "expected 'main' in output")
 }
 
 func TestDiffSyntaxHighlightingUnknownLanguage(t *testing.T) {
@@ -621,12 +497,8 @@ func TestDiffSyntaxHighlightingUnknownLanguage(t *testing.T) {
 
 	// Should not panic with unknown file types
 	view := m.View()
-	if view == "" {
-		t.Error("view should not be empty for unknown file types")
-	}
-	if !strings.Contains(view, "random content") {
-		t.Error("expected content to be present even without syntax highlighting")
-	}
+	assert.NotEmpty(t, view, "view should not be empty for unknown file types")
+	assert.Contains(t, view, "random content", "expected content to be present even without syntax highlighting")
 }
 
 func TestSyntaxHighlighterCaching(t *testing.T) {
@@ -640,15 +512,11 @@ func TestSyntaxHighlighterCaching(t *testing.T) {
 	_, cached := h.lexerCache[".go"]
 	h.mu.RUnlock()
 
-	if !cached {
-		t.Error("expected .go lexer to be cached")
-	}
+	assert.True(t, cached, "expected .go lexer to be cached")
 
 	// Second call should use cache
 	result := h.highlight("package main", "other.go")
-	if result == "" {
-		t.Error("highlight should return non-empty result")
-	}
+	assert.NotEmpty(t, result, "highlight should return non-empty result")
 }
 
 func TestSyntaxHighlighterGoCode(t *testing.T) {
@@ -659,20 +527,12 @@ func TestSyntaxHighlighterGoCode(t *testing.T) {
 	result := h.highlight(code, "main.go")
 
 	// Result should contain ANSI escape sequences for syntax colors
-	if !strings.Contains(result, "\x1b[") {
-		t.Errorf("expected ANSI escape sequences in highlighted Go code, got: %q", result)
-	}
+	assert.Contains(t, result, "\x1b[", "expected ANSI escape sequences in highlighted Go code")
 
 	// Result should still contain the original text
-	if !strings.Contains(result, "func") {
-		t.Error("expected 'func' keyword in result")
-	}
-	if !strings.Contains(result, "main") {
-		t.Error("expected 'main' in result")
-	}
-	if !strings.Contains(result, "hello world") {
-		t.Error("expected string literal in result")
-	}
+	assert.Contains(t, result, "func", "expected 'func' keyword in result")
+	assert.Contains(t, result, "main", "expected 'main' in result")
+	assert.Contains(t, result, "hello world", "expected string literal in result")
 }
 
 func TestSyntaxHighlighterRustCode(t *testing.T) {
@@ -683,9 +543,7 @@ func TestSyntaxHighlighterRustCode(t *testing.T) {
 	result := h.highlight(code, "main.rs")
 
 	// Result should contain ANSI escape sequences
-	if !strings.Contains(result, "\x1b[") {
-		t.Errorf("expected ANSI escape sequences in highlighted Rust code, got: %q", result)
-	}
+	assert.Contains(t, result, "\x1b[", "expected ANSI escape sequences in highlighted Rust code")
 }
 
 func TestSyntaxHighlighterTypescriptCode(t *testing.T) {
@@ -696,9 +554,7 @@ func TestSyntaxHighlighterTypescriptCode(t *testing.T) {
 	result := h.highlight(code, "app.ts")
 
 	// Result should contain ANSI escape sequences
-	if !strings.Contains(result, "\x1b[") {
-		t.Errorf("expected ANSI escape sequences in highlighted TypeScript code, got: %q", result)
-	}
+	assert.Contains(t, result, "\x1b[", "expected ANSI escape sequences in highlighted TypeScript code")
 }
 
 func TestSyntaxHighlighterFallback(t *testing.T) {
@@ -709,12 +565,10 @@ func TestSyntaxHighlighterFallback(t *testing.T) {
 	result := h.highlight(code, "file.unknown123xyz")
 
 	// For truly unknown extensions, should return original
+	// This is actually fine - Chroma might have broad fallback rules
+	// Just verify it doesn't crash and returns something
 	if result != code {
-		// This is actually fine - Chroma might have broad fallback rules
-		// Just verify it doesn't crash and returns something
-		if result == "" {
-			t.Error("highlight should return non-empty result even for unknown types")
-		}
+		assert.NotEmpty(t, result, "highlight should return non-empty result even for unknown types")
 	}
 }
 
@@ -726,17 +580,11 @@ func TestDiffTwoPaneLayout(t *testing.T) {
 	view := m.View()
 
 	// View should contain file names from the tree.
-	if !strings.Contains(view, "registry.go") {
-		t.Error("expected file tree to contain 'registry.go'")
-	}
-	if !strings.Contains(view, "hooks.go") {
-		t.Error("expected file tree to contain 'hooks.go'")
-	}
+	assert.Contains(t, view, "registry.go", "expected file tree to contain 'registry.go'")
+	assert.Contains(t, view, "hooks.go", "expected file tree to contain 'hooks.go'")
 
 	// Should contain diff content markers.
-	if !strings.Contains(view, "@@") {
-		t.Error("expected diff content with hunk headers")
-	}
+	assert.Contains(t, view, "@@", "expected diff content with hunk headers")
 }
 
 func TestDiffTreeFocusToggle(t *testing.T) {
@@ -745,22 +593,16 @@ func TestDiffTreeFocusToggle(t *testing.T) {
 	m.SetDiff(testDiff())
 
 	// Initially, content has focus.
-	if m.treeFocus {
-		t.Error("expected content focus initially")
-	}
+	assert.False(t, m.treeFocus, "expected content focus initially")
 
 	// Tab switches to tree.
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	m.Update(tab)
-	if !m.treeFocus {
-		t.Error("expected tree focus after Tab")
-	}
+	assert.True(t, m.treeFocus, "expected tree focus after Tab")
 
 	// Tab back to content.
 	m.Update(tab)
-	if m.treeFocus {
-		t.Error("expected content focus after second Tab")
-	}
+	assert.False(t, m.treeFocus, "expected content focus after second Tab")
 }
 
 func TestDiffSplitModeToggle(t *testing.T) {
@@ -768,32 +610,22 @@ func TestDiffSplitModeToggle(t *testing.T) {
 	m.SetSize(120, 40)
 	m.SetDiff(testDiff())
 
-	if m.splitMode {
-		t.Error("expected unified mode initially")
-	}
+	assert.False(t, m.splitMode, "expected unified mode initially")
 
 	// Press t to toggle to split mode.
 	tKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}
 	m.Update(tKey)
-	if !m.splitMode {
-		t.Error("expected split mode after t")
-	}
+	assert.True(t, m.splitMode, "expected split mode after t")
 
 	// View should still render.
 	view := m.View()
-	if view == "" {
-		t.Error("split mode view should not be empty")
-	}
+	assert.NotEmpty(t, view, "split mode view should not be empty")
 	// Should contain the file path.
-	if !strings.Contains(view, "registry.go") {
-		t.Error("expected file path in split view")
-	}
+	assert.Contains(t, view, "registry.go", "expected file path in split view")
 
 	// Toggle back.
 	m.Update(tKey)
-	if m.splitMode {
-		t.Error("expected unified mode after second t")
-	}
+	assert.False(t, m.splitMode, "expected unified mode after second t")
 }
 
 func TestDiffSplitModeRendering(t *testing.T) {
@@ -804,13 +636,9 @@ func TestDiffSplitModeRendering(t *testing.T) {
 
 	view := m.View()
 	// Split mode should contain the divider character.
-	if !strings.Contains(view, "│") {
-		t.Error("expected vertical divider in split view")
-	}
+	assert.Contains(t, view, "│", "expected vertical divider in split view")
 	// Should show the "Split" mode label.
-	if !strings.Contains(view, "Split") {
-		t.Error("expected 'Split' label in view")
-	}
+	assert.Contains(t, view, "Split", "expected 'Split' label in view")
 }
 
 func TestDiffUnifiedModeLabel(t *testing.T) {
@@ -819,9 +647,7 @@ func TestDiffUnifiedModeLabel(t *testing.T) {
 	m.SetDiff(testDiff())
 
 	view := m.View()
-	if !strings.Contains(view, "Unified") {
-		t.Error("expected 'Unified' label in default view")
-	}
+	assert.Contains(t, view, "Unified", "expected 'Unified' label in default view")
 }
 
 func TestDiffTreeWidth(t *testing.T) {
@@ -830,23 +656,18 @@ func TestDiffTreeWidth(t *testing.T) {
 	// Normal terminal: 25% of width, clamped.
 	m.SetSize(120, 40)
 	w := m.computeTreeWidth()
-	if w < 20 || w > 40 {
-		t.Errorf("tree width %d outside range [20, 40] for width=120", w)
-	}
+	assert.GreaterOrEqual(t, w, 20, "tree width should be at least 20")
+	assert.LessOrEqual(t, w, 40, "tree width should be at most 40")
 
 	// Very wide terminal.
 	m.SetSize(200, 40)
 	w = m.computeTreeWidth()
-	if w > 40 {
-		t.Errorf("tree width %d should cap at 40 for wide terminal", w)
-	}
+	assert.LessOrEqual(t, w, 40, "tree width should cap at 40 for wide terminal")
 
 	// Narrow terminal.
 	m.SetSize(60, 40)
 	w = m.computeTreeWidth()
-	if w < 10 {
-		t.Errorf("tree width %d should be at least 10 for narrow terminal", w)
-	}
+	assert.GreaterOrEqual(t, w, 10, "tree width should be at least 10 for narrow terminal")
 }
 
 func TestDiffSetComments(t *testing.T) {
@@ -875,26 +696,16 @@ func TestDiffSetComments(t *testing.T) {
 	}
 	m.SetComments(threads)
 
-	if len(m.comments) != 2 {
-		t.Errorf("comments = %d, want 2", len(m.comments))
-	}
-	if m.commentMap == nil {
-		t.Fatal("commentMap should not be nil")
-	}
+	assert.Len(t, m.comments, 2)
+	require.NotNil(t, m.commentMap)
 
 	got := m.commentsForLine("internal/plugin/registry.go", 11)
-	if len(got) != 1 {
-		t.Errorf("commentsForLine(registry.go, 11) = %d, want 1", len(got))
-	}
-	if len(got) > 0 && got[0].ID != "t1" {
-		t.Errorf("expected thread t1, got %s", got[0].ID)
-	}
+	require.Len(t, got, 1)
+	assert.Equal(t, "t1", got[0].ID)
 
 	// No comments for unrelated line.
 	got = m.commentsForLine("internal/plugin/registry.go", 999)
-	if len(got) != 0 {
-		t.Errorf("commentsForLine(registry.go, 999) = %d, want 0", len(got))
-	}
+	assert.Empty(t, got)
 }
 
 func TestDiffInlineCommentRendering(t *testing.T) {
@@ -916,15 +727,10 @@ func TestDiffInlineCommentRendering(t *testing.T) {
 
 	view := m.View()
 	// Comment thread borders should appear in unified view.
-	if !strings.Contains(view, "┌") || !strings.Contains(view, "└") {
-		t.Error("expected comment thread borders in view")
-	}
-	if !strings.Contains(view, "alice") {
-		t.Error("expected comment author in view")
-	}
-	if !strings.Contains(view, "looks good") {
-		t.Error("expected comment body in view")
-	}
+	assert.Contains(t, view, "┌", "expected top border in view")
+	assert.Contains(t, view, "└", "expected bottom border in view")
+	assert.Contains(t, view, "alice", "expected comment author in view")
+	assert.Contains(t, view, "looks good", "expected comment body in view")
 }
 
 func TestDiffInlineCommentResolved(t *testing.T) {
@@ -946,9 +752,7 @@ func TestDiffInlineCommentResolved(t *testing.T) {
 	m.SetComments(threads)
 
 	view := m.View()
-	if !strings.Contains(view, "resolved") {
-		t.Error("expected resolved indicator in view")
-	}
+	assert.Contains(t, view, "resolved", "expected resolved indicator in view")
 }
 
 func TestDiffCommentEditorOpenClose(t *testing.T) {
@@ -962,27 +766,17 @@ func TestDiffCommentEditorOpenClose(t *testing.T) {
 	// Press c to open comment editor.
 	cKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
 	m.Update(cKey)
-	if !m.editing {
-		t.Error("expected editing mode after c")
-	}
-	if m.editPath == "" {
-		t.Error("expected editPath to be set")
-	}
+	assert.True(t, m.editing, "expected editing mode after c")
+	assert.NotEmpty(t, m.editPath, "expected editPath to be set")
 
 	// Type some text.
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h', 'i'}})
-	if m.editBuffer != "hi" {
-		t.Errorf("editBuffer = %q, want %q", m.editBuffer, "hi")
-	}
+	assert.Equal(t, "hi", m.editBuffer)
 
 	// Escape cancels.
 	m.Update(tea.KeyMsg{Type: tea.KeyEscape})
-	if m.editing {
-		t.Error("expected editing to end on Escape")
-	}
-	if m.editBuffer != "" {
-		t.Errorf("editBuffer should be empty after Escape, got %q", m.editBuffer)
-	}
+	assert.False(t, m.editing, "expected editing to end on Escape")
+	assert.Empty(t, m.editBuffer, "editBuffer should be empty after Escape")
 }
 
 func TestDiffCommentEditorSubmit(t *testing.T) {
@@ -1003,25 +797,15 @@ func TestDiffCommentEditorSubmit(t *testing.T) {
 
 	// Ctrl+S submits.
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
-	if m.editing {
-		t.Error("expected editing to end after Ctrl+S")
-	}
+	assert.False(t, m.editing, "expected editing to end after Ctrl+S")
 
 	// Should produce an AddInlineCommentMsg command.
-	if cmd == nil {
-		t.Fatal("expected a command after Ctrl+S")
-	}
+	require.NotNil(t, cmd, "expected a command after Ctrl+S")
 	msg := cmd()
 	addMsg, ok := msg.(AddInlineCommentMsg)
-	if !ok {
-		t.Fatalf("expected AddInlineCommentMsg, got %T", msg)
-	}
-	if addMsg.Number != 42 {
-		t.Errorf("PR number = %d, want 42", addMsg.Number)
-	}
-	if addMsg.Input.Body != "test" {
-		t.Errorf("body = %q, want %q", addMsg.Input.Body, "test")
-	}
+	require.True(t, ok, "expected AddInlineCommentMsg, got %T", msg)
+	assert.Equal(t, 42, addMsg.Number)
+	assert.Equal(t, "test", addMsg.Input.Body)
 }
 
 func TestDiffCommentEditorEmptySubmit(t *testing.T) {
@@ -1036,12 +820,8 @@ func TestDiffCommentEditorEmptySubmit(t *testing.T) {
 
 	// Ctrl+S with empty buffer should not submit.
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
-	if m.editing {
-		t.Error("expected editing to end on empty submit")
-	}
-	if cmd != nil {
-		t.Error("expected nil command for empty comment")
-	}
+	assert.False(t, m.editing, "expected editing to end on empty submit")
+	assert.Nil(t, cmd, "expected nil command for empty comment")
 }
 
 func TestDiffCommentReply(t *testing.T) {
@@ -1068,12 +848,8 @@ func TestDiffCommentReply(t *testing.T) {
 	rKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
 	m.Update(rKey)
 
-	if !m.editing {
-		t.Error("expected editing mode for reply")
-	}
-	if m.editReplyTo != "t1" {
-		t.Errorf("editReplyTo = %q, want %q", m.editReplyTo, "t1")
-	}
+	assert.True(t, m.editing, "expected editing mode for reply")
+	assert.Equal(t, "t1", m.editReplyTo)
 }
 
 func TestDiffCommentResolve(t *testing.T) {
@@ -1100,17 +876,11 @@ func TestDiffCommentResolve(t *testing.T) {
 	xKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
 	cmd := m.Update(xKey)
 
-	if cmd == nil {
-		t.Fatal("expected a command for resolve")
-	}
+	require.NotNil(t, cmd, "expected a command for resolve")
 	msg := cmd()
 	resolveMsg, ok := msg.(ResolveThreadMsg)
-	if !ok {
-		t.Fatalf("expected ResolveThreadMsg, got %T", msg)
-	}
-	if resolveMsg.ThreadID != "t1" {
-		t.Errorf("ThreadID = %q, want %q", resolveMsg.ThreadID, "t1")
-	}
+	require.True(t, ok, "expected ResolveThreadMsg, got %T", msg)
+	assert.Equal(t, "t1", resolveMsg.ThreadID)
 }
 
 func TestDiffCommentEditorBackspace(t *testing.T) {
@@ -1125,16 +895,12 @@ func TestDiffCommentEditorBackspace(t *testing.T) {
 	// Type and backspace.
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a', 'b'}})
 	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
-	if m.editBuffer != "a" {
-		t.Errorf("editBuffer after backspace = %q, want %q", m.editBuffer, "a")
-	}
+	assert.Equal(t, "a", m.editBuffer)
 
 	// Backspace on empty.
 	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 	m.Update(tea.KeyMsg{Type: tea.KeyBackspace}) // extra backspace on empty
-	if m.editBuffer != "" {
-		t.Errorf("editBuffer = %q, want empty", m.editBuffer)
-	}
+	assert.Empty(t, m.editBuffer)
 }
 
 func TestDiffCommentEditorNewline(t *testing.T) {
@@ -1149,9 +915,7 @@ func TestDiffCommentEditorNewline(t *testing.T) {
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
 	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
-	if m.editBuffer != "a\nb" {
-		t.Errorf("editBuffer = %q, want %q", m.editBuffer, "a\nb")
-	}
+	assert.Equal(t, "a\nb", m.editBuffer)
 }
 
 func TestDiffCommentEditorRendering(t *testing.T) {
@@ -1166,12 +930,8 @@ func TestDiffCommentEditorRendering(t *testing.T) {
 
 	view := m.View()
 	// Editor should show in the view.
-	if !strings.Contains(view, "Comment on") {
-		t.Error("expected comment editor header in view")
-	}
-	if !strings.Contains(view, "Ctrl+S") {
-		t.Error("expected Ctrl+S hint in editor")
-	}
+	assert.Contains(t, view, "Comment on", "expected comment editor header in view")
+	assert.Contains(t, view, "Ctrl+S", "expected Ctrl+S hint in editor")
 }
 
 func TestDiffCurrentDiffLine(t *testing.T) {
@@ -1181,45 +941,27 @@ func TestDiffCurrentDiffLine(t *testing.T) {
 
 	// scrollY=0 is the hunk header.
 	path, line, side := m.currentDiffLine()
-	if path != "internal/plugin/registry.go" {
-		t.Errorf("path = %q, want %q", path, "internal/plugin/registry.go")
-	}
-	if line != 0 {
-		t.Errorf("hunk header line = %d, want 0", line)
-	}
-	if side != "" {
-		t.Errorf("hunk header side = %q, want empty", side)
-	}
+	assert.Equal(t, "internal/plugin/registry.go", path)
+	assert.Equal(t, 0, line)
+	assert.Equal(t, "", side)
 
 	// scrollY=1 is the first context line (OldNum=10, NewNum=10).
 	m.scrollY = 1
 	_, line, side = m.currentDiffLine()
-	if line != 10 {
-		t.Errorf("context line = %d, want 10", line)
-	}
-	if side != "RIGHT" {
-		t.Errorf("context side = %q, want RIGHT", side)
-	}
+	assert.Equal(t, 10, line)
+	assert.Equal(t, "RIGHT", side)
 
 	// scrollY=2 is a deletion (OldNum=11).
 	m.scrollY = 2
 	_, line, side = m.currentDiffLine()
-	if line != 11 {
-		t.Errorf("delete line = %d, want 11", line)
-	}
-	if side != "LEFT" {
-		t.Errorf("delete side = %q, want LEFT", side)
-	}
+	assert.Equal(t, 11, line)
+	assert.Equal(t, "LEFT", side)
 
 	// scrollY=3 is an addition (NewNum=11).
 	m.scrollY = 3
 	_, line, side = m.currentDiffLine()
-	if line != 11 {
-		t.Errorf("add line = %d, want 11", line)
-	}
-	if side != "RIGHT" {
-		t.Errorf("add side = %q, want RIGHT", side)
-	}
+	assert.Equal(t, 11, line)
+	assert.Equal(t, "RIGHT", side)
 }
 
 func TestDiffNoCommentOnHunkHeader(t *testing.T) {
@@ -1231,7 +973,5 @@ func TestDiffNoCommentOnHunkHeader(t *testing.T) {
 	m.scrollY = 0
 	cKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
 	m.Update(cKey)
-	if m.editing {
-		t.Error("should not open editor on hunk header")
-	}
+	assert.False(t, m.editing, "should not open editor on hunk header")
 }

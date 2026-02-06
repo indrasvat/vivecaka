@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSentinelErrors(t *testing.T) {
@@ -19,9 +22,8 @@ func TestSentinelErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.err.Error(); got != tt.want {
-				t.Errorf("%s.Error() = %q, want %q", tt.name, got, tt.want)
-			}
+			got := tt.err.Error()
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -39,29 +41,22 @@ func TestSentinelErrorsIs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if !errors.Is(tt.err, tt.target) {
-				t.Errorf("errors.Is(%v, %v) = false, want true", tt.err, tt.target)
-			}
+			assert.True(t, errors.Is(tt.err, tt.target))
 		})
 	}
 }
 
 func TestSentinelErrorsWrapped(t *testing.T) {
 	wrapped := fmt.Errorf("fetching PR #42: %w", ErrNotFound)
-	if !errors.Is(wrapped, ErrNotFound) {
-		t.Error("errors.Is(wrapped, ErrNotFound) = false, want true")
-	}
-	if errors.Is(wrapped, ErrUnauthorized) {
-		t.Error("errors.Is(wrapped, ErrUnauthorized) = true, want false")
-	}
+	assert.True(t, errors.Is(wrapped, ErrNotFound))
+	assert.False(t, errors.Is(wrapped, ErrUnauthorized))
 }
 
 func TestValidationError(t *testing.T) {
 	err := &ValidationError{Field: "title", Message: "cannot be empty"}
 	want := "validation error on title: cannot be empty"
-	if got := err.Error(); got != want {
-		t.Errorf("ValidationError.Error() = %q, want %q", got, want)
-	}
+	got := err.Error()
+	assert.Equal(t, want, got)
 }
 
 func TestValidationErrorAs(t *testing.T) {
@@ -69,20 +64,12 @@ func TestValidationErrorAs(t *testing.T) {
 	wrapped := fmt.Errorf("invalid PR: %w", original)
 
 	var ve *ValidationError
-	if !errors.As(wrapped, &ve) {
-		t.Fatal("errors.As(wrapped, *ValidationError) = false, want true")
-	}
-	if ve.Field != "body" {
-		t.Errorf("ve.Field = %q, want %q", ve.Field, "body")
-	}
-	if ve.Message != "too long" {
-		t.Errorf("ve.Message = %q, want %q", ve.Message, "too long")
-	}
+	require.True(t, errors.As(wrapped, &ve))
+	assert.Equal(t, "body", ve.Field)
+	assert.Equal(t, "too long", ve.Message)
 }
 
 func TestValidationErrorNotMatchSentinel(t *testing.T) {
 	ve := &ValidationError{Field: "x", Message: "y"}
-	if errors.Is(ve, ErrNotFound) {
-		t.Error("ValidationError should not match ErrNotFound")
-	}
+	assert.False(t, errors.Is(ve, ErrNotFound))
 }

@@ -46,7 +46,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 023 | `docs/tasks/023-caching.md` | PR list caching for instant startup | DONE | — |
 | 024 | `docs/tasks/024-config-enhancements.md` | Keybinding overrides, adaptive colors, notifications | DONE | — |
 | 025 | `docs/tasks/025-persistence.md` | Per-repo filter memory, unread indicators | DONE | 001, 007, 023 |
-| 026 | `docs/tasks/026-testing-foundation.md` | testify migration, adapter fixtures, 80%+ coverage | TODO | — |
+| 026 | `docs/tasks/026-testing-foundation.md` | testify migration, adapter fixtures, 80%+ coverage | DONE | — |
 | 027 | `docs/tasks/027-integration-tests.md` | teatest integration tests, TUI test quality | TODO | 026 |
 | 028 | `docs/tasks/028-pr-detail-tabs-layout.md` | Redesign PR detail with horizontal tabs layout | DONE | — |
 | 029 | `docs/tasks/029-debug-logging.md` | Debug logging infrastructure with --debug flag | DONE | — |
@@ -72,6 +72,7 @@ Banner Polish:
 - Task 023: Cache package at `internal/cache/` with JSON file cache in `XDG_CACHE_HOME/vivecaka/repos/{owner}_{name}.json`. Atomic writes via temp file rename. `loadCachedPRsCmd` fires alongside fresh API load; cached data displayed immediately if still loading. `saveCacheCmd` runs as fire-and-forget after fresh load. `IsStale` checks TTL. 79.3% coverage.
 - Task 029: Debug logging via `log/slog` to `XDG_STATE_HOME/vivecaka/debug.log`. Activated via `--debug` flag, `VIVECAKA_DEBUG=1` env var, or `debug = true` in config. Log rotation at 10MB. No-op logger when disabled. 91.3% coverage.
 - Task 024: Keybinding overrides wired via `ApplyOverrides(map[string]string)` on KeyMap. Config `[keybindings]` section parsed and applied on startup. Supports all binding names (quit, search, filter, etc.). Notification config struct already in place. Adaptive colors deferred (current hex colors work on all terminals).
+- Task 026: Testing foundation complete. Created 5 fixture files in `internal/adapter/ghcli/testdata/` (pr_list.json, pr_detail.json, pr_comments.json, pr_checks.json, pr_diff.txt). Added `reader_test.go` with fixture-based tests for all conversion functions (toDomainPR, toDomainPRDetail, groupCommentsIntoThreads, toDomainCheck, ParseDiff, aggregateCI, mapState, mapReviewDecision, mapReviewState, mapCheckStatus). Migrated all 22 test files from raw `if/t.Error` to testify `assert/require`. Adapter coverage: 25.3% → 44.1%. Mock-based exec tests deferred to Task 027.
 - Task 025: Per-repo state persistence via `internal/cache/state.go`. RepoState stores last sort, sort direction, filter opts, and last-viewed PR timestamps. State saved to `XDG_DATA_HOME/vivecaka/state/{owner}_{name}.json`. Filter/sort restored on startup. PR viewed timestamps tracked on detail open. IsUnread checks `updatedAt > lastViewed`. Cache coverage 80.0%.
 - Task 019: Two-pane diff layout with file tree on left (25% width, 20-40 range) and diff content on right. Tab toggles focus between panes. Tree pane: j/k navigate files, Enter selects and returns focus to content. Content pane: all existing diff keys work. Active pane has distinct border color. File tree shows status icon (+/-/~), filename, +N -N counts. Help and status hints updated.
 - Task 020: Side-by-side diff mode via `t` toggle. Split mode shows old/new files in aligned columns with `│` divider. Deletions paired with additions within hunks; context lines shown on both sides. Line numbers on each side. Mode label (Unified/Split) shown in file header. Synchronized scrolling. All existing keys (search, hunk jump, etc.) work in both modes.
@@ -237,15 +238,15 @@ Dependency chains:
 | plugin | 95.2% | — | ✅ Good |
 | tui | 95.0% | — | ⚠️ Tests are shallow |
 | config | 94.0% | — | ✅ Good |
-| views | 90.8% | — | ⚠️ Tests mostly check "doesn't panic" |
-| ghcli | 25.3% | 80%+ | ❌ Only parser tested → Task 026 |
+| views | 76.6% | — | ⚠️ Coverage dipped due to new inline-comment code; tests migrated to testify |
+| ghcli | 44.1% | 80%+ | ⚠️ Fixtures + conversion tests added (Task 026); mock-based exec tests deferred to Task 027 |
 
 ## Notes
 
 - Go 1.25.7 on darwin/arm64
 - BubbleTea v1.3.10, LipGloss v1.1.1, Bubbles v0.21.1
 - go-gh v2.13.0
-- testify listed as dep but never imported → Task 026
+- testify v1.10.0 used across all 22 test files (Task 026 complete)
 - huh listed as dep but never imported → Task 011
 - 0 lint issues, all tests pass with -race
 - Task 001: PR list sort now reorders data with ▲/▼ indicator; added error handling for tutorial flag write to satisfy errcheck.

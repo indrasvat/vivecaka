@@ -1,0 +1,30 @@
+{
+  "number": 42,
+  "title": "Add user authentication",
+  "author": {"login": "alice"},
+  "state": "OPEN",
+  "isDraft": false,
+  "headRefName": "feat/auth",
+  "baseRefName": "main",
+  "labels": [{"name": "enhancement"}, {"name": "security"}],
+  "statusCheckRollup": [
+    {"name": "CI", "status": "COMPLETED", "conclusion": "SUCCESS", "startedAt": "2025-01-15T10:00:00Z", "completedAt": "2025-01-15T10:05:00Z", "detailsUrl": "https://github.com/checks/1"},
+    {"name": "Lint", "status": "COMPLETED", "conclusion": "SKIPPED", "startedAt": null, "completedAt": null, "detailsUrl": ""}
+  ],
+  "reviewDecision": "APPROVED",
+  "updatedAt": "2025-01-15T12:00:00Z",
+  "createdAt": "2025-01-10T09:00:00Z",
+  "url": "https://github.com/owner/repo/pull/42",
+  "body": "## Summary\n\nAdds OAuth2-based authentication with JWT tokens.\n\n## Changes\n- New auth middleware\n- Token refresh logic\n- Login/logout endpoints",
+  "assignees": [{"login": "alice"}, {"login": "dave"}],
+  "reviewRequests": [{"login": "eve", "name": ""}, {"login": "", "name": "security-team"}],
+  "latestReviews": [
+    {"author": {"login": "frank"}, "state": "APPROVED"},
+    {"author": {"login": "grace"}, "state": "CHANGES_REQUESTED"}
+  ],
+  "files": [
+    {"path": "internal/auth/middleware.go", "additions": 120, "deletions": 5},
+    {"path": "internal/auth/token.go", "additions": 85, "deletions": 0},
+    {"path": "cmd/server/main.go", "additions": 3, "deletions": 1}
+  ]
+}

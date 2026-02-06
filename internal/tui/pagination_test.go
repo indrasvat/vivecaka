@@ -3,6 +3,8 @@ package tui
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/indrasvat/vivecaka/internal/config"
 	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/indrasvat/vivecaka/internal/tui/views"
@@ -26,15 +28,9 @@ func TestPaginationFlow(t *testing.T) {
 	app.Update(views.PRsLoadedMsg{PRs: initialPRs, Err: nil})
 
 	// Verify initial state
-	if got := app.prList.TotalPRs(); got != 50 {
-		t.Errorf("After initial load: TotalPRs() = %d, want 50", got)
-	}
-	if got := app.prList.CurrentPage(); got != 1 {
-		t.Errorf("After initial load: CurrentPage() = %d, want 1", got)
-	}
-	if !app.prList.HasMore() {
-		t.Error("After initial load: HasMore() = false, want true")
-	}
+	assert.Equal(t, 50, app.prList.TotalPRs(), "After initial load")
+	assert.Equal(t, 1, app.prList.CurrentPage(), "After initial load")
+	assert.True(t, app.prList.HasMore(), "After initial load")
 
 	// Note: LoadMorePRsMsg requires a.listPRs and a.repo to be set, which they aren't in this test.
 	// In the real app, these are set via WithReader() and repo detection.
@@ -44,12 +40,8 @@ func TestPaginationFlow(t *testing.T) {
 	app.prList.SetLoadingMore(2)
 
 	// Verify loading state was set
-	if !app.prList.IsLoadingMore() {
-		t.Error("After SetLoadingMore: IsLoadingMore() = false, want true")
-	}
-	if got := app.prList.CurrentPage(); got != 2 {
-		t.Errorf("After SetLoadingMore: CurrentPage() = %d, want 2", got)
-	}
+	assert.True(t, app.prList.IsLoadingMore(), "After SetLoadingMore")
+	assert.Equal(t, 2, app.prList.CurrentPage(), "After SetLoadingMore")
 
 	// Simulate more PRs loaded (another 50)
 	morePRs := make([]domain.PR, 50)
@@ -60,15 +52,9 @@ func TestPaginationFlow(t *testing.T) {
 	app.Update(views.MorePRsLoadedMsg{PRs: morePRs, Page: 2, HasMore: true, Err: nil})
 
 	// Verify state after pagination
-	if got := app.prList.TotalPRs(); got != 100 {
-		t.Errorf("After MorePRsLoadedMsg: TotalPRs() = %d, want 100", got)
-	}
-	if app.prList.IsLoadingMore() {
-		t.Error("After MorePRsLoadedMsg: IsLoadingMore() = true, want false")
-	}
-	if !app.prList.HasMore() {
-		t.Error("After MorePRsLoadedMsg: HasMore() = false, want true")
-	}
+	assert.Equal(t, 100, app.prList.TotalPRs(), "After MorePRsLoadedMsg")
+	assert.False(t, app.prList.IsLoadingMore(), "After MorePRsLoadedMsg")
+	assert.True(t, app.prList.HasMore(), "After MorePRsLoadedMsg")
 
 	t.Logf("Pagination flow: 50 -> 100 PRs works correctly")
 }
@@ -87,9 +73,7 @@ func TestPaginationNoMoreItems(t *testing.T) {
 
 	app.Update(views.PRsLoadedMsg{PRs: initialPRs, Err: nil})
 
-	if app.prList.HasMore() {
-		t.Error("After partial load: HasMore() = true, want false (got fewer than perPage)")
-	}
+	assert.False(t, app.prList.HasMore(), "After partial load (got fewer than perPage)")
 }
 
 // TestPaginationEmptyResponse verifies handling of empty pagination response.
@@ -112,10 +96,6 @@ func TestPaginationEmptyResponse(t *testing.T) {
 	app.Update(views.MorePRsLoadedMsg{PRs: []domain.PR{}, Page: 2, HasMore: false, Err: nil})
 
 	// Should still have 50 PRs, hasMore should be false
-	if got := app.prList.TotalPRs(); got != 50 {
-		t.Errorf("After empty pagination: TotalPRs() = %d, want 50", got)
-	}
-	if app.prList.HasMore() {
-		t.Error("After empty pagination: HasMore() = true, want false")
-	}
+	assert.Equal(t, 50, app.prList.TotalPRs(), "After empty pagination")
+	assert.False(t, app.prList.HasMore(), "After empty pagination")
 }

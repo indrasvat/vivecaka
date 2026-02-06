@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDefaultKeyMapCreation(t *testing.T) {
@@ -33,21 +34,15 @@ func TestDefaultKeyMapCreation(t *testing.T) {
 
 	for _, b := range bindings {
 		help := b.binding.Help()
-		if help.Key == "" {
-			t.Errorf("binding %s has no help key", b.name)
-		}
-		if help.Desc == "" {
-			t.Errorf("binding %s has no help description", b.name)
-		}
+		assert.NotEmpty(t, help.Key, "binding %s should have help key", b.name)
+		assert.NotEmpty(t, help.Desc, "binding %s should have help description", b.name)
 	}
 }
 
 func TestShortHelpNotEmpty(t *testing.T) {
 	km := DefaultKeyMap()
 	short := km.ShortHelp()
-	if len(short) == 0 {
-		t.Error("ShortHelp() should return bindings")
-	}
+	assert.NotEmpty(t, short, "ShortHelp() should return bindings")
 }
 
 func TestApplyOverrides(t *testing.T) {
@@ -61,27 +56,11 @@ func TestApplyOverrides(t *testing.T) {
 
 	// Verify quit was overridden.
 	quitKeys := km.Quit.Keys()
-	foundQuit := false
-	for _, k := range quitKeys {
-		if k == "ctrl+q" {
-			foundQuit = true
-		}
-	}
-	if !foundQuit {
-		t.Errorf("expected quit to include ctrl+q, got %v", quitKeys)
-	}
+	assert.Contains(t, quitKeys, "ctrl+q")
 
 	// Verify search was overridden.
 	searchKeys := km.Search.Keys()
-	foundSearch := false
-	for _, k := range searchKeys {
-		if k == "ctrl+f" {
-			foundSearch = true
-		}
-	}
-	if !foundSearch {
-		t.Errorf("expected search to include ctrl+f, got %v", searchKeys)
-	}
+	assert.Contains(t, searchKeys, "ctrl+f")
 }
 
 func TestApplyOverridesUnknown(t *testing.T) {
@@ -93,12 +72,8 @@ func TestApplyOverridesUnknown(t *testing.T) {
 func TestFullHelpNotEmpty(t *testing.T) {
 	km := DefaultKeyMap()
 	full := km.FullHelp()
-	if len(full) == 0 {
-		t.Error("FullHelp() should return binding groups")
-	}
+	assert.NotEmpty(t, full, "FullHelp() should return binding groups")
 	for i, group := range full {
-		if len(group) == 0 {
-			t.Errorf("FullHelp() group %d is empty", i)
-		}
+		assert.NotEmpty(t, group, "FullHelp() group %d should not be empty", i)
 	}
 }

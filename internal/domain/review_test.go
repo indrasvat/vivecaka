@@ -1,6 +1,10 @@
 package domain
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestReviewActionString(t *testing.T) {
 	tests := []struct {
@@ -12,8 +16,7 @@ func TestReviewActionString(t *testing.T) {
 		{ReviewActionComment, "comment"},
 	}
 	for _, tt := range tests {
-		if got := tt.a.String(); got != tt.want {
-			t.Errorf("ReviewAction(%q).String() = %q, want %q", string(tt.a), got, tt.want)
-		}
+		got := tt.a.String()
+		assert.Equal(t, tt.want, got)
 	}
 }
