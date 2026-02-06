@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -433,8 +434,11 @@ func TestIntegrationCheckoutConfirmFlow(t *testing.T) {
 	app := readyApp()
 	app.banner.Hide()
 	app.view = core.ViewPRDetail
+	// DR-12: Set cwdRepo = repo so StrategyLocal fallback routes to legacy confirm dialog.
+	app.repo = domain.RepoRef{Owner: "test", Name: "repo"}
+	app.cwdRepo = app.repo
 
-	// Checkout request shows confirm dialog.
+	// Checkout request shows confirm dialog (legacy path when no RepoManager).
 	updated, _ := app.Update(views.CheckoutPRMsg{Number: 42, Branch: "feat/auth"})
 	app = updated.(*App)
 	assert.Equal(t, core.ViewConfirm, app.view)
@@ -647,4 +651,279 @@ func TestIntegrationFullFlowEndToEnd(t *testing.T) {
 	updated, _ = app.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	app = updated.(*App)
 	assert.Equal(t, core.ViewPRList, app.view)
+}
+
+// -- mock RepoManager for smart checkout tests ----------------------------
+
+type mockRepoManager struct {
+	checkoutBranch string
+	checkoutErr    error
+	cloneErr       error
+	worktreeErr    error
+}
+
+func (m *mockRepoManager) CheckoutAt(_ context.Context, _ domain.RepoRef, _ int, _ string) (string, error) {
+	return m.checkoutBranch, m.checkoutErr
+}
+
+func (m *mockRepoManager) CloneRepo(_ context.Context, _ domain.RepoRef, _ string) error {
+	return m.cloneErr
+}
+
+func (m *mockRepoManager) CreateWorktree(_ context.Context, _ string, _ int, _, _ string) error {
+	return m.worktreeErr
+}
+
+func smartCheckoutApp(rm domain.RepoManager) *App {
+	cfg := config.Default()
+	cfg.General.RefreshInterval = 0
+	app := New(cfg, WithVersion("test-smart"), WithRepoManager(rm))
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	return app
+}
+
+// -- smart checkout integration tests -------------------------------------
+
+func TestIntegrationSmartCheckoutNoRepoManagerReposMatch(t *testing.T) {
+	// No RepoManager + repos match → legacy confirm dialog (DR-2).
+	app := readyApp()
+	app.banner.Hide()
+	app.view = core.ViewPRDetail
+	app.repo = domain.RepoRef{Owner: "test", Name: "repo"}
+	app.cwdRepo = app.repo
+
+	updated, _ := app.Update(views.CheckoutPRMsg{Number: 42, Branch: "feat/auth"})
+	app = updated.(*App)
+	assert.Equal(t, core.ViewConfirm, app.view, "should fallback to legacy confirm")
+}
+
+func TestIntegrationSmartCheckoutNoRepoManagerReposMismatch(t *testing.T) {
+	// No RepoManager + repos DON'T match → error dialog.
+	app := readyApp()
+	app.banner.Hide()
+	app.view = core.ViewPRDetail
+	app.repo = domain.RepoRef{Owner: "other", Name: "repo2"}
+	app.cwdRepo = domain.RepoRef{Owner: "test", Name: "repo"}
+
+	updated, _ := app.Update(views.CheckoutPRMsg{Number: 42, Branch: "feat/auth"})
+	app = updated.(*App)
+	assert.Equal(t, core.ViewSmartCheckout, app.view, "should show error dialog")
+	view := app.View()
+	assert.Contains(t, view, "Checkout Failed", "should show error title")
+}
+
+func TestIntegrationSmartCheckoutStrategyLocal(t *testing.T) {
+	// With RepoManager + CWD matches → worktree choice dialog.
+	rm := &mockRepoManager{checkoutBranch: "feat/auth"}
+	app := smartCheckoutApp(rm)
+	app.banner.Hide()
+	app.view = core.ViewPRDetail
+	app.repo = domain.RepoRef{Owner: "test", Name: "repo"}
+	app.cwdRepo = app.repo
+	app.cwdPath = "/Users/test/code/repo"
+
+	updated, _ := app.Update(views.CheckoutPRMsg{Number: 42, Branch: "feat/auth"})
+	app = updated.(*App)
+	assert.Equal(t, core.ViewSmartCheckout, app.view, "should show smart checkout dialog")
+	view := app.View()
+	assert.Contains(t, view, "Checkout PR #42", "should show PR number in title")
+	assert.Contains(t, view, "Switch branch", "should offer switch branch option")
+	assert.Contains(t, view, "New worktree", "should offer worktree option")
+}
+
+func TestIntegrationSmartCheckoutStrategyNeedsClone(t *testing.T) {
+	// With RepoManager + repos DON'T match + no known path → options dialog.
+	rm := &mockRepoManager{}
+	app := smartCheckoutApp(rm)
+	app.banner.Hide()
+	app.view = core.ViewPRDetail
+	app.repo = domain.RepoRef{Owner: "other", Name: "repo2"}
+	app.cwdRepo = domain.RepoRef{Owner: "test", Name: "repo"}
+	app.cwdPath = "/Users/test/code/repo"
+
+	updated, _ := app.Update(views.CheckoutPRMsg{Number: 10, Branch: "fix/bug"})
+	app = updated.(*App)
+	assert.Equal(t, core.ViewSmartCheckout, app.view, "should show smart checkout dialog")
+	view := app.View()
+	assert.Contains(t, view, "No local clone found", "should show no-clone message")
+	assert.Contains(t, view, "Clone to vivecaka cache", "should offer clone option")
+	assert.Contains(t, view, "Open on GitHub", "should offer browser option")
+}
+
+func TestIntegrationSmartCheckoutStrategyChosenSwitch(t *testing.T) {
+	// Strategy "switch" → checking out spinner + cmd.
+	rm := &mockRepoManager{checkoutBranch: "feat/auth"}
+	app := smartCheckoutApp(rm)
+	app.banner.Hide()
+	app.view = core.ViewSmartCheckout
+	app.cwdPath = "/Users/test/code/repo"
+	app.repo = domain.RepoRef{Owner: "test", Name: "repo"}
+
+	updated, cmd := app.Update(views.CheckoutStrategyChosenMsg{
+		Strategy: "switch",
+		Repo:     domain.RepoRef{Owner: "test", Name: "repo"},
+		PRNumber: 42,
+		Branch:   "feat/auth",
+	})
+	app = updated.(*App)
+	assert.True(t, app.checkoutDialog.IsLoading(), "should show loading state")
+	assert.NotNil(t, cmd, "should return batch cmd for spinner+checkout")
+}
+
+func TestIntegrationSmartCheckoutStrategyChosenBrowser(t *testing.T) {
+	// Strategy "browser" → returns to previous view.
+	rm := &mockRepoManager{}
+	app := smartCheckoutApp(rm)
+	app.banner.Hide()
+	app.view = core.ViewSmartCheckout
+	app.prevView = core.ViewPRDetail
+	app.repo = domain.RepoRef{Owner: "test", Name: "repo"}
+
+	updated, _ := app.Update(views.CheckoutStrategyChosenMsg{
+		Strategy: "browser",
+		Repo:     domain.RepoRef{Owner: "test", Name: "repo"},
+		PRNumber: 42,
+	})
+	app = updated.(*App)
+	assert.Equal(t, core.ViewPRDetail, app.view, "browser should return to prev view")
+}
+
+func TestIntegrationSmartCheckoutCloneDoneSuccess(t *testing.T) {
+	// Clone done → transitions to checking out spinner.
+	rm := &mockRepoManager{checkoutBranch: "feat/auth"}
+	app := smartCheckoutApp(rm)
+	app.banner.Hide()
+	app.view = core.ViewSmartCheckout
+	app.repo = domain.RepoRef{Owner: "test", Name: "repo"}
+	app.checkoutDialog.ShowCloning("/cache/clone/path")
+
+	updated, cmd := app.Update(views.CloneDoneMsg{Path: "/cache/clone/path"})
+	app = updated.(*App)
+	assert.True(t, app.checkoutDialog.IsLoading(), "should transition to checking out")
+	assert.NotNil(t, cmd, "should return checkout cmd")
+}
+
+func TestIntegrationSmartCheckoutCloneDoneError(t *testing.T) {
+	// Clone done with error → shows error dialog.
+	rm := &mockRepoManager{}
+	app := smartCheckoutApp(rm)
+	app.banner.Hide()
+	app.view = core.ViewSmartCheckout
+	app.checkoutDialog.ShowCloning("/cache/clone/path")
+
+	updated, _ := app.Update(views.CloneDoneMsg{Err: fmt.Errorf("clone failed: permission denied")})
+	app = updated.(*App)
+	view := app.View()
+	assert.Contains(t, view, "Checkout Failed", "should show error")
+	assert.Contains(t, view, "clone failed", "should show error message")
+}
+
+func TestIntegrationSmartCheckoutDoneSuccess(t *testing.T) {
+	// Checkout done → success dialog (CWD checkout).
+	rm := &mockRepoManager{checkoutBranch: "feat/auth"}
+	app := smartCheckoutApp(rm)
+	app.banner.Hide()
+	app.view = core.ViewSmartCheckout
+	app.cwdPath = "/Users/test/code/repo"
+	app.checkoutDialog.ShowCheckingOut("/Users/test/code/repo")
+
+	updated, _ := app.Update(views.SmartCheckoutDoneMsg{
+		Branch: "feat/auth",
+		Path:   "/Users/test/code/repo",
+	})
+	app = updated.(*App)
+	view := app.View()
+	assert.Contains(t, view, "Checkout Complete", "should show success")
+	assert.Contains(t, view, "feat/auth", "should show branch name")
+	assert.NotContains(t, view, "copy cd command", "CWD checkout should not show copy hint")
+}
+
+func TestIntegrationSmartCheckoutDoneSuccessRemote(t *testing.T) {
+	// Checkout done → success dialog (remote path → shows copy hint).
+	rm := &mockRepoManager{checkoutBranch: "feat/auth"}
+	app := smartCheckoutApp(rm)
+	app.banner.Hide()
+	app.view = core.ViewSmartCheckout
+	app.cwdPath = "/Users/test/code/repo"
+	app.checkoutDialog.ShowCheckingOut("/cache/clone/path")
+
+	updated, _ := app.Update(views.SmartCheckoutDoneMsg{
+		Branch: "feat/auth",
+		Path:   "/cache/clone/path",
+	})
+	app = updated.(*App)
+	view := app.View()
+	assert.Contains(t, view, "Checkout Complete", "should show success")
+	assert.Contains(t, view, "copy cd command", "remote checkout should show copy hint")
+	assert.Contains(t, view, "cd /cache/clone/path", "should show cd command")
+}
+
+func TestIntegrationSmartCheckoutDoneError(t *testing.T) {
+	// Checkout done with error → error dialog.
+	rm := &mockRepoManager{}
+	app := smartCheckoutApp(rm)
+	app.banner.Hide()
+	app.view = core.ViewSmartCheckout
+	app.checkoutDialog.ShowCheckingOut("/some/path")
+
+	updated, _ := app.Update(views.SmartCheckoutDoneMsg{Err: fmt.Errorf("git: branch conflict")})
+	app = updated.(*App)
+	view := app.View()
+	assert.Contains(t, view, "Checkout Failed", "should show error title")
+	assert.Contains(t, view, "git: branch conflict", "should show error message")
+}
+
+func TestIntegrationSmartCheckoutDialogClose(t *testing.T) {
+	// CheckoutDialogCloseMsg → returns to previous view.
+	rm := &mockRepoManager{}
+	app := smartCheckoutApp(rm)
+	app.banner.Hide()
+	app.view = core.ViewSmartCheckout
+	app.prevView = core.ViewPRDetail
+
+	updated, _ := app.Update(views.CheckoutDialogCloseMsg{})
+	app = updated.(*App)
+	assert.Equal(t, core.ViewPRDetail, app.view, "should return to previous view")
+}
+
+func TestIntegrationSmartCheckoutCopyCdCommand(t *testing.T) {
+	// CopyCdCommandMsg → handled (clipboard may fail in CI, just verify message routing).
+	rm := &mockRepoManager{}
+	app := smartCheckoutApp(rm)
+	app.banner.Hide()
+	app.view = core.ViewSmartCheckout
+	app.prevView = core.ViewPRDetail
+
+	updated, cmd := app.Update(views.CopyCdCommandMsg{Path: "/cache/path"})
+	app = updated.(*App)
+	// Should return to previous view regardless of clipboard success.
+	assert.Equal(t, core.ViewPRDetail, app.view, "should return to previous view after copy")
+	assert.NotNil(t, cmd, "should return toast cmd")
+}
+
+func TestIntegrationSmartCheckoutFallbackSafety(t *testing.T) {
+	// DR-11: Verify fallback safety — no RepoManager, repos match, still works.
+	app := readyApp()
+	app.banner.Hide()
+	app.view = core.ViewPRDetail
+	app.repo = domain.RepoRef{Owner: "test", Name: "repo"}
+	app.cwdRepo = domain.RepoRef{Owner: "TEST", Name: "REPO"} // case-insensitive match
+
+	updated, _ := app.Update(views.CheckoutPRMsg{Number: 1, Branch: "main"})
+	app = updated.(*App)
+	assert.Equal(t, core.ViewConfirm, app.view, "case-insensitive match should use legacy confirm")
+}
+
+func TestIntegrationRepoDetectedAutoLearns(t *testing.T) {
+	// Verify auto-learn: RepoDetectedMsg registers in locator.
+	rm := &mockRepoManager{}
+	app := smartCheckoutApp(rm)
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	repo := domain.RepoRef{Owner: "steipete", Name: "CodexBar"}
+	updated, _ := app.Update(views.RepoDetectedMsg{Repo: repo})
+	app = updated.(*App)
+
+	assert.Equal(t, repo.Owner, app.cwdRepo.Owner, "should set cwdRepo")
+	assert.Equal(t, repo.Name, app.cwdRepo.Name, "should set cwdRepo name")
 }
