@@ -60,6 +60,12 @@ type PRCountLoadedMsg struct {
 	Err   error
 }
 
+// BranchDetectedMsg is sent when the current git branch is detected.
+type BranchDetectedMsg struct {
+	Branch string
+	Err    error
+}
+
 // ReposDiscoveredMsg is sent when user's repos are fetched via gh repo list.
 type ReposDiscoveredMsg struct {
 	Repos []domain.RepoRef

@@ -35,9 +35,9 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 012 | `docs/tasks/012-confirmation-dialogs.md` | Add confirmation before checkout and review submit | DONE | — |
 | 013 | `docs/tasks/013-repo-switcher-wiring.md` | Load favorites from config into repo switcher | DONE | — |
 | 014 | `docs/tasks/014-inbox-wiring.md` | Wire inbox: I key, multi-repo fetch, priority sort | TODO | 006, 013 |
-| 015 | `docs/tasks/015-auto-refresh.md` | Background polling with countdown, pause, toasts | TODO | — |
-| 016 | `docs/tasks/016-startup-experience.md` | Wire tutorial, startup banner, branch detection | TODO | — |
-| 017 | `docs/tasks/017-external-diff-tool.md` | e key to launch external diff tool | TODO | — |
+| 015 | `docs/tasks/015-auto-refresh.md` | Background polling with countdown, pause, toasts | DONE | — |
+| 016 | `docs/tasks/016-startup-experience.md` | Wire tutorial, startup banner, branch detection | DONE | — |
+| 017 | `docs/tasks/017-external-diff-tool.md` | e key to launch external diff tool | DONE | — |
 | 018 | `docs/tasks/018-inline-comments.md` | Inline comments in diff view (c/r/x keys) | TODO | 010 |
 | 019 | `docs/tasks/019-diff-two-pane-layout.md` | File tree + content split layout for diff | TODO | — |
 | 020 | `docs/tasks/020-diff-side-by-side.md` | Side-by-side diff mode with t toggle | TODO | 019 |
@@ -63,6 +63,10 @@ Banner Polish:
 - Replaced Devanagari विवेचक with 5 decorative Unicode symbol trios (e.g., ⟁·⟐·⌬, ⌖·⟡·⊹). Symbols are theme-colored (Primary/Secondary/Primary, muted dots) and rotate every 400ms during the 2s banner display.
 
 - Task 013: Full repo switcher rewrite with three-source data model (favorites from config, user repos via `gh repo list` lazy/cached, manual owner/repo entry with ghost add). Aesthetic redesign: `⟡ Switch Repository` title, `❯` search prompt, `★` star indicator (Warning color), `●` current dot (Success), `▸` cursor, BgDim selected row, sectioned list with `╶── FAVORITES ──╴` / `╶── YOUR REPOS ──╴` headers, scroll indicators ▲/▼, key hints with theme colors. `s` key toggles favorite with config write-back via `UpdateFavorites()`. Fuzzy search filters both sections; ghost `+ add owner/repo` entry when query contains `/` and no match. Dedup: discovered repos exclude favorites. CWD repo auto-prepended to favorites on startup. 28 unit tests (model, view, search, toggle, ghost, sections, discovery). Config `UpdateFavorites()` round-trips TOML. Adapter `ListUserRepos()` + `ValidateRepo()` via `gh repo list/view`.
+
+- Task 015: Auto-refresh polling implemented with `tea.Tick` every second. Countdown shown in header as `↻ 25s`. `p` key pauses/resumes (shows `⏸ paused`). When countdown reaches 0, triggers `loadPRsCmd` silently. Compares new PR count with previous; shows toast when new PRs detected. Refresh pauses automatically during non-list views (detail, diff, review). Uses config `refresh_interval` (default 30s).
+- Task 016: Branch detection via `git rev-parse --abbrev-ref HEAD` on startup. Branch displayed in header as `⎇ main`. Tutorial `Show()` now called from `Init()` when `IsFirstLaunch()` returns true. Branch detection fires alongside repo detection in Init().
+- Task 017: `e` key in diff view emits `OpenExternalDiffMsg`. App handles it via `tea.ExecProcess` with `gh pr diff N` and `GH_PAGER` env var set to configured external tool. If no tool configured, shows toast error. After tool exits, TUI resumes. Status hints updated to show `e ext diff`.
 
 Open Issues:
 - ~~PR detail loading spinner appears stuck~~ **RESOLVED** (Feb 5, 2026): Spinner now animates correctly. Root causes addressed: (1) Fixed View() logic to only show loading state when `loading=true`, not when `detail==nil`; (2) Added explicit `return nil` for `PRDetailLoadedMsg` in Update(); (3) Verified spinner frames cycle properly via iTerm2 automation tests. The `gh pr checks` API call takes ~1.4s which causes visible spinner animation before PR detail loads.

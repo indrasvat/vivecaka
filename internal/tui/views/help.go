@@ -317,7 +317,7 @@ func StatusHints(view core.ViewState, width int) string {
 	case core.ViewPRDetail:
 		hints = "j/k scroll  Tab pane  d diff  c checkout  r review  o open  Esc back  ? help"
 	case core.ViewDiff:
-		hints = "j/k scroll  Tab file  / search  Esc back  ? help"
+		hints = "j/k scroll  Tab file  / search  e ext diff  Esc back  ? help"
 	case core.ViewReview:
 		hints = "j/k field  Enter action  Esc back  ? help"
 	case core.ViewInbox:

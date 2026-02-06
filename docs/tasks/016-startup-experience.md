@@ -1,6 +1,6 @@
 # Task 016: Startup Experience (Tutorial, Banner, Branch Detection)
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 

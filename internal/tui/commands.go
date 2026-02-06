@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"os/exec"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -96,6 +98,19 @@ func resolveThreadCmd(uc *usecase.ResolveThread, repo domain.RepoRef, threadID s
 	return func() tea.Msg {
 		err := uc.Execute(context.Background(), repo, threadID)
 		return resolveThreadDoneMsg{ThreadID: threadID, Err: err}
+	}
+}
+
+// detectBranchCmd detects the current git branch.
+func detectBranchCmd() tea.Cmd {
+	return func() tea.Msg {
+		cmd := exec.CommandContext(context.Background(), "git", "rev-parse", "--abbrev-ref", "HEAD")
+		out, err := cmd.Output()
+		branch := strings.TrimSpace(string(out))
+		if err != nil || branch == "" {
+			return views.BranchDetectedMsg{Err: err}
+		}
+		return views.BranchDetectedMsg{Branch: branch}
 	}
 }
 

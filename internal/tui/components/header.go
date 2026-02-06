@@ -2,6 +2,7 @@ package components
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
@@ -10,13 +11,15 @@ import (
 
 // Header renders the top bar showing repo info and filter state.
 type Header struct {
-	styles      core.Styles
-	repo        domain.RepoRef
-	prCount     int
-	totalCount  int // total PRs available (0 = unknown)
-	filter      string
-	refreshSecs int
-	width       int
+	styles        core.Styles
+	repo          domain.RepoRef
+	prCount       int
+	totalCount    int // total PRs available (0 = unknown)
+	filter        string
+	refreshSecs   int
+	refreshPaused bool
+	branch        string
+	width         int
 }
 
 // NewHeader creates a new Header component.
@@ -38,6 +41,15 @@ func (h *Header) SetFilter(f string) { h.filter = f }
 
 // SetRefreshSecs updates the refresh countdown display.
 func (h *Header) SetRefreshSecs(s int) { h.refreshSecs = s }
+
+// SetRefreshCountdown updates the refresh countdown and pause state.
+func (h *Header) SetRefreshCountdown(secs int, paused bool) {
+	h.refreshSecs = secs
+	h.refreshPaused = paused
+}
+
+// SetBranch updates the displayed branch name.
+func (h *Header) SetBranch(branch string) { h.branch = branch }
 
 // SetWidth updates the header width for responsive layout.
 func (h *Header) SetWidth(w int) { h.width = w }
@@ -80,11 +92,18 @@ func (h *Header) View() string {
 	// Use 6 spaces between each element for visual separation (matches mock's flexbox gaps)
 	left := brand + "      " + repo + "      " + count + "      " + filter
 
-	// Build right side: refresh timer
-	right := ""
-	if h.refreshSecs > 0 {
-		right = refreshStyle.Render(fmt.Sprintf("%ds", h.refreshSecs))
+	// Build right side: branch + refresh timer
+	var rightParts []string
+	if h.branch != "" {
+		branchStyle := lipgloss.NewStyle().Foreground(t.Info)
+		rightParts = append(rightParts, branchStyle.Render("⎇ "+h.branch))
 	}
+	if h.refreshPaused {
+		rightParts = append(rightParts, refreshStyle.Render("⏸ paused"))
+	} else if h.refreshSecs > 0 {
+		rightParts = append(rightParts, refreshStyle.Render(fmt.Sprintf("↻ %ds", h.refreshSecs)))
+	}
+	right := strings.Join(rightParts, "  ")
 
 	// Pad between left and right
 	gap := max(1, h.width-lipgloss.Width(left)-lipgloss.Width(right))

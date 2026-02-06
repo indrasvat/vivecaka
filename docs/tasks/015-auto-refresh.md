@@ -1,6 +1,6 @@
 # Task 015: Auto-Refresh with Polling
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 

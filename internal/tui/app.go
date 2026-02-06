@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -58,6 +59,12 @@ type App struct {
 	repo         domain.RepoRef
 	username     string
 	loadingFrame int // animation frame for loading spinner
+
+	// Auto-refresh
+	refreshCountdown int  // seconds until next refresh
+	refreshPaused    bool // true when paused via 'p'
+	refreshInterval  int  // from config (seconds); 0 = disabled
+	prevPRCount      int  // track count for new-PR detection
 
 	// Shared
 	keys   core.KeyMap
@@ -131,7 +138,8 @@ func New(cfg *config.Config, opts ...Option) *App {
 		status: components.NewStatusBar(styles),
 		toasts: components.NewToastManager(styles),
 
-		filterOpts: domain.ListOpts{State: domain.PRStateOpen, Draft: domain.DraftInclude, PerPage: cfg.General.PageSize},
+		filterOpts:      domain.ListOpts{State: domain.PRStateOpen, Draft: domain.DraftInclude, PerPage: cfg.General.PageSize},
+		refreshInterval: cfg.General.RefreshInterval,
 	}
 
 	for _, opt := range opts {
@@ -165,7 +173,12 @@ func New(cfg *config.Config, opts ...Option) *App {
 func (a *App) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		detectUserCmd(),
+		detectBranchCmd(),
 		a.banner.StartAutoDismiss(2 * time.Second), // Show banner for 2 seconds
+	}
+	// Show tutorial on first launch.
+	if views.IsFirstLaunch() {
+		a.tutorial.Show()
 	}
 	// If repo was provided via WithRepo, skip detection and load PRs directly.
 	if a.repo.Owner != "" {
@@ -192,10 +205,54 @@ type viewReadyMsg struct{}
 // loadingTickMsg drives the loading screen spinner animation.
 type loadingTickMsg struct{}
 
+// refreshTickMsg fires every second for auto-refresh countdown.
+type refreshTickMsg struct{}
+
 func (a *App) loadingTick() tea.Cmd {
 	return tea.Tick(80*time.Millisecond, func(_ time.Time) tea.Msg {
 		return loadingTickMsg{}
 	})
+}
+
+func (a *App) refreshTick() tea.Cmd {
+	if a.refreshInterval <= 0 {
+		return nil
+	}
+	return tea.Tick(1*time.Second, func(_ time.Time) tea.Msg {
+		return refreshTickMsg{}
+	})
+}
+
+func (a *App) startRefreshTimer() tea.Cmd {
+	if a.refreshInterval <= 0 {
+		return nil
+	}
+	a.refreshCountdown = a.refreshInterval
+	a.header.SetRefreshCountdown(a.refreshCountdown, a.refreshPaused)
+	return a.refreshTick()
+}
+
+func (a *App) handleRefreshTick() (tea.Model, tea.Cmd) {
+	if a.refreshInterval <= 0 {
+		return a, nil
+	}
+	if a.refreshPaused {
+		a.header.SetRefreshCountdown(a.refreshCountdown, true)
+		return a, a.refreshTick()
+	}
+	a.refreshCountdown--
+	if a.refreshCountdown <= 0 {
+		// Trigger auto-refresh.
+		a.refreshCountdown = a.refreshInterval
+		a.header.SetRefreshCountdown(a.refreshCountdown, false)
+		if a.listPRs != nil && a.repo.Owner != "" && a.view == core.ViewPRList {
+			a.prevPRCount = a.prList.TotalPRs()
+			return a, tea.Batch(a.refreshTick(), loadPRsCmd(a.listPRs, a.repo, a.filterOpts))
+		}
+		return a, a.refreshTick()
+	}
+	a.header.SetRefreshCountdown(a.refreshCountdown, false)
+	return a, a.refreshTick()
 }
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -218,6 +275,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.UserDetectedMsg:
 		return a.handleUserDetected(msg)
 
+	case views.BranchDetectedMsg:
+		if msg.Err == nil && msg.Branch != "" {
+			a.prList.SetCurrentBranch(msg.Branch)
+			a.header.SetBranch(msg.Branch)
+		}
+		return a, nil
+
 	case views.PRsLoadedMsg:
 		return a.handlePRsLoaded(msg)
 
@@ -238,6 +302,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case views.OpenDiffMsg:
 		return a.handleOpenDiff(msg)
+
+	case views.OpenExternalDiffMsg:
+		return a.handleOpenExternalDiff(msg)
 
 	case views.OpenFilterMsg:
 		a.prevView = a.view
@@ -401,6 +468,19 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.loadingTick()
 		}
 		return a, nil
+
+	case refreshTickMsg:
+		return a.handleRefreshTick()
+
+	case externalDiffDoneMsg:
+		if msg.Err != nil {
+			cmd := a.toasts.Add(
+				fmt.Sprintf("External diff tool error: %v", msg.Err),
+				domain.ToastError, 5*time.Second,
+			)
+			return a, cmd
+		}
+		return a, nil
 	}
 
 	// Dispatch to active view model for unhandled messages.
@@ -506,12 +586,22 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, a.keys.Refresh):
 		if a.view == core.ViewPRList && a.listPRs != nil && a.repo.Owner != "" {
-			return a, loadPRsCmd(a.listPRs, a.repo, a.filterOpts)
+			cmd := a.startRefreshTimer()
+			return a, tea.Batch(cmd, loadPRsCmd(a.listPRs, a.repo, a.filterOpts))
 		}
 		return a, nil
 
 	case key.Matches(msg, a.keys.Back):
 		return a.handleBack()
+	}
+
+	// View-specific global keys (not in keymap).
+	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == 'p' {
+		if a.view == core.ViewPRList && a.refreshInterval > 0 {
+			a.refreshPaused = !a.refreshPaused
+			a.header.SetRefreshCountdown(a.refreshCountdown, a.refreshPaused)
+			return a, nil
+		}
 	}
 
 	// Dispatch to active view.
@@ -607,7 +697,24 @@ func (a *App) handlePRsLoaded(msg views.PRsLoadedMsg) (tea.Model, tea.Cmd) {
 	if a.view != core.ViewBanner {
 		a.view = core.ViewPRList
 	}
-	return a, nil
+
+	// Detect new PRs on auto-refresh.
+	var cmds []tea.Cmd
+	newCount := a.prList.TotalPRs()
+	if a.prevPRCount > 0 && newCount > a.prevPRCount {
+		diff := newCount - a.prevPRCount
+		cmds = append(cmds, a.toasts.Add(
+			fmt.Sprintf("%d new PR(s)", diff),
+			domain.ToastInfo, 5*time.Second,
+		))
+	}
+	a.prevPRCount = newCount
+
+	// Start refresh timer (reset countdown).
+	if a.refreshInterval > 0 && a.refreshCountdown <= 0 {
+		cmds = append(cmds, a.startRefreshTimer())
+	}
+	return a, tea.Batch(cmds...)
 }
 
 func (a *App) handleLoadMorePRs(msg views.LoadMorePRsMsg) (tea.Model, tea.Cmd) {
@@ -671,8 +778,34 @@ func (a *App) handlePRDetailLoaded(msg views.PRDetailLoadedMsg) (tea.Model, tea.
 	return a, nil
 }
 
+func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, tea.Cmd) {
+	tool := a.cfg.Diff.ExternalTool
+	if tool == "" {
+		cmd := a.toasts.Add(
+			"No external diff tool configured. Set [diff] external_tool in config.",
+			domain.ToastWarning, 5*time.Second,
+		)
+		return a, cmd
+	}
+	// Use tea.ExecProcess to suspend TUI and run the external tool.
+	args := []string{"pr", "diff", fmt.Sprintf("%d", msg.Number)}
+	c := exec.Command("gh", args...)
+	c.Env = append(c.Environ(), fmt.Sprintf("GH_PAGER=%s", tool))
+	return a, tea.ExecProcess(c, func(err error) tea.Msg {
+		if err != nil {
+			return externalDiffDoneMsg{Err: err}
+		}
+		return externalDiffDoneMsg{}
+	})
+}
+
+type externalDiffDoneMsg struct {
+	Err error
+}
+
 func (a *App) handleOpenDiff(msg views.OpenDiffMsg) (tea.Model, tea.Cmd) {
 	a.view = core.ViewDiff
+	a.diffView.SetPRNumber(msg.Number)
 	if a.reader != nil && a.repo.Owner != "" {
 		return a, loadDiffCmd(a.reader, a.repo, msg.Number)
 	}

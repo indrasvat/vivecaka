@@ -1,6 +1,6 @@
 # Task 017: External Diff Tool
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 

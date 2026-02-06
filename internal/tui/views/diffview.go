@@ -95,9 +95,15 @@ func (h *syntaxHighlighter) highlight(content, filename string) string {
 	return result
 }
 
+// OpenExternalDiffMsg is sent when the user wants to open an external diff tool.
+type OpenExternalDiffMsg struct {
+	Number int
+}
+
 // DiffViewModel implements the diff viewer.
 type DiffViewModel struct {
 	diff          *domain.Diff
+	prNumber      int
 	width         int
 	height        int
 	styles        core.Styles
@@ -130,6 +136,9 @@ func (m *DiffViewModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 }
+
+// SetPRNumber sets the PR number for external tool launches.
+func (m *DiffViewModel) SetPRNumber(n int) { m.prNumber = n }
 
 // SetDiff updates the displayed diff.
 func (m *DiffViewModel) SetDiff(d *domain.Diff) {
@@ -213,6 +222,9 @@ func (m *DiffViewModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		case 'z':
 			m.pendingKey = 'z'
 			return nil
+		case 'e':
+			n := m.prNumber
+			return func() tea.Msg { return OpenExternalDiffMsg{Number: n} }
 		}
 	}
 
