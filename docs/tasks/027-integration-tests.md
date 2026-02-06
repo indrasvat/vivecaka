@@ -1,6 +1,6 @@
 # Task 027: Integration Tests and TUI Test Quality
 
-## Status: TODO
+## Status: DONE
 
 ## Depends On: 026 (testify migration, adapter fixtures)
 
