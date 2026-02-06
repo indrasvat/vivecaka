@@ -844,19 +844,19 @@ func (a *App) handlePRsLoaded(msg views.PRsLoadedMsg) (tea.Model, tea.Cmd) {
 			fmt.Sprintf("Error loading PRs: %v", msg.Err),
 			domain.ToastError, 5*time.Second,
 		)
-		// Don't switch to PR list while banner is still visible
-		if a.view != core.ViewBanner {
+		// Only transition to PR list from loading state — don't dismiss modals/dialogs.
+		if a.view == core.ViewLoading {
 			a.view = core.ViewPRList
 		}
 		a.prList.SetPRs(nil)
 		return a, cmd
 	}
-	// Store PRs but don't switch view while banner is visible
-	// The banner dismiss handler will transition to the PR list
+	// Store PRs but don't switch view while the user is in a modal or detail view.
+	// Only transition from loading/banner states.
 	a.prList.SetPRs(msg.PRs)
 	a.header.SetPRCount(a.prList.TotalPRs())
 	a.header.SetFilter(a.prList.FilterLabel())
-	if a.view != core.ViewBanner {
+	if a.view == core.ViewLoading || a.view == core.ViewPRList {
 		a.view = core.ViewPRList
 	}
 
