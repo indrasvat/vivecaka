@@ -83,11 +83,27 @@ func (m *mockWriterPlugin) UpdateLabels(_ context.Context, _ domain.RepoRef, _ i
 	return nil
 }
 
-// mockFullPlugin implements Plugin + all three domain interfaces.
+// mockRepoManagerPlugin implements Plugin + domain.RepoManager.
+type mockRepoManagerPlugin struct {
+	mockPlugin
+}
+
+func (m *mockRepoManagerPlugin) CheckoutAt(_ context.Context, _ domain.RepoRef, _ int, _ string) (string, error) {
+	return "", nil
+}
+func (m *mockRepoManagerPlugin) CloneRepo(_ context.Context, _ domain.RepoRef, _ string) error {
+	return nil
+}
+func (m *mockRepoManagerPlugin) CreateWorktree(_ context.Context, _ string, _ int, _, _ string) error {
+	return nil
+}
+
+// mockFullPlugin implements Plugin + all domain interfaces including RepoManager.
 type mockFullPlugin struct {
 	mockReaderPlugin
 	mockReviewerPlugin
 	mockWriterPlugin
+	mockRepoManagerPlugin
 	info PluginInfo
 }
 
@@ -145,6 +161,17 @@ func TestRegistryAutoDiscoverWriter(t *testing.T) {
 	assert.Len(t, writers, 1)
 }
 
+func TestRegistryAutoDiscoverRepoManager(t *testing.T) {
+	reg := NewRegistry()
+	p := &mockRepoManagerPlugin{mockPlugin: mockPlugin{name: "repomgr"}}
+
+	err := reg.Register(p)
+	require.NoError(t, err)
+
+	rms := reg.GetRepoManagers()
+	assert.Len(t, rms, 1)
+}
+
 func TestRegistryNoCapabilities(t *testing.T) {
 	reg := NewRegistry()
 	p := &mockPlugin{name: "bare"}
@@ -188,6 +215,7 @@ func TestRegistryAutoDiscoverAllCapabilities(t *testing.T) {
 	assert.Len(t, reg.GetReaders(), 1)
 	assert.Len(t, reg.GetReviewers(), 1)
 	assert.Len(t, reg.GetWriters(), 1)
+	assert.Len(t, reg.GetRepoManagers(), 1)
 }
 
 func TestRegistryHooksNotNil(t *testing.T) {

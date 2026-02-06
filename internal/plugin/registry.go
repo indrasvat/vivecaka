@@ -9,14 +9,15 @@ import (
 
 // Registry manages plugin lifecycle and capability discovery.
 type Registry struct {
-	mu        sync.RWMutex
-	plugins   map[string]Plugin
-	readers   []domain.PRReader
-	reviewers []domain.PRReviewer
-	writers   []domain.PRWriter
-	views     []ViewRegistration
-	keys      []KeyRegistration
-	hooks     *HookManager
+	mu           sync.RWMutex
+	plugins      map[string]Plugin
+	readers      []domain.PRReader
+	reviewers    []domain.PRReviewer
+	writers      []domain.PRWriter
+	repoManagers []domain.RepoManager
+	views        []ViewRegistration
+	keys         []KeyRegistration
+	hooks        *HookManager
 }
 
 // NewRegistry creates a new plugin registry.
@@ -46,6 +47,9 @@ func (r *Registry) Register(p Plugin) error {
 	}
 	if writer, ok := p.(domain.PRWriter); ok {
 		r.writers = append(r.writers, writer)
+	}
+	if rm, ok := p.(domain.RepoManager); ok {
+		r.repoManagers = append(r.repoManagers, rm)
 	}
 	if vp, ok := p.(ViewPlugin); ok {
 		r.views = append(r.views, vp.Views()...)
@@ -84,6 +88,15 @@ func (r *Registry) GetWriters() []domain.PRWriter {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.writers
+}
+
+// GetRepoManagers returns all registered RepoManager implementations.
+// Future-ready: for plugin authors to provide custom repo management.
+// Current MVP wiring uses direct injection via tui.WithRepoManager().
+func (r *Registry) GetRepoManagers() []domain.RepoManager {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.repoManagers
 }
 
 // Hooks returns the hook manager.
