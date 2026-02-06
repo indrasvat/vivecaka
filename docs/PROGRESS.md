@@ -43,7 +43,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 020 | `docs/tasks/020-diff-side-by-side.md` | Side-by-side diff mode with t toggle | TODO | 019 |
 | 021 | `docs/tasks/021-visual-selection-mode.md` | v key for multi-select, batch operations | DONE | — |
 | 022 | `docs/tasks/022-pagination.md` | Paginated PR loading with infinite scroll | DONE | — |
-| 023 | `docs/tasks/023-caching.md` | PR list caching for instant startup | TODO | — |
+| 023 | `docs/tasks/023-caching.md` | PR list caching for instant startup | DONE | — |
 | 024 | `docs/tasks/024-config-enhancements.md` | Keybinding overrides, adaptive colors, notifications | TODO | — |
 | 025 | `docs/tasks/025-persistence.md` | Per-repo filter memory, unread indicators | TODO | 001, 007, 023 |
 | 026 | `docs/tasks/026-testing-foundation.md` | testify migration, adapter fixtures, 80%+ coverage | TODO | — |
@@ -69,6 +69,7 @@ Banner Polish:
 - Task 017: `e` key in diff view emits `OpenExternalDiffMsg`. App handles it via `tea.ExecProcess` with `gh pr diff N` and `GH_PAGER` env var set to configured external tool. If no tool configured, shows toast error. After tool exits, TUI resumes. Status hints updated to show `e ext diff`.
 - Task 014: `GetInboxPRs` use case fetches PRs from all favorite repos in parallel via errgroup, tolerates partial failures. `I` key opens inbox from PR list. `OpenInboxPRMsg` switches repo context and loads PR detail. `PrioritySort` called on inbox data (review-requested > CI-failing > stale > normal). Usecase coverage stays at 100%.
 - Task 021: Visual selection mode via `v` key. Space toggles selection (`●`/`○`), `a` selects all visible, Esc cancels. Batch operations: `y` copies all selected PR URLs (newline-separated), `o` opens all in browser. Status bar shows `N selected` count. Cursor uses `▸`/`▹` in selection mode. Quick filters m/n disabled during selection mode.
+- Task 023: Cache package at `internal/cache/` with JSON file cache in `XDG_CACHE_HOME/vivecaka/repos/{owner}_{name}.json`. Atomic writes via temp file rename. `loadCachedPRsCmd` fires alongside fresh API load; cached data displayed immediately if still loading. `saveCacheCmd` runs as fire-and-forget after fresh load. `IsStale` checks TTL. 79.3% coverage.
 
 Open Issues:
 - ~~PR detail loading spinner appears stuck~~ **RESOLVED** (Feb 5, 2026): Spinner now animates correctly. Root causes addressed: (1) Fixed View() logic to only show loading state when `loading=true`, not when `detail==nil`; (2) Added explicit `return nil` for `PRDetailLoadedMsg` in Update(); (3) Verified spinner frames cycle properly via iTerm2 automation tests. The `gh pr checks` API call takes ~1.4s which causes visible spinner animation before PR detail loads.

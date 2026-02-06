@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/indrasvat/vivecaka/internal/adapter/ghcli"
+	"github.com/indrasvat/vivecaka/internal/cache"
 	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/indrasvat/vivecaka/internal/tui/views"
 	"github.com/indrasvat/vivecaka/internal/usecase"
@@ -135,6 +136,31 @@ func loadInboxCmd(uc *usecase.GetInboxPRs, repos []domain.RepoRef) tea.Cmd {
 			vPRs[i] = views.InboxPR{PR: p.PR, Repo: p.Repo}
 		}
 		return views.InboxPRsLoadedMsg{PRs: vPRs}
+	}
+}
+
+// cachedPRsLoadedMsg is sent when cached PRs are loaded from disk.
+type cachedPRsLoadedMsg struct {
+	PRs     []domain.PR
+	Updated time.Time
+}
+
+// loadCachedPRsCmd attempts to load PRs from the on-disk cache.
+func loadCachedPRsCmd(repo domain.RepoRef) tea.Cmd {
+	return func() tea.Msg {
+		prs, updated, err := cache.Load(repo)
+		if err != nil || len(prs) == 0 {
+			return cachedPRsLoadedMsg{}
+		}
+		return cachedPRsLoadedMsg{PRs: prs, Updated: updated}
+	}
+}
+
+// saveCacheCmd writes PRs to the on-disk cache.
+func saveCacheCmd(repo domain.RepoRef, prs []domain.PR) tea.Cmd {
+	return func() tea.Msg {
+		_ = cache.Save(repo, prs)
+		return nil
 	}
 }
 

@@ -277,6 +277,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.UserDetectedMsg:
 		return a.handleUserDetected(msg)
 
+	case cachedPRsLoadedMsg:
+		if len(msg.PRs) > 0 && a.prList.IsLoading() {
+			// Show cached data immediately while fresh load is in progress.
+			a.prList.SetPRs(msg.PRs)
+			a.header.SetPRCount(a.prList.TotalPRs())
+		}
+		return a, nil
+
 	case views.BranchDetectedMsg:
 		if msg.Err == nil && msg.Branch != "" {
 			a.prList.SetCurrentBranch(msg.Branch)
@@ -691,12 +699,14 @@ func (a *App) handleRepoDetected(msg views.RepoDetectedMsg) (tea.Model, tea.Cmd)
 	a.repoSwitcher.SetCurrentRepo(a.repo)
 
 	if a.listPRs != nil {
-		// Load PRs and fetch total count in parallel
+		// Load PRs and fetch total count in parallel.
+		// Also try loading cached PRs for instant display.
 		state := a.filterOpts.State
 		if state == "" {
 			state = domain.PRStateOpen
 		}
 		return a, tea.Batch(
+			loadCachedPRsCmd(a.repo),
 			loadPRsCmd(a.listPRs, a.repo, a.filterOpts),
 			loadPRCountCmd(a.reader, a.repo, state),
 		)
@@ -741,8 +751,13 @@ func (a *App) handlePRsLoaded(msg views.PRsLoadedMsg) (tea.Model, tea.Cmd) {
 		a.view = core.ViewPRList
 	}
 
-	// Detect new PRs on auto-refresh.
+	// Save fresh PRs to cache (fire and forget).
 	var cmds []tea.Cmd
+	if a.repo.Owner != "" && len(msg.PRs) > 0 {
+		cmds = append(cmds, saveCacheCmd(a.repo, msg.PRs))
+	}
+
+	// Detect new PRs on auto-refresh.
 	newCount := a.prList.TotalPRs()
 	if a.prevPRCount > 0 && newCount > a.prevPRCount {
 		diff := newCount - a.prevPRCount

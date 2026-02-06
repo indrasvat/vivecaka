@@ -1,6 +1,6 @@
 # Task 023: Caching and Instant Startup
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 
