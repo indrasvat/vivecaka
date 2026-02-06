@@ -30,6 +30,7 @@ type GeneralConfig struct {
 	ShowBanner      bool   `toml:"show_banner"`
 	CacheTTL        int    `toml:"cache_ttl"`
 	StaleDays       int    `toml:"stale_days"`
+	Debug           bool   `toml:"debug"`
 }
 
 // DiffConfig holds diff viewer settings.

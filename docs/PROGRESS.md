@@ -49,7 +49,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 026 | `docs/tasks/026-testing-foundation.md` | testify migration, adapter fixtures, 80%+ coverage | TODO | — |
 | 027 | `docs/tasks/027-integration-tests.md` | teatest integration tests, TUI test quality | TODO | 026 |
 | 028 | `docs/tasks/028-pr-detail-tabs-layout.md` | Redesign PR detail with horizontal tabs layout | DONE | — |
-| 029 | `docs/tasks/029-debug-logging.md` | Debug logging infrastructure with --debug flag | TODO | — |
+| 029 | `docs/tasks/029-debug-logging.md` | Debug logging infrastructure with --debug flag | DONE | — |
 
 Notes:
 - Task 007: filter panel matches mock (static label options: enhancement/bug/docs; CI filter options: All/Passing/Failing; Review filter options: All/Approved/Pending). Pending CI + changes-requested review filters not exposed yet.
@@ -70,6 +70,7 @@ Banner Polish:
 - Task 014: `GetInboxPRs` use case fetches PRs from all favorite repos in parallel via errgroup, tolerates partial failures. `I` key opens inbox from PR list. `OpenInboxPRMsg` switches repo context and loads PR detail. `PrioritySort` called on inbox data (review-requested > CI-failing > stale > normal). Usecase coverage stays at 100%.
 - Task 021: Visual selection mode via `v` key. Space toggles selection (`●`/`○`), `a` selects all visible, Esc cancels. Batch operations: `y` copies all selected PR URLs (newline-separated), `o` opens all in browser. Status bar shows `N selected` count. Cursor uses `▸`/`▹` in selection mode. Quick filters m/n disabled during selection mode.
 - Task 023: Cache package at `internal/cache/` with JSON file cache in `XDG_CACHE_HOME/vivecaka/repos/{owner}_{name}.json`. Atomic writes via temp file rename. `loadCachedPRsCmd` fires alongside fresh API load; cached data displayed immediately if still loading. `saveCacheCmd` runs as fire-and-forget after fresh load. `IsStale` checks TTL. 79.3% coverage.
+- Task 029: Debug logging via `log/slog` to `XDG_STATE_HOME/vivecaka/debug.log`. Activated via `--debug` flag, `VIVECAKA_DEBUG=1` env var, or `debug = true` in config. Log rotation at 10MB. No-op logger when disabled. 91.3% coverage.
 
 Open Issues:
 - ~~PR detail loading spinner appears stuck~~ **RESOLVED** (Feb 5, 2026): Spinner now animates correctly. Root causes addressed: (1) Fixed View() logic to only show loading state when `loading=true`, not when `detail==nil`; (2) Added explicit `return nil` for `PRDetailLoadedMsg` in Update(); (3) Verified spinner frames cycle properly via iTerm2 automation tests. The `gh pr checks` API call takes ~1.4s which causes visible spinner animation before PR detail loads.
