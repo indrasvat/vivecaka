@@ -16,6 +16,8 @@ type Config struct {
 	Repos         ReposConfig         `toml:"repos"`
 	Keybindings   map[string]string   `toml:"keybindings"`
 	Notifications NotificationsConfig `toml:"notifications"`
+
+	path string `toml:"-"` // source file path (not serialized)
 }
 
 // GeneralConfig holds general settings.
@@ -118,6 +120,34 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// ConfigPath returns the path from which this config was loaded (empty if default).
+func (c *Config) ConfigPath() string {
+	return c.path
+}
+
+// UpdateFavorites writes the favorites list back to the config TOML file.
+// If the config was loaded from a file, it updates that file. Otherwise it
+// writes to the default XDG config path.
+func (c *Config) UpdateFavorites(favorites []string) error {
+	c.Repos.Favorites = favorites
+
+	path := c.path
+	if path == "" {
+		path = filepath.Join(ConfigDir(), "config.toml")
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
+	}
+
+	out, err := toml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+
+	return os.WriteFile(path, out, 0o644)
+}
+
 // Load reads configuration from the XDG config path, creating defaults if needed.
 func Load() (*Config, error) {
 	return LoadFrom(filepath.Join(ConfigDir(), "config.toml"))
@@ -150,5 +180,6 @@ func LoadFrom(path string) (*Config, error) {
 		return Default(), err
 	}
 
+	cfg.path = path
 	return cfg, nil
 }

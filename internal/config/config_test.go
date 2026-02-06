@@ -264,6 +264,72 @@ func TestLoadFromInvalidTOML(t *testing.T) {
 	}
 }
 
+func TestUpdateFavorites(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	initial := `
+[general]
+theme = "default-dark"
+
+[repos]
+favorites = ["acme/frontend"]
+`
+	if err := os.WriteFile(path, []byte(initial), 0o644); err != nil {
+		t.Fatalf("WriteFile error = %v", err)
+	}
+
+	cfg, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom() error = %v", err)
+	}
+
+	// Update favorites.
+	err = cfg.UpdateFavorites([]string{"acme/frontend", "acme/backend", "other/lib"})
+	if err != nil {
+		t.Fatalf("UpdateFavorites() error = %v", err)
+	}
+
+	// Reload and verify.
+	cfg2, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom() after update error = %v", err)
+	}
+	if len(cfg2.Repos.Favorites) != 3 {
+		t.Errorf("favorites = %d, want 3", len(cfg2.Repos.Favorites))
+	}
+	if cfg2.Repos.Favorites[0] != "acme/frontend" {
+		t.Errorf("favorites[0] = %q, want acme/frontend", cfg2.Repos.Favorites[0])
+	}
+	if cfg2.Repos.Favorites[1] != "acme/backend" {
+		t.Errorf("favorites[1] = %q, want acme/backend", cfg2.Repos.Favorites[1])
+	}
+}
+
+func TestUpdateFavoritesNewFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "subdir", "config.toml")
+
+	cfg := Default()
+	// path is not set, but we set it manually.
+	cfg2 := *cfg
+	cfg2.path = path
+
+	err := cfg2.UpdateFavorites([]string{"acme/frontend"})
+	if err != nil {
+		t.Fatalf("UpdateFavorites() error = %v", err)
+	}
+
+	// Verify file was created.
+	reloaded, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom() error = %v", err)
+	}
+	if len(reloaded.Repos.Favorites) != 1 {
+		t.Errorf("favorites = %d, want 1", len(reloaded.Repos.Favorites))
+	}
+}
+
 func TestLoadFromInvalidValues(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")

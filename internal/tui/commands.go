@@ -98,3 +98,19 @@ func resolveThreadCmd(uc *usecase.ResolveThread, repo domain.RepoRef, threadID s
 		return resolveThreadDoneMsg{ThreadID: threadID, Err: err}
 	}
 }
+
+// discoverReposCmd fetches the user's repos via gh repo list.
+func discoverReposCmd() tea.Cmd {
+	return func() tea.Msg {
+		repos, err := ghcli.ListUserRepos(context.Background(), 20)
+		return views.ReposDiscoveredMsg{Repos: repos, Err: err}
+	}
+}
+
+// validateRepoCmd checks if a manually entered repo exists.
+func validateRepoCmd(repo domain.RepoRef) tea.Cmd {
+	return func() tea.Msg {
+		err := ghcli.ValidateRepo(context.Background(), repo)
+		return views.RepoValidatedMsg{Repo: repo, Err: err}
+	}
+}

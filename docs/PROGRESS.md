@@ -33,7 +33,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 010 | `docs/tasks/010-comments-enhancement.md` | Comment collapse/expand, reply, resolve | DONE | 008 |
 | 011 | `docs/tasks/011-review-form-huh.md` | Rewrite review form using huh library | DONE | — |
 | 012 | `docs/tasks/012-confirmation-dialogs.md` | Add confirmation before checkout and review submit | DONE | — |
-| 013 | `docs/tasks/013-repo-switcher-wiring.md` | Load favorites from config into repo switcher | TODO | — |
+| 013 | `docs/tasks/013-repo-switcher-wiring.md` | Load favorites from config into repo switcher | DONE | — |
 | 014 | `docs/tasks/014-inbox-wiring.md` | Wire inbox: I key, multi-repo fetch, priority sort | TODO | 006, 013 |
 | 015 | `docs/tasks/015-auto-refresh.md` | Background polling with countdown, pause, toasts | TODO | — |
 | 016 | `docs/tasks/016-startup-experience.md` | Wire tutorial, startup banner, branch detection | TODO | — |
@@ -61,6 +61,8 @@ Notes:
 
 Banner Polish:
 - Replaced Devanagari विवेचक with 5 decorative Unicode symbol trios (e.g., ⟁·⟐·⌬, ⌖·⟡·⊹). Symbols are theme-colored (Primary/Secondary/Primary, muted dots) and rotate every 400ms during the 2s banner display.
+
+- Task 013: Full repo switcher rewrite with three-source data model (favorites from config, user repos via `gh repo list` lazy/cached, manual owner/repo entry with ghost add). Aesthetic redesign: `⟡ Switch Repository` title, `❯` search prompt, `★` star indicator (Warning color), `●` current dot (Success), `▸` cursor, BgDim selected row, sectioned list with `╶── FAVORITES ──╴` / `╶── YOUR REPOS ──╴` headers, scroll indicators ▲/▼, key hints with theme colors. `s` key toggles favorite with config write-back via `UpdateFavorites()`. Fuzzy search filters both sections; ghost `+ add owner/repo` entry when query contains `/` and no match. Dedup: discovered repos exclude favorites. CWD repo auto-prepended to favorites on startup. 28 unit tests (model, view, search, toggle, ghost, sections, discovery). Config `UpdateFavorites()` round-trips TOML. Adapter `ListUserRepos()` + `ValidateRepo()` via `gh repo list/view`.
 
 Open Issues:
 - ~~PR detail loading spinner appears stuck~~ **RESOLVED** (Feb 5, 2026): Spinner now animates correctly. Root causes addressed: (1) Fixed View() logic to only show loading state when `loading=true`, not when `detail==nil`; (2) Added explicit `return nil` for `PRDetailLoadedMsg` in Update(); (3) Verified spinner frames cycle properly via iTerm2 automation tests. The `gh pr checks` API call takes ~1.4s which causes visible spinner animation before PR detail loads.

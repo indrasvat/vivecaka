@@ -59,3 +59,26 @@ type PRCountLoadedMsg struct {
 	Total int
 	Err   error
 }
+
+// ReposDiscoveredMsg is sent when user's repos are fetched via gh repo list.
+type ReposDiscoveredMsg struct {
+	Repos []domain.RepoRef
+	Err   error
+}
+
+// ToggleFavoriteMsg is sent when user toggles favorite status on a repo.
+type ToggleFavoriteMsg struct {
+	Repo     domain.RepoRef
+	Favorite bool // new state: true = add to favorites, false = remove
+}
+
+// ValidateRepoRequestMsg is sent when user wants to add a manually entered repo.
+type ValidateRepoRequestMsg struct {
+	Repo domain.RepoRef
+}
+
+// RepoValidatedMsg is sent after validating a manually entered repo.
+type RepoValidatedMsg struct {
+	Repo domain.RepoRef
+	Err  error
+}

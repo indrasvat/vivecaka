@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -154,6 +155,9 @@ func New(cfg *config.Config, opts ...Option) *App {
 	if a.writer != nil {
 		a.checkoutPR = usecase.NewCheckoutPR(a.writer)
 	}
+
+	// Initialize repo switcher with favorites from config.
+	a.initRepoSwitcherFavorites()
 
 	return a
 }
@@ -323,6 +327,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.view = a.prevView
 		return a, nil
 
+	case views.ReposDiscoveredMsg:
+		return a.handleReposDiscovered(msg)
+
+	case views.ToggleFavoriteMsg:
+		return a.handleToggleFavorite(msg)
+
+	case views.ValidateRepoRequestMsg:
+		return a, validateRepoCmd(msg.Repo)
+
+	case views.RepoValidatedMsg:
+		return a.handleRepoValidated(msg)
+
 	case views.CloseHelpMsg:
 		a.view = a.prevView
 		return a, nil
@@ -478,6 +494,13 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if a.view != core.ViewRepoSwitch {
 			a.prevView = a.view
 			a.view = core.ViewRepoSwitch
+			// Mark current repo in the switcher.
+			a.repoSwitcher.SetCurrentRepo(a.repo)
+			// Trigger discovery on first open.
+			if a.repoSwitcher.NeedsDiscovery() {
+				a.repoSwitcher.SetDiscovering()
+				return a, discoverReposCmd()
+			}
 		}
 		return a, nil
 
@@ -530,6 +553,9 @@ func (a *App) handleRepoDetected(msg views.RepoDetectedMsg) (tea.Model, tea.Cmd)
 	a.repo = msg.Repo
 	a.header.SetRepo(a.repo)
 	a.header.SetTotalCount(0) // Reset total count for new repo
+	// Prepend CWD repo to favorites if not already there.
+	a.ensureCWDRepoInFavorites()
+	a.repoSwitcher.SetCurrentRepo(a.repo)
 
 	if a.listPRs != nil {
 		// Load PRs and fetch total count in parallel
@@ -740,6 +766,7 @@ func (a *App) handleSwitchRepo(msg views.SwitchRepoMsg) (tea.Model, tea.Cmd) {
 	a.repo = msg.Repo
 	a.header.SetRepo(a.repo)
 	a.header.SetTotalCount(0) // Reset total count for new repo
+	a.repoSwitcher.SetCurrentRepo(a.repo)
 	a.view = core.ViewPRList
 
 	if a.listPRs != nil {
@@ -753,6 +780,86 @@ func (a *App) handleSwitchRepo(msg views.SwitchRepoMsg) (tea.Model, tea.Cmd) {
 		)
 	}
 	return a, nil
+}
+
+func (a *App) handleReposDiscovered(msg views.ReposDiscoveredMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		cmd := a.toasts.Add(
+			fmt.Sprintf("Could not list repos: %v", msg.Err),
+			domain.ToastWarning, 5*time.Second,
+		)
+		return a, cmd
+	}
+	a.repoSwitcher.MergeDiscovered(msg.Repos)
+	return a, nil
+}
+
+func (a *App) handleToggleFavorite(msg views.ToggleFavoriteMsg) (tea.Model, tea.Cmd) {
+	// Collect current favorite repos from the switcher.
+	favs := a.collectFavoriteStrings()
+	if err := a.cfg.UpdateFavorites(favs); err != nil {
+		cmd := a.toasts.Add(
+			fmt.Sprintf("Failed to save favorites: %v", err),
+			domain.ToastError, 5*time.Second,
+		)
+		return a, cmd
+	}
+	action := "added to"
+	if !msg.Favorite {
+		action = "removed from"
+	}
+	cmd := a.toasts.Add(
+		fmt.Sprintf("%s %s favorites", msg.Repo.String(), action),
+		domain.ToastSuccess, 3*time.Second,
+	)
+	return a, cmd
+}
+
+func (a *App) handleRepoValidated(msg views.RepoValidatedMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		cmd := a.toasts.Add(
+			fmt.Sprintf("Repository not found: %s", msg.Repo.String()),
+			domain.ToastError, 5*time.Second,
+		)
+		return a, cmd
+	}
+	// Valid repo — switch to it and add to favorites.
+	return a.handleSwitchRepo(views.SwitchRepoMsg{Repo: msg.Repo})
+}
+
+func (a *App) ensureCWDRepoInFavorites() {
+	if a.repo.Owner == "" {
+		return
+	}
+	// Check if already in favorites.
+	for _, f := range a.repoSwitcher.Favorites() {
+		if f.Repo == a.repo {
+			return
+		}
+	}
+	// Prepend CWD repo.
+	entry := views.RepoEntry{
+		Repo:      a.repo,
+		Favorite:  true,
+		Section:   views.SectionFavorite,
+		Current:   true,
+		OpenCount: -1,
+	}
+	current := a.repoSwitcher.Favorites()
+	all := append([]views.RepoEntry{entry}, current...)
+	a.repoSwitcher.SetRepos(all)
+}
+
+func (a *App) collectFavoriteStrings() []string {
+	// Walk the repo switcher favorites to build the config list.
+	// Access via the SetRepos/MergeDiscovered approach — we need the switcher state.
+	// Since we just toggled, we read from config and update based on the msg.
+	// Simpler: read the favorites from the switcher model.
+	var favs []string
+	for _, entry := range a.repoSwitcher.Favorites() {
+		favs = append(favs, entry.Repo.String())
+	}
+	return favs
 }
 
 // resolveThreadDoneMsg is sent when a resolve/unresolve thread operation completes.
@@ -876,6 +983,23 @@ func (a *App) rebuildStyles() {
 
 func (a *App) contentHeight() int {
 	return max(1, a.height-2) // header + status bar
+}
+
+// initRepoSwitcherFavorites populates the repo switcher from config favorites.
+func (a *App) initRepoSwitcherFavorites() {
+	var entries []views.RepoEntry
+	for _, fav := range a.cfg.Repos.Favorites {
+		parts := strings.SplitN(fav, "/", 2)
+		if len(parts) == 2 {
+			entries = append(entries, views.RepoEntry{
+				Repo:      domain.RepoRef{Owner: parts[0], Name: parts[1]},
+				Favorite:  true,
+				Section:   views.SectionFavorite,
+				OpenCount: -1,
+			})
+		}
+	}
+	a.repoSwitcher.SetRepos(entries)
 }
 
 func (a *App) View() string {

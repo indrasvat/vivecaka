@@ -323,7 +323,7 @@ func StatusHints(view core.ViewState, width int) string {
 	case core.ViewInbox:
 		hints = "j/k navigate  Tab tab  Enter open  Esc back  ? help"
 	case core.ViewRepoSwitch:
-		hints = "j/k navigate  Enter switch  Esc cancel"
+		hints = "j/k navigate  s star  Enter switch  Esc cancel"
 	case core.ViewHelp:
 		hints = "? or Esc to close"
 	case core.ViewFilter:
