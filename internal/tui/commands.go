@@ -122,6 +122,22 @@ func discoverReposCmd() tea.Cmd {
 	}
 }
 
+// loadInboxCmd fetches PRs from multiple repos for the inbox.
+func loadInboxCmd(uc *usecase.GetInboxPRs, repos []domain.RepoRef) tea.Cmd {
+	return func() tea.Msg {
+		prs, err := uc.Execute(context.Background(), repos)
+		if err != nil {
+			return views.InboxPRsLoadedMsg{PRs: nil}
+		}
+		// Convert usecase.InboxPR to views.InboxPR.
+		vPRs := make([]views.InboxPR, len(prs))
+		for i, p := range prs {
+			vPRs[i] = views.InboxPR{PR: p.PR, Repo: p.Repo}
+		}
+		return views.InboxPRsLoadedMsg{PRs: vPRs}
+	}
+}
+
 // validateRepoCmd checks if a manually entered repo exists.
 func validateRepoCmd(repo domain.RepoRef) tea.Cmd {
 	return func() tea.Msg {

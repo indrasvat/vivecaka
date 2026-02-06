@@ -65,6 +65,8 @@ func (m *InboxModel) SetUsername(u string) {
 
 // SetPRs updates the inbox with PRs from all repos.
 func (m *InboxModel) SetPRs(prs []InboxPR) {
+	// Apply priority sort before storing.
+	PrioritySort(prs, m.username, 7)
 	m.allPRs = prs
 	m.loading = false
 	m.applyFilter()

@@ -34,7 +34,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 011 | `docs/tasks/011-review-form-huh.md` | Rewrite review form using huh library | DONE | — |
 | 012 | `docs/tasks/012-confirmation-dialogs.md` | Add confirmation before checkout and review submit | DONE | — |
 | 013 | `docs/tasks/013-repo-switcher-wiring.md` | Load favorites from config into repo switcher | DONE | — |
-| 014 | `docs/tasks/014-inbox-wiring.md` | Wire inbox: I key, multi-repo fetch, priority sort | TODO | 006, 013 |
+| 014 | `docs/tasks/014-inbox-wiring.md` | Wire inbox: I key, multi-repo fetch, priority sort | DONE | 006, 013 |
 | 015 | `docs/tasks/015-auto-refresh.md` | Background polling with countdown, pause, toasts | DONE | — |
 | 016 | `docs/tasks/016-startup-experience.md` | Wire tutorial, startup banner, branch detection | DONE | — |
 | 017 | `docs/tasks/017-external-diff-tool.md` | e key to launch external diff tool | DONE | — |
@@ -67,6 +67,7 @@ Banner Polish:
 - Task 015: Auto-refresh polling implemented with `tea.Tick` every second. Countdown shown in header as `↻ 25s`. `p` key pauses/resumes (shows `⏸ paused`). When countdown reaches 0, triggers `loadPRsCmd` silently. Compares new PR count with previous; shows toast when new PRs detected. Refresh pauses automatically during non-list views (detail, diff, review). Uses config `refresh_interval` (default 30s).
 - Task 016: Branch detection via `git rev-parse --abbrev-ref HEAD` on startup. Branch displayed in header as `⎇ main`. Tutorial `Show()` now called from `Init()` when `IsFirstLaunch()` returns true. Branch detection fires alongside repo detection in Init().
 - Task 017: `e` key in diff view emits `OpenExternalDiffMsg`. App handles it via `tea.ExecProcess` with `gh pr diff N` and `GH_PAGER` env var set to configured external tool. If no tool configured, shows toast error. After tool exits, TUI resumes. Status hints updated to show `e ext diff`.
+- Task 014: `GetInboxPRs` use case fetches PRs from all favorite repos in parallel via errgroup, tolerates partial failures. `I` key opens inbox from PR list. `OpenInboxPRMsg` switches repo context and loads PR detail. `PrioritySort` called on inbox data (review-requested > CI-failing > stale > normal). Usecase coverage stays at 100%.
 
 Open Issues:
 - ~~PR detail loading spinner appears stuck~~ **RESOLVED** (Feb 5, 2026): Spinner now animates correctly. Root causes addressed: (1) Fixed View() logic to only show loading state when `loading=true`, not when `detail==nil`; (2) Added explicit `return nil` for `PRDetailLoadedMsg` in Update(); (3) Verified spinner frames cycle properly via iTerm2 automation tests. The `gh pr checks` API call takes ~1.4s which causes visible spinner animation before PR detail loads.

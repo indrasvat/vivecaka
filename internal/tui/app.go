@@ -82,6 +82,7 @@ type App struct {
 	reviewPR      *usecase.ReviewPR
 	checkoutPR    *usecase.CheckoutPR
 	resolveThread *usecase.ResolveThread
+	getInboxPRs   *usecase.GetInboxPRs
 
 	// View models
 	prList       views.PRListModel
@@ -155,6 +156,7 @@ func New(cfg *config.Config, opts ...Option) *App {
 	if a.reader != nil {
 		a.listPRs = usecase.NewListPRs(a.reader)
 		a.getPRDetail = usecase.NewGetPRDetail(a.reader)
+		a.getInboxPRs = usecase.NewGetInboxPRs(a.reader)
 	}
 	if a.reviewer != nil {
 		a.reviewPR = usecase.NewReviewPR(a.reviewer)
@@ -410,6 +412,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.view = a.prevView
 		return a, nil
 
+	case views.OpenInboxPRMsg:
+		return a.handleOpenInboxPR(msg)
+
 	case views.CloseInboxMsg:
 		a.view = core.ViewPRList
 		return a, nil
@@ -596,11 +601,18 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// View-specific global keys (not in keymap).
-	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == 'p' {
-		if a.view == core.ViewPRList && a.refreshInterval > 0 {
-			a.refreshPaused = !a.refreshPaused
-			a.header.SetRefreshCountdown(a.refreshCountdown, a.refreshPaused)
-			return a, nil
+	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
+		switch msg.Runes[0] {
+		case 'p':
+			if a.view == core.ViewPRList && a.refreshInterval > 0 {
+				a.refreshPaused = !a.refreshPaused
+				a.header.SetRefreshCountdown(a.refreshCountdown, a.refreshPaused)
+				return a, nil
+			}
+		case 'I':
+			if a.view == core.ViewPRList {
+				return a.openInbox()
+			}
 		}
 	}
 
@@ -946,6 +958,39 @@ func (a *App) handleToggleFavorite(msg views.ToggleFavoriteMsg) (tea.Model, tea.
 		domain.ToastSuccess, 3*time.Second,
 	)
 	return a, cmd
+}
+
+func (a *App) openInbox() (tea.Model, tea.Cmd) {
+	a.prevView = a.view
+	a.view = core.ViewInbox
+	a.inbox.SetUsername(a.username)
+
+	// Collect repos from favorites.
+	var repos []domain.RepoRef
+	for _, entry := range a.repoSwitcher.Favorites() {
+		repos = append(repos, entry.Repo)
+	}
+	if len(repos) == 0 && a.repo.Owner != "" {
+		repos = []domain.RepoRef{a.repo}
+	}
+
+	if a.getInboxPRs != nil && len(repos) > 0 {
+		return a, loadInboxCmd(a.getInboxPRs, repos)
+	}
+	return a, nil
+}
+
+func (a *App) handleOpenInboxPR(msg views.OpenInboxPRMsg) (tea.Model, tea.Cmd) {
+	// Switch repo context to the inbox PR's repo and open detail.
+	a.repo = msg.Repo
+	a.header.SetRepo(a.repo)
+	a.view = core.ViewPRDetail
+	spinCmd := a.prDetail.StartLoading(msg.Number)
+
+	if a.getPRDetail != nil {
+		return a, tea.Batch(spinCmd, loadPRDetailCmd(a.getPRDetail, a.repo, msg.Number))
+	}
+	return a, spinCmd
 }
 
 func (a *App) handleRepoValidated(msg views.RepoValidatedMsg) (tea.Model, tea.Cmd) {

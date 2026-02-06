@@ -1,6 +1,6 @@
 # Task 014: Inbox Wiring (Multi-Repo PR Aggregation)
 
-## Status: TODO
+## Status: DONE
 
 ## Depends On: 006 (username detection), 013 (repo switcher / favorites loading)
 
