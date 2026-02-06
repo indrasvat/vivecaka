@@ -15,4 +15,5 @@ const (
 	ViewInbox
 	ViewFilter
 	ViewConfirm
+	ViewSmartCheckout
 )
