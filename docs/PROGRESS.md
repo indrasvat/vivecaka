@@ -41,7 +41,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 018 | `docs/tasks/018-inline-comments.md` | Inline comments in diff view (c/r/x keys) | TODO | 010 |
 | 019 | `docs/tasks/019-diff-two-pane-layout.md` | File tree + content split layout for diff | TODO | — |
 | 020 | `docs/tasks/020-diff-side-by-side.md` | Side-by-side diff mode with t toggle | TODO | 019 |
-| 021 | `docs/tasks/021-visual-selection-mode.md` | v key for multi-select, batch operations | TODO | — |
+| 021 | `docs/tasks/021-visual-selection-mode.md` | v key for multi-select, batch operations | DONE | — |
 | 022 | `docs/tasks/022-pagination.md` | Paginated PR loading with infinite scroll | DONE | — |
 | 023 | `docs/tasks/023-caching.md` | PR list caching for instant startup | TODO | — |
 | 024 | `docs/tasks/024-config-enhancements.md` | Keybinding overrides, adaptive colors, notifications | TODO | — |
@@ -68,6 +68,7 @@ Banner Polish:
 - Task 016: Branch detection via `git rev-parse --abbrev-ref HEAD` on startup. Branch displayed in header as `⎇ main`. Tutorial `Show()` now called from `Init()` when `IsFirstLaunch()` returns true. Branch detection fires alongside repo detection in Init().
 - Task 017: `e` key in diff view emits `OpenExternalDiffMsg`. App handles it via `tea.ExecProcess` with `gh pr diff N` and `GH_PAGER` env var set to configured external tool. If no tool configured, shows toast error. After tool exits, TUI resumes. Status hints updated to show `e ext diff`.
 - Task 014: `GetInboxPRs` use case fetches PRs from all favorite repos in parallel via errgroup, tolerates partial failures. `I` key opens inbox from PR list. `OpenInboxPRMsg` switches repo context and loads PR detail. `PrioritySort` called on inbox data (review-requested > CI-failing > stale > normal). Usecase coverage stays at 100%.
+- Task 021: Visual selection mode via `v` key. Space toggles selection (`●`/`○`), `a` selects all visible, Esc cancels. Batch operations: `y` copies all selected PR URLs (newline-separated), `o` opens all in browser. Status bar shows `N selected` count. Cursor uses `▸`/`▹` in selection mode. Quick filters m/n disabled during selection mode.
 
 Open Issues:
 - ~~PR detail loading spinner appears stuck~~ **RESOLVED** (Feb 5, 2026): Spinner now animates correctly. Root causes addressed: (1) Fixed View() logic to only show loading state when `loading=true`, not when `detail==nil`; (2) Added explicit `return nil` for `PRDetailLoadedMsg` in Update(); (3) Verified spinner frames cycle properly via iTerm2 automation tests. The `gh pr checks` API call takes ~1.4s which causes visible spinner animation before PR detail loads.

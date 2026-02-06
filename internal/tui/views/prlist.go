@@ -43,6 +43,26 @@ type PRListModel struct {
 
 	// Spinner animation
 	spinnerFrame int
+
+	// Visual selection mode
+	selectionMode bool
+	selected      map[int]bool // PR number → selected
+}
+
+// BatchCopyURLsMsg is sent when copying multiple PR URLs.
+type BatchCopyURLsMsg struct{ URLs []string }
+
+// BatchOpenBrowserMsg is sent when opening multiple PRs in browser.
+type BatchOpenBrowserMsg struct{ URLs []string }
+
+// SelectionCount returns the number of selected PRs.
+func (m *PRListModel) SelectionCount() int {
+	return len(m.selected)
+}
+
+// IsSelectionMode returns true if visual selection mode is active.
+func (m *PRListModel) IsSelectionMode() bool {
+	return m.selectionMode
 }
 
 // NewPRListModel creates a new PR list view.
@@ -226,10 +246,48 @@ func (m *PRListModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
 		switch msg.Runes[0] {
 		case 'm':
-			return m.toggleQuickFilter(quickFilterMyPRs)
+			if !m.selectionMode {
+				return m.toggleQuickFilter(quickFilterMyPRs)
+			}
 		case 'n':
-			return m.toggleQuickFilter(quickFilterNeedsReview)
+			if !m.selectionMode {
+				return m.toggleQuickFilter(quickFilterNeedsReview)
+			}
+		case 'v':
+			m.selectionMode = !m.selectionMode
+			if !m.selectionMode {
+				m.selected = nil
+			} else if m.selected == nil {
+				m.selected = make(map[int]bool)
+			}
+			return nil
+		case 'a':
+			if m.selectionMode {
+				// Select all visible.
+				if m.selected == nil {
+					m.selected = make(map[int]bool)
+				}
+				for _, pr := range m.filtered {
+					m.selected[pr.Number] = true
+				}
+				return nil
+			}
 		}
+	}
+
+	// Space toggles selection in selection mode.
+	if m.selectionMode && msg.Type == tea.KeySpace {
+		if pr := m.SelectedPR(); pr != nil {
+			if m.selected == nil {
+				m.selected = make(map[int]bool)
+			}
+			if m.selected[pr.Number] {
+				delete(m.selected, pr.Number)
+			} else {
+				m.selected[pr.Number] = true
+			}
+		}
+		return nil
 	}
 
 	if listLen == 0 {
@@ -295,10 +353,18 @@ func (m *PRListModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 			return func() tea.Msg { return CheckoutPRMsg{Number: pr.Number, Branch: pr.Branch.Head} }
 		}
 	case key.Matches(msg, m.keys.Yank):
+		if m.selectionMode && len(m.selected) > 0 {
+			urls := m.selectedURLs()
+			return func() tea.Msg { return BatchCopyURLsMsg{URLs: urls} }
+		}
 		if pr := m.SelectedPR(); pr != nil {
 			return func() tea.Msg { return CopyURLMsg{URL: pr.URL} }
 		}
 	case key.Matches(msg, m.keys.Open):
+		if m.selectionMode && len(m.selected) > 0 {
+			urls := m.selectedURLs()
+			return func() tea.Msg { return BatchOpenBrowserMsg{URLs: urls} }
+		}
 		if pr := m.SelectedPR(); pr != nil {
 			return func() tea.Msg { return OpenBrowserMsg{URL: pr.URL} }
 		}
@@ -582,11 +648,22 @@ func (m *PRListModel) columns() colWidths {
 	}
 }
 
+func (m *PRListModel) selectedURLs() []string {
+	var urls []string
+	for _, pr := range m.filtered {
+		if m.selected[pr.Number] {
+			urls = append(urls, pr.URL)
+		}
+	}
+	return urls
+}
+
 func (m *PRListModel) renderPRRow(idx int, pr domain.PR) string {
 	t := m.styles.Theme
 	cols := m.columns()
 
-	selected := idx == m.cursor
+	isCursor := idx == m.cursor
+	isSelected := m.selectionMode && m.selected[pr.Number]
 	isBranch := m.currentBranch != "" && pr.Branch.Head == m.currentBranch
 	isDraft := pr.Draft
 
@@ -603,10 +680,27 @@ func (m *PRListModel) renderPRRow(idx int, pr domain.PR) string {
 	var numStyle, titleStyle, authorStyle, ageStyle lipgloss.Style
 	leftIndicator := " " // space for non-selected
 
+	// Selection checkbox indicator.
+	if m.selectionMode {
+		if isSelected {
+			leftIndicator = lipgloss.NewStyle().Foreground(t.Success).Render("●")
+		} else {
+			leftIndicator = lipgloss.NewStyle().Foreground(t.Muted).Render("○")
+		}
+	}
+
 	switch {
-	case selected:
-		// Selected row: mauve left border, bold number
-		leftIndicator = lipgloss.NewStyle().Foreground(t.Primary).Render("│")
+	case isCursor:
+		// Cursor row: mauve left border (override selection indicator).
+		if m.selectionMode {
+			if isSelected {
+				leftIndicator = lipgloss.NewStyle().Foreground(t.Primary).Render("▸")
+			} else {
+				leftIndicator = lipgloss.NewStyle().Foreground(t.Primary).Render("▹")
+			}
+		} else {
+			leftIndicator = lipgloss.NewStyle().Foreground(t.Primary).Render("│")
+		}
 		numStyle = lipgloss.NewStyle().Foreground(t.Primary).Bold(true)
 		titleStyle = lipgloss.NewStyle().Foreground(t.Fg).Bold(true)
 		authorStyle = lipgloss.NewStyle().Foreground(t.Secondary)

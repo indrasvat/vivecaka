@@ -313,7 +313,7 @@ func StatusHints(view core.ViewState, width int) string {
 	var hints string
 	switch view {
 	case core.ViewPRList:
-		hints = "j/k navigate  Enter open  c checkout  / search  f filter  ? help  q quit"
+		hints = "j/k navigate  Enter open  c checkout  / search  f filter  v select  I inbox  ? help  q quit"
 	case core.ViewPRDetail:
 		hints = "j/k scroll  Tab pane  d diff  c checkout  r review  o open  Esc back  ? help"
 	case core.ViewDiff:

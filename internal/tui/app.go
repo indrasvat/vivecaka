@@ -385,6 +385,37 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case views.BatchCopyURLsMsg:
+		combined := strings.Join(msg.URLs, "\n")
+		if err := copyToClipboard(combined); err != nil {
+			cmd := a.toasts.Add(
+				fmt.Sprintf("Copy failed: %v", err),
+				domain.ToastError, 5*time.Second,
+			)
+			return a, cmd
+		}
+		cmd := a.toasts.Add(
+			fmt.Sprintf("Copied %d PR URLs", len(msg.URLs)),
+			domain.ToastSuccess, 3*time.Second,
+		)
+		return a, cmd
+
+	case views.BatchOpenBrowserMsg:
+		for _, url := range msg.URLs {
+			if err := openBrowser(url); err != nil {
+				cmd := a.toasts.Add(
+					fmt.Sprintf("Open browser failed: %v", err),
+					domain.ToastError, 5*time.Second,
+				)
+				return a, cmd
+			}
+		}
+		cmd := a.toasts.Add(
+			fmt.Sprintf("Opened %d PRs in browser", len(msg.URLs)),
+			domain.ToastSuccess, 3*time.Second,
+		)
+		return a, cmd
+
 	case views.PRListFilterMsg:
 		a.header.SetFilter(msg.Label)
 		return a, nil
@@ -1202,10 +1233,14 @@ func (a *App) View() string {
 	contentHeight := a.contentHeight()
 	content := a.renderContent(contentHeight)
 
-	// Status bar — use dialog-specific hints when confirm is active.
-	if a.view == core.ViewConfirm {
+	// Status bar — context-specific hints.
+	switch {
+	case a.view == core.ViewConfirm:
 		a.status.SetHints([]string{a.confirmDialog.ConfirmStateHint()})
-	} else {
+	case a.view == core.ViewPRList && a.prList.IsSelectionMode():
+		n := a.prList.SelectionCount()
+		a.status.SetHints([]string{fmt.Sprintf("%d selected  Space toggle  a all  y copy  o open  v exit  Esc cancel", n)})
+	default:
 		a.status.SetHints([]string{views.StatusHints(a.view, a.width)})
 	}
 	statusView := a.status.View()

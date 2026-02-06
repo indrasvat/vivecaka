@@ -1,6 +1,6 @@
 # Task 021: Visual Selection Mode
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 
