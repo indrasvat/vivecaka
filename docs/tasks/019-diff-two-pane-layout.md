@@ -1,6 +1,6 @@
 # Task 019: Diff Two-Pane Layout (File Tree + Content)
 
-## Status: TODO
+## Status: DONE
 
 ## Problem
 

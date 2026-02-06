@@ -214,10 +214,12 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 			{
 				title: "Navigation",
 				bindings: []helpBinding{
-					{"j/k", "Scroll up/down"},
+					{"j/k", "Scroll / navigate files"},
 					{"Ctrl+d/u", "Half page"},
-					{"Tab", "Next file"},
-					{"Shift+Tab", "Previous file"},
+					{"Tab", "Switch pane (tree/content)"},
+					{"{/}", "Previous / next file"},
+					{"[/]", "Previous / next hunk"},
+					{"gg/G", "Top / bottom"},
 				},
 			},
 		}
@@ -225,7 +227,10 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 			{
 				title: "Actions",
 				bindings: []helpBinding{
+					{"Enter", "Select file (in tree)"},
 					{"/", "Search in diff"},
+					{"e", "External diff tool"},
+					{"za", "Toggle collapse"},
 					{"Esc", "Back to detail"},
 				},
 			},
@@ -317,7 +322,7 @@ func StatusHints(view core.ViewState, width int) string {
 	case core.ViewPRDetail:
 		hints = "j/k scroll  Tab pane  d diff  c checkout  r review  o open  Esc back  ? help"
 	case core.ViewDiff:
-		hints = "j/k scroll  Tab file  / search  e ext diff  Esc back  ? help"
+		hints = "j/k scroll  Tab pane  {/} file  / search  e ext diff  Esc back  ? help"
 	case core.ViewReview:
 		hints = "j/k field  Enter action  Esc back  ? help"
 	case core.ViewInbox:

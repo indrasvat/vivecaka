@@ -190,30 +190,55 @@ func TestDiffFileNavigation(t *testing.T) {
 		t.Fatalf("initial fileIdx = %d, want 0", m.fileIdx)
 	}
 
-	// Tab to next file.
+	// { } still navigate files from content pane.
+	next := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'}'}}
+	m.Update(next)
+	if m.fileIdx != 1 {
+		t.Errorf("fileIdx after } = %d, want 1", m.fileIdx)
+	}
+
+	prev := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'{'}}
+	m.Update(prev)
+	if m.fileIdx != 0 {
+		t.Errorf("fileIdx after { = %d, want 0", m.fileIdx)
+	}
+
+	// Tab toggles focus to tree pane.
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	m.Update(tab)
-	if m.fileIdx != 1 {
-		t.Errorf("fileIdx after tab = %d, want 1", m.fileIdx)
+	if !m.treeFocus {
+		t.Error("expected treeFocus after Tab")
 	}
 
-	// Tab at last file stays.
-	m.Update(tab)
+	// In tree pane, j/k navigate files.
+	down := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	m.Update(down)
 	if m.fileIdx != 1 {
-		t.Errorf("fileIdx after tab at end = %d, want 1", m.fileIdx)
+		t.Errorf("fileIdx after j in tree = %d, want 1", m.fileIdx)
 	}
 
-	// Shift-tab back.
+	up := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
+	m.Update(up)
+	if m.fileIdx != 0 {
+		t.Errorf("fileIdx after k in tree = %d, want 0", m.fileIdx)
+	}
+
+	// Enter selects file and returns focus to content.
+	m.Update(down) // go to file 1
+	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	m.Update(enter)
+	if m.treeFocus {
+		t.Error("expected content focus after Enter in tree")
+	}
+	if m.fileIdx != 1 {
+		t.Errorf("fileIdx after Enter = %d, want 1", m.fileIdx)
+	}
+
+	// Shift-tab also toggles focus.
 	shiftTab := tea.KeyMsg{Type: tea.KeyShiftTab}
 	m.Update(shiftTab)
-	if m.fileIdx != 0 {
-		t.Errorf("fileIdx after shift-tab = %d, want 0", m.fileIdx)
-	}
-
-	// Shift-tab at first file stays.
-	m.Update(shiftTab)
-	if m.fileIdx != 0 {
-		t.Errorf("fileIdx after shift-tab at start = %d, want 0", m.fileIdx)
+	if !m.treeFocus {
+		t.Error("expected treeFocus after Shift-Tab")
 	}
 }
 
@@ -223,8 +248,9 @@ func TestDiffFileNavResetsScroll(t *testing.T) {
 	m.SetDiff(testDiff())
 
 	m.scrollY = 5
-	tab := tea.KeyMsg{Type: tea.KeyTab}
-	m.Update(tab)
+	// Use } to navigate to next file (resets scroll).
+	next := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'}'}}
+	m.Update(next)
 	if m.scrollY != 0 {
 		t.Errorf("scrollY should reset on file switch, got %d", m.scrollY)
 	}
@@ -689,5 +715,75 @@ func TestSyntaxHighlighterFallback(t *testing.T) {
 		if result == "" {
 			t.Error("highlight should return non-empty result even for unknown types")
 		}
+	}
+}
+
+func TestDiffTwoPaneLayout(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	view := m.View()
+
+	// View should contain file names from the tree.
+	if !strings.Contains(view, "registry.go") {
+		t.Error("expected file tree to contain 'registry.go'")
+	}
+	if !strings.Contains(view, "hooks.go") {
+		t.Error("expected file tree to contain 'hooks.go'")
+	}
+
+	// Should contain diff content markers.
+	if !strings.Contains(view, "@@") {
+		t.Error("expected diff content with hunk headers")
+	}
+}
+
+func TestDiffTreeFocusToggle(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	// Initially, content has focus.
+	if m.treeFocus {
+		t.Error("expected content focus initially")
+	}
+
+	// Tab switches to tree.
+	tab := tea.KeyMsg{Type: tea.KeyTab}
+	m.Update(tab)
+	if !m.treeFocus {
+		t.Error("expected tree focus after Tab")
+	}
+
+	// Tab back to content.
+	m.Update(tab)
+	if m.treeFocus {
+		t.Error("expected content focus after second Tab")
+	}
+}
+
+func TestDiffTreeWidth(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+
+	// Normal terminal: 25% of width, clamped.
+	m.SetSize(120, 40)
+	w := m.computeTreeWidth()
+	if w < 20 || w > 40 {
+		t.Errorf("tree width %d outside range [20, 40] for width=120", w)
+	}
+
+	// Very wide terminal.
+	m.SetSize(200, 40)
+	w = m.computeTreeWidth()
+	if w > 40 {
+		t.Errorf("tree width %d should cap at 40 for wide terminal", w)
+	}
+
+	// Narrow terminal.
+	m.SetSize(60, 40)
+	w = m.computeTreeWidth()
+	if w < 10 {
+		t.Errorf("tree width %d should be at least 10 for narrow terminal", w)
 	}
 }

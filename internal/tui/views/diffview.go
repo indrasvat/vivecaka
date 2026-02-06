@@ -118,6 +118,10 @@ type DiffViewModel struct {
 	pendingKey    rune
 	collapsed     map[int]bool
 	highlighter   *syntaxHighlighter
+
+	// Two-pane layout: file tree on left, content on right.
+	treeFocus bool // true when file tree pane has focus
+	treeWidth int  // computed tree pane width
 }
 
 // NewDiffViewModel creates a new diff viewer.
@@ -168,11 +172,53 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
+// IsTreeFocus returns whether the file tree pane has focus.
+func (m *DiffViewModel) IsTreeFocus() bool { return m.treeFocus }
+
 func (m *DiffViewModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	if m.searching {
 		return m.handleSearchKey(msg)
 	}
 
+	// Tab toggles focus between file tree and content pane.
+	if key.Matches(msg, m.keys.Tab) || key.Matches(msg, m.keys.ShiftTab) {
+		m.treeFocus = !m.treeFocus
+		return nil
+	}
+
+	// When tree pane is focused, handle tree-specific keys.
+	if m.treeFocus {
+		return m.handleTreeKey(msg)
+	}
+
+	return m.handleContentKey(msg)
+}
+
+func (m *DiffViewModel) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
+	switch {
+	case key.Matches(msg, m.keys.Down):
+		m.nextFile()
+	case key.Matches(msg, m.keys.Up):
+		m.prevFile()
+	case key.Matches(msg, m.keys.Enter):
+		// Select file and switch focus to content.
+		m.treeFocus = false
+		m.scrollY = 0
+	case key.Matches(msg, m.keys.Search):
+		m.searching = true
+		m.searchQuery = ""
+		m.updateSearchMatches()
+	}
+
+	// Rune-based keys in tree.
+	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == 'e' {
+		n := m.prNumber
+		return func() tea.Msg { return OpenExternalDiffMsg{Number: n} }
+	}
+	return nil
+}
+
+func (m *DiffViewModel) handleContentKey(msg tea.KeyMsg) tea.Cmd {
 	if m.pendingKey != 0 && msg.Type != tea.KeyRunes {
 		m.pendingKey = 0
 	}
@@ -242,12 +288,6 @@ func (m *DiffViewModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		if m.scrollY < 0 {
 			m.scrollY = 0
 		}
-	case key.Matches(msg, m.keys.Tab):
-		// Next file.
-		m.nextFile()
-	case key.Matches(msg, m.keys.ShiftTab):
-		// Previous file.
-		m.prevFile()
 	case key.Matches(msg, m.keys.Search):
 		m.searching = true
 		m.searchQuery = ""
@@ -280,6 +320,21 @@ func (m *DiffViewModel) handleSearchKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+// computeTreeWidth calculates the file tree pane width.
+func (m *DiffViewModel) computeTreeWidth() int {
+	w := m.width / 4
+	if w < 20 {
+		w = 20
+	}
+	if w > 40 {
+		w = 40
+	}
+	if w >= m.width-20 {
+		w = max(10, m.width/3)
+	}
+	return w
+}
+
 // View renders the diff viewer.
 func (m *DiffViewModel) View() string {
 	if m.loading || m.diff == nil {
@@ -298,20 +353,103 @@ func (m *DiffViewModel) View() string {
 			Render("No files changed")
 	}
 
+	m.treeWidth = m.computeTreeWidth()
+	treePane := m.renderFileTree()
+	contentPane := m.renderContentPane()
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, treePane, contentPane)
+}
+
+// renderFileTree renders the left file tree pane.
+func (m *DiffViewModel) renderFileTree() string {
+	t := m.styles.Theme
+	tw := m.treeWidth - 2 // subtract border
+
+	borderColor := t.Muted
+	if m.treeFocus {
+		borderColor = t.Primary
+	}
+
+	var lines []string
+	for i, f := range m.diff.Files {
+		adds, dels := countFileChanges(f)
+		// Status icon.
+		icon := "~"
+		if adds > 0 && dels == 0 {
+			icon = "+"
+		} else if dels > 0 && adds == 0 {
+			icon = "-"
+		}
+
+		// Shorten path for tree display.
+		name := filepath.Base(f.Path)
+		dir := filepath.Dir(f.Path)
+		if dir != "." {
+			maxDir := tw - len(name) - 12
+			if maxDir > 0 && len(dir) > maxDir {
+				dir = "…" + dir[len(dir)-maxDir+1:]
+			}
+			name = dir + "/" + name
+		}
+		if len(name) > tw-8 {
+			name = "…" + name[len(name)-tw+9:]
+		}
+
+		stat := fmt.Sprintf("+%d -%d", adds, dels)
+		// Pad or truncate to fit.
+		padding := tw - len(name) - len(stat) - 3 // icon + spaces
+		if padding < 1 {
+			padding = 1
+		}
+		line := fmt.Sprintf(" %s %s%s%s", icon, name, strings.Repeat(" ", padding), stat)
+		if len(line) > tw {
+			line = line[:tw]
+		}
+
+		style := lipgloss.NewStyle().Foreground(t.Fg)
+		if i == m.fileIdx {
+			if m.treeFocus {
+				style = style.Background(t.BgDim).Bold(true).Foreground(t.Primary)
+			} else {
+				style = style.Bold(true).Foreground(t.Primary)
+			}
+		} else {
+			style = style.Foreground(t.Muted)
+		}
+		lines = append(lines, style.Render(line))
+	}
+
+	// Pad to fill height.
+	for len(lines) < m.height {
+		lines = append(lines, strings.Repeat(" ", tw))
+	}
+	if len(lines) > m.height {
+		lines = lines[:m.height]
+	}
+
+	content := strings.Join(lines, "\n")
+	return lipgloss.NewStyle().
+		Width(m.treeWidth).
+		BorderRight(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(borderColor).
+		Render(content)
+}
+
+// renderContentPane renders the right diff content pane.
+func (m *DiffViewModel) renderContentPane() string {
 	t := m.styles.Theme
 	matchStyle := lipgloss.NewStyle().Background(t.Info).Foreground(t.Bg).Bold(true)
 	lineMatches := m.matchesByLine(m.fileIdx)
 
-	// File tab bar.
-	fileBar := m.renderFileBar()
+	contentWidth := m.width - m.treeWidth - 1 // subtract tree + border
+	contentHeight := m.height - 1
+	contentHeight = max(1, contentHeight)
 
-	// Diff content for current file.
-	contentHeight := m.height - 2
-	if contentHeight < 1 {
-		contentHeight = 1
-	}
-
+	// File header line.
 	file := m.diff.Files[m.fileIdx]
+	fileHeader := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(file.Path)
+
 	var lines []string
 	lineIdx := 0
 
@@ -319,7 +457,6 @@ func (m *DiffViewModel) View() string {
 		lines = append(lines, m.renderCollapsedFile(file))
 	} else {
 		for _, hunk := range file.Hunks {
-			// Hunk header.
 			hunkStyle := lipgloss.NewStyle().Foreground(t.Info)
 			header := hunk.Header
 			if matches := lineMatches[lineIdx]; len(matches) > 0 {
@@ -333,7 +470,6 @@ func (m *DiffViewModel) View() string {
 			for _, dl := range hunk.Lines {
 				matches := lineMatches[lineIdx]
 				lineNum := ""
-				// Apply syntax highlighting to content
 				highlightedContent := m.highlighter.highlight(dl.Content, file.Path)
 				switch dl.Type {
 				case domain.DiffAdd:
@@ -359,9 +495,7 @@ func (m *DiffViewModel) View() string {
 		m.scrollY = max(0, len(lines)-1)
 	}
 	end := m.scrollY + contentHeight
-	if end > len(lines) {
-		end = len(lines)
-	}
+	end = min(end, len(lines))
 	visible := lines[m.scrollY:end]
 
 	content := strings.Join(visible, "\n")
@@ -372,28 +506,9 @@ func (m *DiffViewModel) View() string {
 		content += "\n" + search
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, fileBar, content)
-}
-
-func (m *DiffViewModel) renderFileBar() string {
-	t := m.styles.Theme
-	active := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Padding(0, 1)
-	inactive := lipgloss.NewStyle().Foreground(t.Muted).Padding(0, 1)
-
-	var tabs []string
-	for i, f := range m.diff.Files {
-		// Shorten path for display.
-		name := f.Path
-		if len(name) > 20 {
-			name = "…" + name[len(name)-19:]
-		}
-		if i == m.fileIdx {
-			tabs = append(tabs, active.Render(name))
-		} else {
-			tabs = append(tabs, inactive.Render(name))
-		}
-	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
+	return lipgloss.NewStyle().
+		Width(contentWidth).
+		Render(lipgloss.JoinVertical(lipgloss.Left, fileHeader, content))
 }
 
 type searchMatch struct {
