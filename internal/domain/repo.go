@@ -1,5 +1,15 @@
 package domain
 
+import "time"
+
+// RepoLocation tracks where a repository is cloned locally.
+type RepoLocation struct {
+	Repo     RepoRef   `json:"repo"`
+	Path     string    `json:"path"`
+	LastSeen time.Time `json:"last_seen"`
+	Source   string    `json:"source"` // "detected", "cloned", "manual"
+}
+
 // RepoConfig represents a saved repo configuration.
 type RepoConfig struct {
 	Repo     RepoRef `json:"repo"`

@@ -26,3 +26,17 @@ type PRWriter interface {
 	Merge(ctx context.Context, repo RepoRef, number int, opts MergeOpts) error
 	UpdateLabels(ctx context.Context, repo RepoRef, number int, labels []string) error
 }
+
+// RepoManager provides local git repository management capabilities.
+// Implemented by adapters that can perform git/clone operations.
+// Separate from PRWriter — these are repo-level git ops, not PR ops.
+type RepoManager interface {
+	// CheckoutAt checks out a PR branch in the specified working directory.
+	// If workDir is "", uses the process CWD (same as PRWriter.Checkout).
+	CheckoutAt(ctx context.Context, repo RepoRef, number int, workDir string) (branch string, err error)
+	// CloneRepo clones a repository to the specified local path.
+	CloneRepo(ctx context.Context, repo RepoRef, targetPath string) error
+	// CreateWorktree creates a git worktree for a PR branch at the given path.
+	// It fetches the PR ref first, then creates the worktree.
+	CreateWorktree(ctx context.Context, repoPath string, number int, branch, worktreePath string) error
+}
