@@ -164,6 +164,14 @@ func saveCacheCmd(repo domain.RepoRef, prs []domain.PR) tea.Cmd {
 	}
 }
 
+// addInlineCommentCmd submits an inline comment on a PR.
+func addInlineCommentCmd(uc *usecase.AddComment, repo domain.RepoRef, number int, input domain.InlineCommentInput) tea.Cmd {
+	return func() tea.Msg {
+		err := uc.Execute(context.Background(), repo, number, input)
+		return views.InlineCommentAddedMsg{Err: err}
+	}
+}
+
 // validateRepoCmd checks if a manually entered repo exists.
 func validateRepoCmd(repo domain.RepoRef) tea.Cmd {
 	return func() tea.Msg {

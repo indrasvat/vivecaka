@@ -100,6 +100,17 @@ type OpenExternalDiffMsg struct {
 	Number int
 }
 
+// AddInlineCommentMsg is sent when the user submits an inline comment.
+type AddInlineCommentMsg struct {
+	Number int
+	Input  domain.InlineCommentInput
+}
+
+// InlineCommentAddedMsg is sent after a comment is successfully added.
+type InlineCommentAddedMsg struct {
+	Err error
+}
+
 // DiffViewModel implements the diff viewer.
 type DiffViewModel struct {
 	diff          *domain.Diff
@@ -125,6 +136,16 @@ type DiffViewModel struct {
 
 	// Side-by-side mode.
 	splitMode bool // true for side-by-side, false for unified
+
+	// Inline comments.
+	comments    []domain.CommentThread            // all comments for this PR
+	commentMap  map[string][]domain.CommentThread // path:line → threads
+	editing     bool                              // true when comment editor is open
+	editBuffer  string                            // current editor text
+	editLine    int                               // line number being commented
+	editPath    string                            // file path being commented
+	editSide    string                            // "LEFT" or "RIGHT"
+	editReplyTo string                            // thread ID if replying
 }
 
 // NewDiffViewModel creates a new diff viewer.
@@ -158,6 +179,24 @@ func (m *DiffViewModel) SetDiff(d *domain.Diff) {
 	}
 }
 
+// SetComments sets the inline comments for display in the diff.
+func (m *DiffViewModel) SetComments(threads []domain.CommentThread) {
+	m.comments = threads
+	m.commentMap = make(map[string][]domain.CommentThread)
+	for _, t := range threads {
+		key := fmt.Sprintf("%s:%d", t.Path, t.Line)
+		m.commentMap[key] = append(m.commentMap[key], t)
+	}
+}
+
+// commentsForLine returns comment threads anchored to a specific file and line.
+func (m *DiffViewModel) commentsForLine(path string, line int) []domain.CommentThread {
+	if m.commentMap == nil {
+		return nil
+	}
+	return m.commentMap[fmt.Sprintf("%s:%d", path, line)]
+}
+
 // Message types.
 type DiffLoadedMsg struct {
 	Diff *domain.Diff
@@ -182,6 +221,11 @@ func (m *DiffViewModel) IsTreeFocus() bool { return m.treeFocus }
 func (m *DiffViewModel) IsSplitMode() bool { return m.splitMode }
 
 func (m *DiffViewModel) handleKey(msg tea.KeyMsg) tea.Cmd {
+	// Comment editor intercepts all keys.
+	if m.editing {
+		return m.handleEditKey(msg)
+	}
+
 	if m.searching {
 		return m.handleSearchKey(msg)
 	}
@@ -220,6 +264,87 @@ func (m *DiffViewModel) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == 'e' {
 		n := m.prNumber
 		return func() tea.Msg { return OpenExternalDiffMsg{Number: n} }
+	}
+	return nil
+}
+
+func (m *DiffViewModel) handleEditKey(msg tea.KeyMsg) tea.Cmd {
+	switch msg.Type {
+	case tea.KeyEscape:
+		m.editing = false
+		m.editBuffer = ""
+		m.editReplyTo = ""
+	case tea.KeyCtrlS:
+		// Submit the comment.
+		if strings.TrimSpace(m.editBuffer) == "" {
+			m.editing = false
+			m.editBuffer = ""
+			return nil
+		}
+		input := domain.InlineCommentInput{
+			Path:      m.editPath,
+			Line:      m.editLine,
+			Side:      m.editSide,
+			Body:      m.editBuffer,
+			InReplyTo: m.editReplyTo,
+		}
+		n := m.prNumber
+		m.editing = false
+		m.editBuffer = ""
+		m.editReplyTo = ""
+		return func() tea.Msg {
+			return AddInlineCommentMsg{Number: n, Input: input}
+		}
+	case tea.KeyEnter:
+		m.editBuffer += "\n"
+	case tea.KeyBackspace:
+		if len(m.editBuffer) > 0 {
+			m.editBuffer = m.editBuffer[:len(m.editBuffer)-1]
+		}
+	case tea.KeyRunes:
+		m.editBuffer += string(msg.Runes)
+	}
+	return nil
+}
+
+// currentDiffLine returns the diff line info at the current scroll position.
+func (m *DiffViewModel) currentDiffLine() (path string, line int, side string) {
+	if m.diff == nil || m.fileIdx >= len(m.diff.Files) {
+		return "", 0, ""
+	}
+	file := m.diff.Files[m.fileIdx]
+	pos := m.scrollY
+	for _, hunk := range file.Hunks {
+		pos-- // hunk header
+		if pos < 0 {
+			return file.Path, 0, ""
+		}
+		for _, dl := range hunk.Lines {
+			if pos == 0 {
+				switch dl.Type {
+				case domain.DiffAdd:
+					return file.Path, dl.NewNum, "RIGHT"
+				case domain.DiffDelete:
+					return file.Path, dl.OldNum, "LEFT"
+				default:
+					return file.Path, dl.NewNum, "RIGHT"
+				}
+			}
+			pos--
+		}
+	}
+	return file.Path, 0, ""
+}
+
+// threadAtCurrentLine returns the first comment thread at the current scroll position.
+func (m *DiffViewModel) threadAtCurrentLine() *domain.CommentThread {
+	path, line, _ := m.currentDiffLine()
+	if path == "" || line == 0 {
+		return nil
+	}
+	threads := m.commentsForLine(path, line)
+	if len(threads) > 0 {
+		return &threads[0]
 	}
 	return nil
 }
@@ -277,6 +402,38 @@ func (m *DiffViewModel) handleContentKey(msg tea.KeyMsg) tea.Cmd {
 		case 't':
 			m.splitMode = !m.splitMode
 			m.scrollY = 0
+			return nil
+		case 'c':
+			// Open comment editor at current line.
+			path, line, side := m.currentDiffLine()
+			if path != "" && line > 0 {
+				m.editing = true
+				m.editBuffer = ""
+				m.editPath = path
+				m.editLine = line
+				m.editSide = side
+				m.editReplyTo = ""
+			}
+			return nil
+		case 'r':
+			// Reply to thread at current line.
+			thread := m.threadAtCurrentLine()
+			if thread != nil {
+				m.editing = true
+				m.editBuffer = ""
+				m.editPath = thread.Path
+				m.editLine = thread.Line
+				m.editSide = "RIGHT"
+				m.editReplyTo = thread.ID
+			}
+			return nil
+		case 'x':
+			// Resolve thread at current line.
+			thread := m.threadAtCurrentLine()
+			if thread != nil {
+				threadID := thread.ID
+				return func() tea.Msg { return ResolveThreadMsg{ThreadID: threadID} }
+			}
 			return nil
 		case 'e':
 			n := m.prNumber
@@ -499,6 +656,15 @@ func (m *DiffViewModel) renderUnifiedContent() string {
 					lines = append(lines, renderDiffLineWithSyntax(lineNum, " ", dl.Content, highlightedContent, lipgloss.NewStyle().Foreground(t.Fg), matchStyle, matches))
 				}
 				lineIdx++
+
+				// Render inline comments anchored to this line.
+				commentLine := dl.NewNum
+				if dl.Type == domain.DiffDelete {
+					commentLine = dl.OldNum
+				}
+				for _, thread := range m.commentsForLine(file.Path, commentLine) {
+					lines = append(lines, m.renderCommentThread(thread)...)
+				}
 			}
 		}
 	}
@@ -514,8 +680,66 @@ func (m *DiffViewModel) renderUnifiedContent() string {
 		content += "\n" + lipgloss.NewStyle().Foreground(t.Info).Render(m.searchBarText())
 	}
 
+	// Show comment editor if active.
+	if m.editing {
+		content += "\n" + m.renderCommentEditor()
+	}
+
 	return lipgloss.NewStyle().Width(contentWidth).
 		Render(lipgloss.JoinVertical(lipgloss.Left, fileHeader, content))
+}
+
+// renderCommentThread renders an inline comment thread as indented lines.
+func (m *DiffViewModel) renderCommentThread(thread domain.CommentThread) []string {
+	t := m.styles.Theme
+	var lines []string
+
+	borderStyle := lipgloss.NewStyle().Foreground(t.Border)
+	authorStyle := lipgloss.NewStyle().Foreground(t.Warning).Bold(true)
+	bodyStyle := lipgloss.NewStyle().Foreground(t.Muted)
+	resolvedStyle := lipgloss.NewStyle().Foreground(t.Success)
+
+	prefix := "    │ "
+	topBorder := borderStyle.Render("    ┌─── ")
+	if thread.Resolved {
+		topBorder += resolvedStyle.Render("✓ resolved")
+	}
+	lines = append(lines, topBorder)
+
+	for _, c := range thread.Comments {
+		header := prefix + authorStyle.Render(c.Author) + bodyStyle.Render(" "+c.CreatedAt.Format("Jan 2"))
+		lines = append(lines, header)
+		for _, bodyLine := range strings.Split(c.Body, "\n") {
+			lines = append(lines, borderStyle.Render(prefix)+bodyStyle.Render(bodyLine))
+		}
+	}
+	lines = append(lines, borderStyle.Render("    └───"))
+	return lines
+}
+
+// renderCommentEditor renders the inline comment editor.
+func (m *DiffViewModel) renderCommentEditor() string {
+	t := m.styles.Theme
+	border := lipgloss.NewStyle().Foreground(t.Primary)
+	hint := lipgloss.NewStyle().Foreground(t.Muted)
+
+	var lines []string
+	lines = append(lines, border.Render("    ╔══ Comment on "+m.editPath+fmt.Sprintf(":%d", m.editLine)))
+	if m.editReplyTo != "" {
+		lines = append(lines, border.Render("    ║ ")+hint.Render("(reply to thread)"))
+	}
+
+	// Show buffer content.
+	bufLines := strings.Split(m.editBuffer, "\n")
+	for _, bl := range bufLines {
+		lines = append(lines, border.Render("    ║ ")+bl+"▎")
+	}
+	if m.editBuffer == "" {
+		lines = append(lines, border.Render("    ║ ")+"▎")
+	}
+
+	lines = append(lines, border.Render("    ╚══ ")+hint.Render("Ctrl+S submit  Esc cancel"))
+	return strings.Join(lines, "\n")
 }
 
 // splitRow holds one row of the side-by-side view.

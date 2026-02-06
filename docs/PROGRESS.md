@@ -38,7 +38,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 015 | `docs/tasks/015-auto-refresh.md` | Background polling with countdown, pause, toasts | DONE | — |
 | 016 | `docs/tasks/016-startup-experience.md` | Wire tutorial, startup banner, branch detection | DONE | — |
 | 017 | `docs/tasks/017-external-diff-tool.md` | e key to launch external diff tool | DONE | — |
-| 018 | `docs/tasks/018-inline-comments.md` | Inline comments in diff view (c/r/x keys) | TODO | 010 |
+| 018 | `docs/tasks/018-inline-comments.md` | Inline comments in diff view (c/r/x keys) | DONE | 010 |
 | 019 | `docs/tasks/019-diff-two-pane-layout.md` | File tree + content split layout for diff | DONE | — |
 | 020 | `docs/tasks/020-diff-side-by-side.md` | Side-by-side diff mode with t toggle | DONE | 019 |
 | 021 | `docs/tasks/021-visual-selection-mode.md` | v key for multi-select, batch operations | DONE | — |

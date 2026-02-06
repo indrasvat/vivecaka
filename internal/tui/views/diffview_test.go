@@ -848,3 +848,390 @@ func TestDiffTreeWidth(t *testing.T) {
 		t.Errorf("tree width %d should be at least 10 for narrow terminal", w)
 	}
 }
+
+func TestDiffSetComments(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	threads := []domain.CommentThread{
+		{
+			ID:   "t1",
+			Path: "internal/plugin/registry.go",
+			Line: 11,
+			Comments: []domain.Comment{
+				{Author: "alice", Body: "looks good"},
+			},
+		},
+		{
+			ID:       "t2",
+			Path:     "internal/plugin/registry.go",
+			Line:     12,
+			Resolved: true,
+			Comments: []domain.Comment{
+				{Author: "bob", Body: "nit: remove import"},
+			},
+		},
+	}
+	m.SetComments(threads)
+
+	if len(m.comments) != 2 {
+		t.Errorf("comments = %d, want 2", len(m.comments))
+	}
+	if m.commentMap == nil {
+		t.Fatal("commentMap should not be nil")
+	}
+
+	got := m.commentsForLine("internal/plugin/registry.go", 11)
+	if len(got) != 1 {
+		t.Errorf("commentsForLine(registry.go, 11) = %d, want 1", len(got))
+	}
+	if len(got) > 0 && got[0].ID != "t1" {
+		t.Errorf("expected thread t1, got %s", got[0].ID)
+	}
+
+	// No comments for unrelated line.
+	got = m.commentsForLine("internal/plugin/registry.go", 999)
+	if len(got) != 0 {
+		t.Errorf("commentsForLine(registry.go, 999) = %d, want 0", len(got))
+	}
+}
+
+func TestDiffInlineCommentRendering(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	threads := []domain.CommentThread{
+		{
+			ID:   "t1",
+			Path: "internal/plugin/registry.go",
+			Line: 11,
+			Comments: []domain.Comment{
+				{Author: "alice", Body: "looks good"},
+			},
+		},
+	}
+	m.SetComments(threads)
+
+	view := m.View()
+	// Comment thread borders should appear in unified view.
+	if !strings.Contains(view, "┌") || !strings.Contains(view, "└") {
+		t.Error("expected comment thread borders in view")
+	}
+	if !strings.Contains(view, "alice") {
+		t.Error("expected comment author in view")
+	}
+	if !strings.Contains(view, "looks good") {
+		t.Error("expected comment body in view")
+	}
+}
+
+func TestDiffInlineCommentResolved(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	threads := []domain.CommentThread{
+		{
+			ID:       "t1",
+			Path:     "internal/plugin/registry.go",
+			Line:     11,
+			Resolved: true,
+			Comments: []domain.Comment{
+				{Author: "bob", Body: "done"},
+			},
+		},
+	}
+	m.SetComments(threads)
+
+	view := m.View()
+	if !strings.Contains(view, "resolved") {
+		t.Error("expected resolved indicator in view")
+	}
+}
+
+func TestDiffCommentEditorOpenClose(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	// Scroll to a diff line (past hunk header at position 0).
+	m.scrollY = 1
+
+	// Press c to open comment editor.
+	cKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+	m.Update(cKey)
+	if !m.editing {
+		t.Error("expected editing mode after c")
+	}
+	if m.editPath == "" {
+		t.Error("expected editPath to be set")
+	}
+
+	// Type some text.
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h', 'i'}})
+	if m.editBuffer != "hi" {
+		t.Errorf("editBuffer = %q, want %q", m.editBuffer, "hi")
+	}
+
+	// Escape cancels.
+	m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	if m.editing {
+		t.Error("expected editing to end on Escape")
+	}
+	if m.editBuffer != "" {
+		t.Errorf("editBuffer should be empty after Escape, got %q", m.editBuffer)
+	}
+}
+
+func TestDiffCommentEditorSubmit(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+	m.SetPRNumber(42)
+
+	// Move past hunk header.
+	m.scrollY = 1
+
+	// Open editor.
+	cKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+	m.Update(cKey)
+
+	// Type comment text.
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t', 'e', 's', 't'}})
+
+	// Ctrl+S submits.
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	if m.editing {
+		t.Error("expected editing to end after Ctrl+S")
+	}
+
+	// Should produce an AddInlineCommentMsg command.
+	if cmd == nil {
+		t.Fatal("expected a command after Ctrl+S")
+	}
+	msg := cmd()
+	addMsg, ok := msg.(AddInlineCommentMsg)
+	if !ok {
+		t.Fatalf("expected AddInlineCommentMsg, got %T", msg)
+	}
+	if addMsg.Number != 42 {
+		t.Errorf("PR number = %d, want 42", addMsg.Number)
+	}
+	if addMsg.Input.Body != "test" {
+		t.Errorf("body = %q, want %q", addMsg.Input.Body, "test")
+	}
+}
+
+func TestDiffCommentEditorEmptySubmit(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+	m.scrollY = 1
+
+	// Open editor.
+	cKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+	m.Update(cKey)
+
+	// Ctrl+S with empty buffer should not submit.
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	if m.editing {
+		t.Error("expected editing to end on empty submit")
+	}
+	if cmd != nil {
+		t.Error("expected nil command for empty comment")
+	}
+}
+
+func TestDiffCommentReply(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	threads := []domain.CommentThread{
+		{
+			ID:   "t1",
+			Path: "internal/plugin/registry.go",
+			Line: 11,
+			Comments: []domain.Comment{
+				{Author: "alice", Body: "looks good"},
+			},
+		},
+	}
+	m.SetComments(threads)
+
+	// Scroll to deletion at line 11 (position 2: header=0, context=1, delete=2).
+	m.scrollY = 2
+
+	// Press r to reply.
+	rKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+	m.Update(rKey)
+
+	if !m.editing {
+		t.Error("expected editing mode for reply")
+	}
+	if m.editReplyTo != "t1" {
+		t.Errorf("editReplyTo = %q, want %q", m.editReplyTo, "t1")
+	}
+}
+
+func TestDiffCommentResolve(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	threads := []domain.CommentThread{
+		{
+			ID:   "t1",
+			Path: "internal/plugin/registry.go",
+			Line: 11,
+			Comments: []domain.Comment{
+				{Author: "alice", Body: "looks good"},
+			},
+		},
+	}
+	m.SetComments(threads)
+
+	// Scroll to deletion at line 11 (position 2: header=0, context=1, delete=2).
+	m.scrollY = 2
+
+	// Press x to resolve.
+	xKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
+	cmd := m.Update(xKey)
+
+	if cmd == nil {
+		t.Fatal("expected a command for resolve")
+	}
+	msg := cmd()
+	resolveMsg, ok := msg.(ResolveThreadMsg)
+	if !ok {
+		t.Fatalf("expected ResolveThreadMsg, got %T", msg)
+	}
+	if resolveMsg.ThreadID != "t1" {
+		t.Errorf("ThreadID = %q, want %q", resolveMsg.ThreadID, "t1")
+	}
+}
+
+func TestDiffCommentEditorBackspace(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+	m.scrollY = 1
+
+	cKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+	m.Update(cKey)
+
+	// Type and backspace.
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a', 'b'}})
+	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	if m.editBuffer != "a" {
+		t.Errorf("editBuffer after backspace = %q, want %q", m.editBuffer, "a")
+	}
+
+	// Backspace on empty.
+	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	m.Update(tea.KeyMsg{Type: tea.KeyBackspace}) // extra backspace on empty
+	if m.editBuffer != "" {
+		t.Errorf("editBuffer = %q, want empty", m.editBuffer)
+	}
+}
+
+func TestDiffCommentEditorNewline(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+	m.scrollY = 1
+
+	cKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+	m.Update(cKey)
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+	if m.editBuffer != "a\nb" {
+		t.Errorf("editBuffer = %q, want %q", m.editBuffer, "a\nb")
+	}
+}
+
+func TestDiffCommentEditorRendering(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+	m.scrollY = 1
+
+	cKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+	m.Update(cKey)
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h', 'e', 'l', 'l', 'o'}})
+
+	view := m.View()
+	// Editor should show in the view.
+	if !strings.Contains(view, "Comment on") {
+		t.Error("expected comment editor header in view")
+	}
+	if !strings.Contains(view, "Ctrl+S") {
+		t.Error("expected Ctrl+S hint in editor")
+	}
+}
+
+func TestDiffCurrentDiffLine(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	// scrollY=0 is the hunk header.
+	path, line, side := m.currentDiffLine()
+	if path != "internal/plugin/registry.go" {
+		t.Errorf("path = %q, want %q", path, "internal/plugin/registry.go")
+	}
+	if line != 0 {
+		t.Errorf("hunk header line = %d, want 0", line)
+	}
+	if side != "" {
+		t.Errorf("hunk header side = %q, want empty", side)
+	}
+
+	// scrollY=1 is the first context line (OldNum=10, NewNum=10).
+	m.scrollY = 1
+	_, line, side = m.currentDiffLine()
+	if line != 10 {
+		t.Errorf("context line = %d, want 10", line)
+	}
+	if side != "RIGHT" {
+		t.Errorf("context side = %q, want RIGHT", side)
+	}
+
+	// scrollY=2 is a deletion (OldNum=11).
+	m.scrollY = 2
+	_, line, side = m.currentDiffLine()
+	if line != 11 {
+		t.Errorf("delete line = %d, want 11", line)
+	}
+	if side != "LEFT" {
+		t.Errorf("delete side = %q, want LEFT", side)
+	}
+
+	// scrollY=3 is an addition (NewNum=11).
+	m.scrollY = 3
+	_, line, side = m.currentDiffLine()
+	if line != 11 {
+		t.Errorf("add line = %d, want 11", line)
+	}
+	if side != "RIGHT" {
+		t.Errorf("add side = %q, want RIGHT", side)
+	}
+}
+
+func TestDiffNoCommentOnHunkHeader(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	// scrollY=0 is hunk header (line=0), c should not open editor.
+	m.scrollY = 0
+	cKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+	m.Update(cKey)
+	if m.editing {
+		t.Error("should not open editor on hunk header")
+	}
+}

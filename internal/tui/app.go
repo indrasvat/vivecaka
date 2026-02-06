@@ -82,6 +82,7 @@ type App struct {
 	getPRDetail   *usecase.GetPRDetail
 	reviewPR      *usecase.ReviewPR
 	checkoutPR    *usecase.CheckoutPR
+	addComment    *usecase.AddComment
 	resolveThread *usecase.ResolveThread
 	getInboxPRs   *usecase.GetInboxPRs
 
@@ -169,6 +170,7 @@ func New(cfg *config.Config, opts ...Option) *App {
 	}
 	if a.reviewer != nil {
 		a.reviewPR = usecase.NewReviewPR(a.reviewer)
+		a.addComment = usecase.NewAddComment(a.reviewer)
 		a.resolveThread = usecase.NewResolveThread(a.reviewer)
 	}
 	if a.writer != nil {
@@ -353,6 +355,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 		return a, tea.Batch(cmds...)
+
+	case views.AddInlineCommentMsg:
+		return a.handleAddInlineComment(msg)
+
+	case views.InlineCommentAddedMsg:
+		return a.handleInlineCommentAdded(msg)
 
 	case views.StartReviewMsg:
 		a.prevView = a.view
@@ -880,10 +888,35 @@ type externalDiffDoneMsg struct {
 func (a *App) handleOpenDiff(msg views.OpenDiffMsg) (tea.Model, tea.Cmd) {
 	a.view = core.ViewDiff
 	a.diffView.SetPRNumber(msg.Number)
+	// Pass inline comments from the loaded PR detail to the diff view.
+	a.diffView.SetComments(a.prDetail.GetComments())
 	if a.reader != nil && a.repo.Owner != "" {
 		return a, loadDiffCmd(a.reader, a.repo, msg.Number)
 	}
 	return a, nil
+}
+
+func (a *App) handleAddInlineComment(msg views.AddInlineCommentMsg) (tea.Model, tea.Cmd) {
+	if a.addComment != nil && a.repo.Owner != "" {
+		return a, addInlineCommentCmd(a.addComment, a.repo, msg.Number, msg.Input)
+	}
+	return a, nil
+}
+
+func (a *App) handleInlineCommentAdded(msg views.InlineCommentAddedMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		cmd := a.toasts.Add(
+			fmt.Sprintf("Comment failed: %v", msg.Err),
+			domain.ToastError, 5*time.Second,
+		)
+		return a, cmd
+	}
+	cmd := a.toasts.Add("Comment added", domain.ToastSuccess, 3*time.Second)
+	// Refresh PR detail to show the new comment.
+	if a.getPRDetail != nil && a.prDetail.GetPRNumber() > 0 {
+		return a, tea.Batch(cmd, loadPRDetailCmd(a.getPRDetail, a.repo, a.prDetail.GetPRNumber()))
+	}
+	return a, cmd
 }
 
 func (a *App) handleSubmitReview(msg views.SubmitReviewMsg) (tea.Model, tea.Cmd) {

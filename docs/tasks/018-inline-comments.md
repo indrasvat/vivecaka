@@ -1,6 +1,6 @@
 # Task 018: Inline Comments in Diff View
 
-## Status: TODO
+## Status: DONE
 
 ## Depends On: 010 (comments enhancement)
 

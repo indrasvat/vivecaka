@@ -91,6 +91,14 @@ func (m *PRDetailModel) GetPRNumber() int {
 	return m.pendingNum
 }
 
+// GetComments returns the comment threads from the loaded PR detail.
+func (m *PRDetailModel) GetComments() []domain.CommentThread {
+	if m.detail == nil {
+		return nil
+	}
+	return m.detail.Comments
+}
+
 // StartLoading shows loading state while detail is fetched.
 func (m *PRDetailModel) StartLoading(number int) tea.Cmd {
 	m.loading = true
