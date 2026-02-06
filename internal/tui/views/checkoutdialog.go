@@ -119,6 +119,11 @@ func (m *CheckoutDialogModel) Active() bool {
 	return m.state != checkoutInactive
 }
 
+// GetPRNumber returns the PR number the dialog is currently handling.
+func (m *CheckoutDialogModel) GetPRNumber() int {
+	return m.prNumber
+}
+
 // IsLoading returns whether the dialog is in a loading state.
 func (m *CheckoutDialogModel) IsLoading() bool {
 	return m.state == checkoutCloning || m.state == checkoutCheckingOut
@@ -267,11 +272,11 @@ func (m *CheckoutDialogModel) handleWorktreeKey(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *CheckoutDialogModel) handleKnownConfirmKey(msg tea.KeyMsg) tea.Cmd {
-	switch {
-	case msg.Type == tea.KeyEscape:
+	switch msg.Type {
+	case tea.KeyEscape:
 		m.reset()
 		return func() tea.Msg { return CheckoutDialogCloseMsg{} }
-	case msg.Type == tea.KeyEnter:
+	case tea.KeyEnter:
 		path := m.plan.TargetPath
 		return func() tea.Msg {
 			return CheckoutStrategyChosenMsg{
@@ -282,7 +287,7 @@ func (m *CheckoutDialogModel) handleKnownConfirmKey(msg tea.KeyMsg) tea.Cmd {
 				Branch:   m.branch,
 			}
 		}
-	case msg.Type == tea.KeyRunes:
+	case tea.KeyRunes:
 		if len(msg.Runes) == 1 && (msg.Runes[0] == 'n' || msg.Runes[0] == 'N') {
 			m.reset()
 			return func() tea.Msg { return CheckoutDialogCloseMsg{} }

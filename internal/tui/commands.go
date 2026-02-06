@@ -172,6 +172,38 @@ func addInlineCommentCmd(uc *usecase.AddComment, repo domain.RepoRef, number int
 	}
 }
 
+// cloneRepoCmd clones a repo then triggers checkout.
+func cloneRepoCmd(uc *usecase.SmartCheckout, repo domain.RepoRef, _ int, _ string, targetPath string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := uc.ExecuteClone(ctx, repo, targetPath); err != nil {
+			return views.CloneDoneMsg{Path: targetPath, Err: err}
+		}
+		return views.CloneDoneMsg{Path: targetPath}
+	}
+}
+
+// smartCheckoutCmd checks out a PR at a specific directory.
+func smartCheckoutCmd(uc *usecase.SmartCheckout, repo domain.RepoRef, number int, workDir string, _ bool) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), ghTimeout)
+		defer cancel()
+		branch, err := uc.ExecuteCheckout(ctx, repo, number, workDir)
+		return views.SmartCheckoutDoneMsg{Branch: branch, Path: workDir, Err: err}
+	}
+}
+
+// worktreeCmd creates a worktree for a PR.
+func worktreeCmd(uc *usecase.SmartCheckout, repo domain.RepoRef, number int, branch, basePath string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), ghTimeout)
+		defer cancel()
+		wtPath, err := uc.ExecuteWorktree(ctx, repo, number, branch, basePath)
+		return views.SmartCheckoutDoneMsg{Branch: branch, Path: wtPath, Err: err}
+	}
+}
+
 // validateRepoCmd checks if a manually entered repo exists.
 func validateRepoCmd(repo domain.RepoRef) tea.Cmd {
 	return func() tea.Msg {

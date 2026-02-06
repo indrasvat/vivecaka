@@ -55,6 +55,7 @@ func main() {
 		tui.WithReader(adapter),
 		tui.WithReviewer(adapter),
 		tui.WithWriter(adapter),
+		tui.WithRepoManager(adapter),
 	)
 
 	// Set terminal background color to match theme (Catppuccin Mocha base)

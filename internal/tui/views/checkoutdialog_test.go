@@ -250,7 +250,7 @@ func TestCheckoutDialogLoadingStates(t *testing.T) {
 	view := m.View()
 	assert.Contains(t, view, "Cloning Repository")
 
-	cmd = m.ShowCheckingOut("/cache/path")
+	_ = m.ShowCheckingOut("/cache/path")
 	assert.True(t, m.IsLoading())
 	view = m.View()
 	assert.Contains(t, view, "Checking Out")

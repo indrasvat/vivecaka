@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/indrasvat/vivecaka/internal/cache"
 	"github.com/indrasvat/vivecaka/internal/config"
 	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/indrasvat/vivecaka/internal/repolocator"
 	"github.com/indrasvat/vivecaka/internal/tui/components"
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 	"github.com/indrasvat/vivecaka/internal/tui/views"
@@ -39,6 +41,11 @@ func WithReviewer(r domain.PRReviewer) Option {
 // WithWriter sets the PRWriter adapter.
 func WithWriter(w domain.PRWriter) Option {
 	return func(a *App) { a.writer = w }
+}
+
+// WithRepoManager sets the RepoManager adapter for smart checkout.
+func WithRepoManager(rm domain.RepoManager) Option {
+	return func(a *App) { a.repoManager = rm }
 }
 
 // WithRepo sets the initial repo (skips auto-detection).
@@ -73,9 +80,16 @@ type App struct {
 	theme  core.Theme
 
 	// Domain (injected)
-	reader   domain.PRReader
-	reviewer domain.PRReviewer
-	writer   domain.PRWriter
+	reader      domain.PRReader
+	reviewer    domain.PRReviewer
+	writer      domain.PRWriter
+	repoManager domain.RepoManager
+
+	// Smart checkout
+	cwdRepo       domain.RepoRef // CWD repo identity (detected on startup)
+	cwdPath       string         // CWD path (captured on startup)
+	repoLocator   *repolocator.Locator
+	smartCheckout *usecase.SmartCheckout
 
 	// Use cases
 	listPRs       *usecase.ListPRs
@@ -98,7 +112,8 @@ type App struct {
 	filterPanel  views.FilterModel
 
 	// Overlays
-	confirmDialog views.ConfirmModel
+	confirmDialog  views.ConfirmModel
+	checkoutDialog views.CheckoutDialogModel
 
 	// Filters
 	filterOpts domain.ListOpts
@@ -132,16 +147,20 @@ func New(cfg *config.Config, opts ...Option) *App {
 		styles: styles,
 
 		// View models
-		prList:        views.NewPRListModel(styles, keys),
-		prDetail:      views.NewPRDetailModel(styles, keys),
-		diffView:      views.NewDiffViewModel(styles, keys),
-		reviewForm:    views.NewReviewModel(styles, keys),
-		repoSwitcher:  views.NewRepoSwitcherModel(styles, keys),
-		helpOverlay:   views.NewHelpModel(styles),
-		inbox:         views.NewInboxModel(styles, keys),
-		tutorial:      views.NewTutorialModel(styles),
-		filterPanel:   views.NewFilterModel(styles, keys),
-		confirmDialog: views.NewConfirmModel(styles),
+		prList:         views.NewPRListModel(styles, keys),
+		prDetail:       views.NewPRDetailModel(styles, keys),
+		diffView:       views.NewDiffViewModel(styles, keys),
+		reviewForm:     views.NewReviewModel(styles, keys),
+		repoSwitcher:   views.NewRepoSwitcherModel(styles, keys),
+		helpOverlay:    views.NewHelpModel(styles),
+		inbox:          views.NewInboxModel(styles, keys),
+		tutorial:       views.NewTutorialModel(styles),
+		filterPanel:    views.NewFilterModel(styles, keys),
+		confirmDialog:  views.NewConfirmModel(styles),
+		checkoutDialog: views.NewCheckoutDialogModel(styles, keys),
+
+		// Infrastructure
+		repoLocator: repolocator.New(),
 
 		// Components
 		banner: nil, // initialized after options apply
@@ -176,6 +195,12 @@ func New(cfg *config.Config, opts ...Option) *App {
 	if a.writer != nil {
 		a.checkoutPR = usecase.NewCheckoutPR(a.writer)
 	}
+	if a.repoManager != nil {
+		a.smartCheckout = usecase.NewSmartCheckout(a.repoManager, a.repoLocator)
+	}
+
+	// Capture CWD path on startup.
+	a.cwdPath, _ = os.Getwd()
 
 	// Initialize repo switcher with favorites from config.
 	a.initRepoSwitcherFavorites()
@@ -379,7 +404,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case views.CheckoutPRMsg:
-		return a.handleCheckoutConfirm(msg)
+		return a.handleSmartCheckout(msg)
 
 	case views.ConfirmResultMsg:
 		return a.handleConfirmResult(msg)
@@ -390,6 +415,31 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case views.CheckoutDoneMsg:
 		return a.handleCheckoutDone(msg)
+
+	case views.CheckoutStrategyChosenMsg:
+		return a.handleCheckoutStrategyChosen(msg)
+
+	case views.CloneDoneMsg:
+		return a.handleCloneDone(msg)
+
+	case views.SmartCheckoutDoneMsg:
+		return a.handleSmartCheckoutDone(msg)
+
+	case views.CheckoutDialogCloseMsg:
+		a.view = a.prevView
+		return a, nil
+
+	case views.CopyCdCommandMsg:
+		if err := copyToClipboard("cd " + msg.Path); err != nil {
+			cmd := a.toasts.Add(
+				fmt.Sprintf("Copy failed: %v", err),
+				domain.ToastError, 5*time.Second,
+			)
+			return a, cmd
+		}
+		cmd := a.toasts.Add("Copied cd command", domain.ToastSuccess, 3*time.Second)
+		a.view = a.prevView
+		return a, cmd
 
 	case views.CopyURLMsg:
 		if err := copyToClipboard(msg.URL); err != nil {
@@ -575,6 +625,7 @@ func (a *App) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	a.tutorial.SetSize(a.width, contentHeight)
 	a.filterPanel.SetSize(a.width, contentHeight)
 	a.confirmDialog.SetSize(a.width, contentHeight)
+	a.checkoutDialog.SetSize(a.width, contentHeight)
 
 	// Components.
 	a.header.SetWidth(a.width)
@@ -603,6 +654,12 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Confirm dialog intercepts all keys when visible.
 	if a.view == core.ViewConfirm {
 		cmd := a.confirmDialog.Update(msg)
+		return a, cmd
+	}
+
+	// Smart checkout dialog intercepts all keys when visible.
+	if a.view == core.ViewSmartCheckout {
+		cmd := a.checkoutDialog.Update(msg)
 		return a, cmd
 	}
 
@@ -735,8 +792,15 @@ func (a *App) handleRepoDetected(msg views.RepoDetectedMsg) (tea.Model, tea.Cmd)
 		return a, cmd
 	}
 	a.repo = msg.Repo
+	a.cwdRepo = msg.Repo // Record CWD repo identity for smart checkout.
 	a.header.SetRepo(a.repo)
 	a.header.SetTotalCount(0) // Reset total count for new repo
+
+	// Auto-learn: register CWD repo in known-repos (smart checkout mechanism 1).
+	if a.repoLocator != nil && a.cwdPath != "" {
+		_ = a.repoLocator.Register(msg.Repo, a.cwdPath, "detected")
+	}
+
 	// Load per-repo state (sort/filter memory).
 	a.loadRepoState()
 	// Prepend CWD repo to favorites if not already there.
@@ -961,6 +1025,121 @@ func (a *App) handleReviewSubmitted(msg views.ReviewSubmittedMsg) (tea.Model, te
 	cmd := a.toasts.Add("Review submitted", domain.ToastSuccess, 3*time.Second)
 	a.view = core.ViewPRDetail
 	return a, cmd
+}
+
+func (a *App) handleSmartCheckout(msg views.CheckoutPRMsg) (tea.Model, tea.Cmd) {
+	// If no RepoManager, use legacy path (DR-2: only safe when repos match).
+	if a.smartCheckout == nil {
+		if reposMatchRef(a.repo, a.cwdRepo) {
+			return a.handleCheckoutConfirm(msg)
+		}
+		// Unsafe: can't checkout in wrong repo without RepoManager.
+		a.prevView = a.view
+		a.view = core.ViewSmartCheckout
+		a.checkoutDialog.ShowError(fmt.Errorf("cannot check out PRs from a different repo without smart checkout capability"))
+		return a, nil
+	}
+
+	// Validate known-repos entry (I/O — DR-1).
+	knownPath, knownValid := a.repoLocator.Validate(a.repo)
+
+	ctx := usecase.CheckoutContext{
+		BrowsingRepo: a.repo,
+		CWDRepo:      a.cwdRepo,
+		CWDPath:      a.cwdPath,
+	}
+	plan := a.smartCheckout.Plan(ctx, knownPath, knownValid)
+
+	a.prevView = a.view
+	switch plan.Strategy {
+	case usecase.StrategyLocal:
+		// CWD matches — show worktree choice dialog.
+		a.view = core.ViewSmartCheckout
+		a.checkoutDialog.ShowWorktreeChoice(a.repo, msg.Number, msg.Branch, plan)
+		return a, nil
+
+	case usecase.StrategyKnownPath:
+		// Known path — show confirmation dialog.
+		a.view = core.ViewSmartCheckout
+		a.checkoutDialog.ShowKnownConfirm(a.repo, msg.Number, msg.Branch, plan)
+		return a, nil
+
+	case usecase.StrategyNeedsClone:
+		// No local clone — show options dialog.
+		a.view = core.ViewSmartCheckout
+		a.checkoutDialog.ShowOptions(a.repo, msg.Number, msg.Branch, plan)
+		return a, nil
+	}
+	return a, nil
+}
+
+func (a *App) handleCheckoutStrategyChosen(msg views.CheckoutStrategyChosenMsg) (tea.Model, tea.Cmd) {
+	switch msg.Strategy {
+	case "switch":
+		// Direct branch switch in CWD (existing behavior).
+		spinnerCmd := a.checkoutDialog.ShowCheckingOut(a.cwdPath)
+		return a, tea.Batch(spinnerCmd,
+			smartCheckoutCmd(a.smartCheckout, msg.Repo, msg.PRNumber, a.cwdPath, true))
+
+	case "worktree":
+		// Create worktree in CWD repo.
+		spinnerCmd := a.checkoutDialog.ShowCheckingOut(a.cwdPath)
+		return a, tea.Batch(spinnerCmd,
+			worktreeCmd(a.smartCheckout, msg.Repo, msg.PRNumber, msg.Branch, a.cwdPath))
+
+	case "known-path":
+		// Checkout at known path.
+		spinnerCmd := a.checkoutDialog.ShowCheckingOut(msg.Path)
+		return a, tea.Batch(spinnerCmd,
+			smartCheckoutCmd(a.smartCheckout, msg.Repo, msg.PRNumber, msg.Path, false))
+
+	case "clone-cache", "clone-custom":
+		// Clone then checkout.
+		spinnerCmd := a.checkoutDialog.ShowCloning(msg.Path)
+		return a, tea.Batch(spinnerCmd,
+			cloneRepoCmd(a.smartCheckout, msg.Repo, msg.PRNumber, msg.Branch, msg.Path))
+
+	case "browser":
+		// Open in browser.
+		url := fmt.Sprintf("https://github.com/%s/pull/%d", msg.Repo.String(), msg.PRNumber)
+		a.view = a.prevView
+		if err := openBrowser(url); err != nil {
+			cmd := a.toasts.Add(
+				fmt.Sprintf("Open browser failed: %v", err),
+				domain.ToastError, 5*time.Second,
+			)
+			return a, cmd
+		}
+		return a, nil
+	}
+	return a, nil
+}
+
+func (a *App) handleCloneDone(msg views.CloneDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		a.checkoutDialog.ShowError(msg.Err)
+		return a, nil
+	}
+	// Clone succeeded — now checkout the PR.
+	spinnerCmd := a.checkoutDialog.ShowCheckingOut(msg.Path)
+	// Get the PR number and repo from the dialog state.
+	return a, tea.Batch(spinnerCmd,
+		smartCheckoutCmd(a.smartCheckout, a.repo, a.checkoutDialog.GetPRNumber(), msg.Path, false))
+}
+
+func (a *App) handleSmartCheckoutDone(msg views.SmartCheckoutDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		a.checkoutDialog.ShowError(msg.Err)
+		return a, nil
+	}
+	a.prList.SetCurrentBranch(msg.Branch)
+	cwdCheckout := msg.Path == a.cwdPath
+	a.checkoutDialog.ShowSuccess(msg.Branch, msg.Path, cwdCheckout)
+	return a, nil
+}
+
+func reposMatchRef(a, b domain.RepoRef) bool {
+	return strings.EqualFold(a.Owner, b.Owner) && strings.EqualFold(a.Name, b.Name)
 }
 
 func (a *App) handleCheckoutConfirm(msg views.CheckoutPRMsg) (tea.Model, tea.Cmd) {
@@ -1232,6 +1411,8 @@ func (a *App) updateActiveView(msg tea.Msg) tea.Cmd {
 		return a.filterPanel.Update(msg)
 	case core.ViewConfirm:
 		return a.confirmDialog.Update(msg)
+	case core.ViewSmartCheckout:
+		return a.checkoutDialog.Update(msg)
 	}
 	return nil
 }
@@ -1252,6 +1433,7 @@ func (a *App) rebuildStyles() {
 	a.tutorial.SetStyles(s)
 	a.filterPanel.SetStyles(s)
 	a.confirmDialog.SetStyles(s)
+	a.checkoutDialog.SetStyles(s)
 
 	// Update styles on components (preserves state).
 	a.banner.SetStyles(s)
@@ -1329,6 +1511,8 @@ func (a *App) View() string {
 
 	// Status bar — context-specific hints.
 	switch {
+	case a.view == core.ViewSmartCheckout:
+		a.status.SetHints([]string{a.checkoutDialog.StatusHint()})
 	case a.view == core.ViewConfirm:
 		a.status.SetHints([]string{a.confirmDialog.ConfirmStateHint()})
 	case a.view == core.ViewPRList && a.prList.IsSelectionMode():
@@ -1385,6 +1569,9 @@ func (a *App) renderContent(height int) string {
 	case core.ViewConfirm:
 		return a.confirmDialog.View()
 
+	case core.ViewSmartCheckout:
+		return a.checkoutDialog.View()
+
 	default:
 		return ""
 	}
@@ -1412,6 +1599,8 @@ func (a *App) viewName() string {
 		return "Filter"
 	case core.ViewConfirm:
 		return "Confirm"
+	case core.ViewSmartCheckout:
+		return "Smart Checkout"
 	default:
 		return ""
 	}
