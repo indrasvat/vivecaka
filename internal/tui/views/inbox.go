@@ -43,6 +43,9 @@ type InboxModel struct {
 	username string // current user for tab filtering
 }
 
+// SetStyles updates the styles without losing state.
+func (m *InboxModel) SetStyles(s core.Styles) { m.styles = s }
+
 // NewInboxModel creates a new inbox view.
 func NewInboxModel(styles core.Styles, keys core.KeyMap) InboxModel {
 	return InboxModel{

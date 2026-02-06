@@ -42,6 +42,9 @@ func NewBanner(styles core.Styles, version string) *Banner {
 // BannerGlyphTickMsg advances to the next symbol trio.
 type BannerGlyphTickMsg struct{}
 
+// SetStyles updates the styles without losing state.
+func (b *Banner) SetStyles(s core.Styles) { b.styles = s }
+
 // SetSize updates the banner dimensions.
 func (b *Banner) SetSize(w, h int) {
 	b.width = w

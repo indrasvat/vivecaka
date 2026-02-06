@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/indrasvat/vivecaka/internal/domain"
@@ -45,6 +44,9 @@ type RepoSwitcherModel struct {
 	reposDiscovered bool // true after first gh repo list fetch
 	discovering     bool // true while fetching
 }
+
+// SetStyles updates the styles without losing state.
+func (m *RepoSwitcherModel) SetStyles(s core.Styles) { m.styles = s }
 
 // NewRepoSwitcherModel creates a new repo switcher.
 func NewRepoSwitcherModel(styles core.Styles, keys core.KeyMap) RepoSwitcherModel {
@@ -160,22 +162,6 @@ func (m *RepoSwitcherModel) Update(msg tea.Msg) tea.Cmd {
 }
 
 func (m *RepoSwitcherModel) handleKey(msg tea.KeyMsg) tea.Cmd {
-	// Navigation first.
-	switch {
-	case key.Matches(msg, m.keys.Down):
-		if m.cursor < len(m.visible)-1 {
-			m.cursor++
-			m.ensureVisible()
-		}
-		return nil
-	case key.Matches(msg, m.keys.Up):
-		if m.cursor > 0 {
-			m.cursor--
-			m.ensureVisible()
-		}
-		return nil
-	}
-
 	switch msg.Type {
 	case tea.KeyEscape:
 		return func() tea.Msg { return CloseRepoSwitcherMsg{} }
@@ -184,7 +170,6 @@ func (m *RepoSwitcherModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		if len(m.visible) > 0 && m.cursor < len(m.visible) {
 			entry := m.visible[m.cursor]
 			if entry.Section == SectionGhost {
-				// Ghost entry: emit validation request (app will call gh repo view).
 				repo := entry.Repo
 				return func() tea.Msg {
 					return ValidateRepoRequestMsg{Repo: repo}
@@ -201,9 +186,23 @@ func (m *RepoSwitcherModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 
+	case tea.KeyUp:
+		if m.cursor > 0 {
+			m.cursor--
+			m.ensureVisible()
+		}
+		return nil
+
+	case tea.KeyDown:
+		if m.cursor < len(m.visible)-1 {
+			m.cursor++
+			m.ensureVisible()
+		}
+		return nil
+
 	case tea.KeyRunes:
 		r := string(msg.Runes)
-		// Check for 's' key to toggle favorite (only when query is empty).
+		// Toggle favorite with 's' only when query is empty.
 		if r == "s" && m.query == "" {
 			return m.toggleFavorite()
 		}

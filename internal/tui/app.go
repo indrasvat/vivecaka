@@ -612,6 +612,30 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
+	// Views with text input intercept all keys so global shortcuts
+	// (q, ?, T, R) don't fire while the user is typing.
+	// Only Ctrl+C is allowed to quit globally from these views.
+	switch a.view {
+	case core.ViewRepoSwitch:
+		if msg.Type == tea.KeyCtrlC {
+			return a, tea.Quit
+		}
+		cmd := a.repoSwitcher.Update(msg)
+		return a, cmd
+	case core.ViewFilter:
+		if msg.Type == tea.KeyCtrlC {
+			return a, tea.Quit
+		}
+		cmd := a.filterPanel.Update(msg)
+		return a, cmd
+	case core.ViewReview:
+		if msg.Type == tea.KeyCtrlC {
+			return a, tea.Quit
+		}
+		cmd := a.reviewForm.Update(msg)
+		return a, cmd
+	}
+
 	// Global keys always active.
 	switch {
 	case key.Matches(msg, a.keys.Quit):
@@ -1212,46 +1236,28 @@ func (a *App) updateActiveView(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-// rebuildStyles propagates the updated theme to all view models and components.
+// rebuildStyles propagates the updated theme to all view models and components
+// without recreating them, preserving all state (PR data, cursor positions, etc.).
 func (a *App) rebuildStyles() {
 	s := a.styles
-	k := a.keys
 
-	a.prList = views.NewPRListModel(s, k)
-	a.prDetail = views.NewPRDetailModel(s, k)
-	a.diffView = views.NewDiffViewModel(s, k)
-	a.reviewForm = views.NewReviewModel(s, k)
-	a.repoSwitcher = views.NewRepoSwitcherModel(s, k)
-	a.helpOverlay = views.NewHelpModel(s)
-	a.inbox = views.NewInboxModel(s, k)
-	a.tutorial = views.NewTutorialModel(s)
-	a.filterPanel = views.NewFilterModel(s, k)
-	a.confirmDialog = views.NewConfirmModel(s)
+	// Update styles on all view models (preserves state).
+	a.prList.SetStyles(s)
+	a.prDetail.SetStyles(s)
+	a.diffView.SetStyles(s)
+	a.reviewForm.SetStyles(s)
+	a.repoSwitcher.SetStyles(s)
+	a.helpOverlay.SetStyles(s)
+	a.inbox.SetStyles(s)
+	a.tutorial.SetStyles(s)
+	a.filterPanel.SetStyles(s)
+	a.confirmDialog.SetStyles(s)
 
-	a.banner = components.NewBanner(s, a.version)
-	a.header = components.NewHeader(s)
-	a.status = components.NewStatusBar(s)
-	a.toasts = components.NewToastManager(s)
-
-	// Re-set repo on header.
-	a.header.SetRepo(a.repo)
-
-	// Re-set sizes.
-	ch := a.contentHeight()
-	a.banner.SetSize(a.width, a.height)
-	a.prList.SetSize(a.width, ch)
-	a.prDetail.SetSize(a.width, ch)
-	a.diffView.SetSize(a.width, ch)
-	a.reviewForm.SetSize(a.width, ch)
-	a.repoSwitcher.SetSize(a.width, ch)
-	a.helpOverlay.SetSize(a.width, ch)
-	a.inbox.SetSize(a.width, ch)
-	a.tutorial.SetSize(a.width, ch)
-	a.filterPanel.SetSize(a.width, ch)
-	a.confirmDialog.SetSize(a.width, ch)
-	a.header.SetWidth(a.width)
-	a.status.SetWidth(a.width)
-	a.toasts.SetWidth(a.width)
+	// Update styles on components (preserves state).
+	a.banner.SetStyles(s)
+	a.header.SetStyles(s)
+	a.status.SetStyles(s)
+	a.toasts.SetStyles(s)
 }
 
 func (a *App) contentHeight() int {

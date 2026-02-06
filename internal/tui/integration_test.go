@@ -291,9 +291,13 @@ func TestIntegrationNavigationFlow(t *testing.T) {
 	assert.Equal(t, core.ViewRepoSwitch, app.view)
 	assert.Equal(t, core.ViewPRList, app.prevView)
 
-	// Repo switcher → back to PR list.
-	updated, _ = app.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	// Repo switcher → back to PR list (intercepted, needs message cycle).
+	updated, cmd := app.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	app = updated.(*App)
+	if cmd != nil {
+		updated, _ = app.Update(cmd())
+		app = updated.(*App)
+	}
 	assert.Equal(t, core.ViewPRList, app.view)
 }
 
@@ -483,6 +487,14 @@ func TestIntegrationInlineCommentError(t *testing.T) {
 }
 
 func TestIntegrationQuitFromAnyView(t *testing.T) {
+	// Views with text input intercept all keys — 'q' types into search,
+	// so only Ctrl+C can quit from those views.
+	textInputViews := map[core.ViewState]bool{
+		core.ViewRepoSwitch: true,
+		core.ViewFilter:     true,
+		core.ViewReview:     true,
+	}
+
 	allViews := []core.ViewState{
 		core.ViewPRList, core.ViewPRDetail, core.ViewDiff,
 		core.ViewReview, core.ViewHelp, core.ViewRepoSwitch,
@@ -493,8 +505,18 @@ func TestIntegrationQuitFromAnyView(t *testing.T) {
 		app.banner.Hide()
 		app.view = v
 
-		_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
-		require.NotNil(t, cmd, "quit from view %d should return cmd", v)
+		if textInputViews[v] {
+			// 'q' should NOT quit — it's intercepted by the view.
+			_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+			assert.Nil(t, cmd, "q from text-input view %d should NOT quit", v)
+
+			// Ctrl+C should still quit.
+			_, cmd = app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+			require.NotNil(t, cmd, "ctrl+c from view %d should return quit cmd", v)
+		} else {
+			_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+			require.NotNil(t, cmd, "quit from view %d should return cmd", v)
+		}
 	}
 }
 

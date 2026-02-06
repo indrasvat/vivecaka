@@ -20,6 +20,9 @@ type ReviewModel struct {
 	body     string
 }
 
+// SetStyles updates the styles without losing state.
+func (m *ReviewModel) SetStyles(s core.Styles) { m.styles = s }
+
 // NewReviewModel creates a new review form.
 func NewReviewModel(styles core.Styles, keys core.KeyMap) ReviewModel {
 	return ReviewModel{
@@ -133,15 +136,16 @@ func (m *ReviewModel) Init() tea.Cmd {
 
 // Update handles messages for the review form.
 func (m *ReviewModel) Update(msg tea.Msg) tea.Cmd {
-	if m.form == nil {
-		return nil
-	}
-
-	// Check for Escape key to cancel
+	// Check for Escape key to cancel (before nil form check so Escape
+	// always works, even if the form hasn't initialized yet).
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		if keyMsg.Type == tea.KeyEscape {
 			return func() tea.Msg { return CloseReviewMsg{} }
 		}
+	}
+
+	if m.form == nil {
+		return nil
 	}
 
 	// Update the form

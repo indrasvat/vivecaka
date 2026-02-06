@@ -17,6 +17,9 @@ type HelpModel struct {
 	styles  core.Styles
 }
 
+// SetStyles updates the styles without losing state.
+func (m *HelpModel) SetStyles(s core.Styles) { m.styles = s }
+
 // NewHelpModel creates a new help overlay.
 func NewHelpModel(styles core.Styles) HelpModel {
 	return HelpModel{styles: styles}

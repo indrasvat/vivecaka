@@ -48,6 +48,9 @@ type TutorialModel struct {
 	visible bool
 }
 
+// SetStyles updates the styles without losing state.
+func (m *TutorialModel) SetStyles(s core.Styles) { m.styles = s }
+
 // NewTutorialModel creates a new tutorial model.
 func NewTutorialModel(styles core.Styles) TutorialModel {
 	return TutorialModel{styles: styles}

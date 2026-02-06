@@ -65,6 +65,9 @@ func (m *PRListModel) IsSelectionMode() bool {
 	return m.selectionMode
 }
 
+// SetStyles updates the styles without losing state.
+func (m *PRListModel) SetStyles(s core.Styles) { m.styles = s }
+
 // NewPRListModel creates a new PR list view.
 func NewPRListModel(styles core.Styles, keys core.KeyMap) PRListModel {
 	return PRListModel{

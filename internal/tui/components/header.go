@@ -22,6 +22,9 @@ type Header struct {
 	width         int
 }
 
+// SetStyles updates the styles without losing state.
+func (h *Header) SetStyles(s core.Styles) { h.styles = s }
+
 // NewHeader creates a new Header component.
 func NewHeader(styles core.Styles) *Header {
 	return &Header{styles: styles}

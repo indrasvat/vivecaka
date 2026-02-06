@@ -54,6 +54,14 @@ type markdownCache struct {
 	rendered string
 }
 
+// SetStyles updates the styles without losing state. Clears markdown caches
+// so they re-render with the new theme colors on next View().
+func (m *PRDetailModel) SetStyles(s core.Styles) {
+	m.styles = s
+	m.bodyCache = markdownCache{}
+	m.commentCache = make(map[string]markdownCache)
+}
+
 // NewPRDetailModel creates a new PR detail view.
 func NewPRDetailModel(styles core.Styles, keys core.KeyMap) PRDetailModel {
 	return PRDetailModel{

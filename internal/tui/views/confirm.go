@@ -40,6 +40,9 @@ type ConfirmModel struct {
 	resultMessage string
 }
 
+// SetStyles updates the styles without losing state.
+func (m *ConfirmModel) SetStyles(s core.Styles) { m.styles = s }
+
 // NewConfirmModel creates a new confirmation dialog.
 func NewConfirmModel(styles core.Styles) ConfirmModel {
 	return ConfirmModel{

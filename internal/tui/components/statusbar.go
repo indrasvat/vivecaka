@@ -16,6 +16,9 @@ type StatusBar struct {
 	width  int
 }
 
+// SetStyles updates the styles without losing state.
+func (s *StatusBar) SetStyles(st core.Styles) { s.styles = st }
+
 // NewStatusBar creates a new StatusBar component.
 func NewStatusBar(styles core.Styles) *StatusBar {
 	return &StatusBar{styles: styles}

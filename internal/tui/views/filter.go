@@ -61,6 +61,9 @@ type FilterModel struct {
 	perPage int
 }
 
+// SetStyles updates the styles without losing state.
+func (m *FilterModel) SetStyles(s core.Styles) { m.styles = s }
+
 // NewFilterModel creates a new filter panel.
 func NewFilterModel(styles core.Styles, keys core.KeyMap) FilterModel {
 	m := FilterModel{

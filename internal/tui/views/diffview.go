@@ -148,6 +148,9 @@ type DiffViewModel struct {
 	editReplyTo string                            // thread ID if replying
 }
 
+// SetStyles updates the styles without losing state.
+func (m *DiffViewModel) SetStyles(s core.Styles) { m.styles = s }
+
 // NewDiffViewModel creates a new diff viewer.
 func NewDiffViewModel(styles core.Styles, keys core.KeyMap) DiffViewModel {
 	return DiffViewModel{

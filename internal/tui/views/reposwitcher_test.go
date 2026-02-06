@@ -51,11 +51,12 @@ func TestRepoSwitcherNavigation(t *testing.T) {
 	m.SetSize(100, 30)
 	m.SetRepos(testRepoEntries())
 
-	down := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	// Repo switcher uses arrow keys for navigation (j/k type into search).
+	down := tea.KeyMsg{Type: tea.KeyDown}
 	m.Update(down)
 	assert.Equal(t, 1, m.cursor)
 
-	up := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
+	up := tea.KeyMsg{Type: tea.KeyUp}
 	m.Update(up)
 	assert.Equal(t, 0, m.cursor)
 
@@ -111,8 +112,8 @@ func TestRepoSwitcherSelect(t *testing.T) {
 	m.SetSize(100, 30)
 	m.SetRepos(testRepoEntries())
 
-	// Move to second entry and select.
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	// Move to second entry (arrow key) and select.
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	require.NotNil(t, cmd, "Enter should produce a command")
 

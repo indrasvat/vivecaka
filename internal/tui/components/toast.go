@@ -25,6 +25,9 @@ type ToastManager struct {
 	width  int
 }
 
+// SetStyles updates the styles without losing state.
+func (tm *ToastManager) SetStyles(s core.Styles) { tm.styles = s }
+
 // NewToastManager creates a new ToastManager.
 func NewToastManager(styles core.Styles) *ToastManager {
 	return &ToastManager{styles: styles}

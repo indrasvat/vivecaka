@@ -151,8 +151,17 @@ func TestAppBackNavigation(t *testing.T) {
 		app.prevView = core.ViewPRList // For help/repo-switch navigation.
 
 		msg := tea.KeyMsg{Type: tea.KeyEscape}
-		updated, _ := app.Update(msg)
+		updated, cmd := app.Update(msg)
 		a := updated.(*App)
+
+		// Views with text input (RepoSwitch, Filter, Review) intercept keys
+		// and return a cmd that produces a close message. Process the cmd to
+		// complete the navigation cycle.
+		if cmd != nil && a.view == tt.from {
+			closeMsg := cmd()
+			updated, _ = a.Update(closeMsg)
+			a = updated.(*App)
+		}
 
 		assert.Equal(t, tt.to, a.view, "back from %d", tt.from)
 	}
