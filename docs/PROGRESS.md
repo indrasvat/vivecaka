@@ -45,7 +45,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 022 | `docs/tasks/022-pagination.md` | Paginated PR loading with infinite scroll | DONE | — |
 | 023 | `docs/tasks/023-caching.md` | PR list caching for instant startup | DONE | — |
 | 024 | `docs/tasks/024-config-enhancements.md` | Keybinding overrides, adaptive colors, notifications | DONE | — |
-| 025 | `docs/tasks/025-persistence.md` | Per-repo filter memory, unread indicators | TODO | 001, 007, 023 |
+| 025 | `docs/tasks/025-persistence.md` | Per-repo filter memory, unread indicators | DONE | 001, 007, 023 |
 | 026 | `docs/tasks/026-testing-foundation.md` | testify migration, adapter fixtures, 80%+ coverage | TODO | — |
 | 027 | `docs/tasks/027-integration-tests.md` | teatest integration tests, TUI test quality | TODO | 026 |
 | 028 | `docs/tasks/028-pr-detail-tabs-layout.md` | Redesign PR detail with horizontal tabs layout | DONE | — |
@@ -72,6 +72,7 @@ Banner Polish:
 - Task 023: Cache package at `internal/cache/` with JSON file cache in `XDG_CACHE_HOME/vivecaka/repos/{owner}_{name}.json`. Atomic writes via temp file rename. `loadCachedPRsCmd` fires alongside fresh API load; cached data displayed immediately if still loading. `saveCacheCmd` runs as fire-and-forget after fresh load. `IsStale` checks TTL. 79.3% coverage.
 - Task 029: Debug logging via `log/slog` to `XDG_STATE_HOME/vivecaka/debug.log`. Activated via `--debug` flag, `VIVECAKA_DEBUG=1` env var, or `debug = true` in config. Log rotation at 10MB. No-op logger when disabled. 91.3% coverage.
 - Task 024: Keybinding overrides wired via `ApplyOverrides(map[string]string)` on KeyMap. Config `[keybindings]` section parsed and applied on startup. Supports all binding names (quit, search, filter, etc.). Notification config struct already in place. Adaptive colors deferred (current hex colors work on all terminals).
+- Task 025: Per-repo state persistence via `internal/cache/state.go`. RepoState stores last sort, sort direction, filter opts, and last-viewed PR timestamps. State saved to `XDG_DATA_HOME/vivecaka/state/{owner}_{name}.json`. Filter/sort restored on startup. PR viewed timestamps tracked on detail open. IsUnread checks `updatedAt > lastViewed`. Cache coverage 80.0%.
 
 Open Issues:
 - ~~PR detail loading spinner appears stuck~~ **RESOLVED** (Feb 5, 2026): Spinner now animates correctly. Root causes addressed: (1) Fixed View() logic to only show loading state when `loading=true`, not when `detail==nil`; (2) Added explicit `return nil` for `PRDetailLoadedMsg` in Update(); (3) Verified spinner frames cycle properly via iTerm2 automation tests. The `gh pr checks` API call takes ~1.4s which causes visible spinner animation before PR detail loads.

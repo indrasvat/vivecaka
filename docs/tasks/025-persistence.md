@@ -1,6 +1,6 @@
 # Task 025: Persistence (Per-Repo Filter Memory, Unread Indicators)
 
-## Status: TODO
+## Status: DONE
 
 ## Depends On: 001 (sort working), 007 (filter panel), 023 (caching infra)
 

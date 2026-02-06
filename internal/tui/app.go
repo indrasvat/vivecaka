@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/indrasvat/vivecaka/internal/cache"
 	"github.com/indrasvat/vivecaka/internal/config"
 	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/indrasvat/vivecaka/internal/tui/components"
@@ -100,6 +101,9 @@ type App struct {
 
 	// Filters
 	filterOpts domain.ListOpts
+
+	// Per-repo state persistence
+	repoState cache.RepoState
 
 	// Components
 	banner *components.Banner
@@ -331,6 +335,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.filterOpts = msg.Opts
 		a.prList.SetFilter(msg.Opts)
 		a.header.SetFilter(a.prList.FilterLabel())
+		a.repoState.LastFilter = msg.Opts
+		a.saveRepoState()
 		a.view = a.prevView
 		if a.listPRs != nil && a.repo.Owner != "" {
 			return a, loadPRsCmd(a.listPRs, a.repo, msg.Opts)
@@ -699,6 +705,8 @@ func (a *App) handleRepoDetected(msg views.RepoDetectedMsg) (tea.Model, tea.Cmd)
 	a.repo = msg.Repo
 	a.header.SetRepo(a.repo)
 	a.header.SetTotalCount(0) // Reset total count for new repo
+	// Load per-repo state (sort/filter memory).
+	a.loadRepoState()
 	// Prepend CWD repo to favorites if not already there.
 	a.ensureCWDRepoInFavorites()
 	a.repoSwitcher.SetCurrentRepo(a.repo)
@@ -820,6 +828,9 @@ func (a *App) handlePRCountLoaded(msg views.PRCountLoadedMsg) (tea.Model, tea.Cm
 
 func (a *App) handleOpenPR(msg views.OpenPRMsg) (tea.Model, tea.Cmd) {
 	a.view = core.ViewPRDetail
+	// Mark PR as viewed for unread tracking.
+	a.repoState.MarkPRViewed(msg.Number)
+	a.saveRepoState()
 	spinCmd := a.prDetail.StartLoading(msg.Number)
 
 	if a.getPRDetail != nil && a.repo.Owner != "" {
@@ -1212,6 +1223,30 @@ func (a *App) rebuildStyles() {
 
 func (a *App) contentHeight() int {
 	return max(1, a.height-2) // header + status bar
+}
+
+func (a *App) loadRepoState() {
+	if a.repo.Owner == "" {
+		return
+	}
+	state, err := cache.LoadRepoState(a.repo)
+	if err != nil {
+		return
+	}
+	a.repoState = state
+	// Apply saved filter if it has non-default values.
+	if state.LastFilter.State != "" {
+		a.filterOpts = state.LastFilter
+		a.prList.SetFilter(a.filterOpts)
+		a.header.SetFilter(a.prList.FilterLabel())
+	}
+}
+
+func (a *App) saveRepoState() {
+	if a.repo.Owner == "" {
+		return
+	}
+	_ = cache.SaveRepoState(a.repo, a.repoState)
 }
 
 // initRepoSwitcherFavorites populates the repo switcher from config favorites.
