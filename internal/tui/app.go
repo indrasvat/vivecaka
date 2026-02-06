@@ -361,6 +361,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.toasts.Update(msg)
 		return a, nil
 
+	case components.BannerGlyphTickMsg:
+		cmd := a.banner.Update(msg)
+		return a, cmd
+
 	case components.BannerDismissMsg:
 		a.banner.Update(msg)
 		if a.view == core.ViewBanner {

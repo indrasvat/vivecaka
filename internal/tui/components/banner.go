@@ -1,6 +1,7 @@
 package components
 
 import (
+	"math/rand/v2"
 	"strings"
 	"time"
 
@@ -9,23 +10,37 @@ import (
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
+// bannerGlyphs are decorative symbol trios shown under the logo, picked at random per launch.
+var bannerGlyphs = [][3]string{
+	{"⟁", "⟐", "⌬"},
+	{"⌖", "⟡", "⊹"},
+	{"⊛", "⟠", "⋈"},
+	{"⏣", "◬", "⧉"},
+	{"⎔", "⟐", "⟁"},
+}
+
 // Banner renders the startup ASCII art banner.
 type Banner struct {
-	styles  core.Styles
-	version string
-	visible bool
-	width   int
-	height  int
+	styles     core.Styles
+	version    string
+	visible    bool
+	width      int
+	height     int
+	glyphIndex int
 }
 
 // NewBanner creates a new Banner component.
 func NewBanner(styles core.Styles, version string) *Banner {
 	return &Banner{
-		styles:  styles,
-		version: version,
-		visible: true,
+		styles:     styles,
+		version:    version,
+		visible:    true,
+		glyphIndex: rand.IntN(len(bannerGlyphs)),
 	}
 }
+
+// BannerGlyphTickMsg advances to the next symbol trio.
+type BannerGlyphTickMsg struct{}
 
 // SetSize updates the banner dimensions.
 func (b *Banner) SetSize(w, h int) {
@@ -59,15 +74,32 @@ func (b *Banner) Update(msg tea.Msg) tea.Cmd {
 	case BannerDismissMsg:
 		b.visible = false
 		return nil
+	case BannerGlyphTickMsg:
+		b.glyphIndex = (b.glyphIndex + 1) % len(bannerGlyphs)
+		return b.scheduleGlyphTick()
 	}
 	return nil
 }
 
-// StartAutoDismiss returns a command that dismisses the banner after a delay.
-func (b *Banner) StartAutoDismiss(delay time.Duration) tea.Cmd {
-	return tea.Tick(delay, func(_ time.Time) tea.Msg {
-		return BannerDismissMsg{}
+// scheduleGlyphTick returns a command that rotates glyphs after an interval.
+func (b *Banner) scheduleGlyphTick() tea.Cmd {
+	if !b.visible {
+		return nil
+	}
+	return tea.Tick(400*time.Millisecond, func(_ time.Time) tea.Msg {
+		return BannerGlyphTickMsg{}
 	})
+}
+
+// StartAutoDismiss returns a command that dismisses the banner after a delay
+// and starts the glyph rotation animation.
+func (b *Banner) StartAutoDismiss(delay time.Duration) tea.Cmd {
+	return tea.Batch(
+		tea.Tick(delay, func(_ time.Time) tea.Msg {
+			return BannerDismissMsg{}
+		}),
+		b.scheduleGlyphTick(),
+	)
 }
 
 // View renders the banner.
@@ -106,10 +138,15 @@ func (b *Banner) View() string {
 	}
 	styledLogo := lipgloss.JoinVertical(lipgloss.Left, styledLines...)
 
-	// Sanskrit name
-	sanskrit := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#F5E0DC")). // rosewater
-		Render("विवेचक")
+	// Decorative symbol trio (rotates while banner is visible, theme-colored)
+	g := bannerGlyphs[b.glyphIndex]
+	dot := lipgloss.NewStyle().Foreground(t.Muted).Render("·")
+	sp := "  "
+	glyphs := lipgloss.NewStyle().Foreground(t.Primary).Render(g[0]) +
+		sp + dot + sp +
+		lipgloss.NewStyle().Foreground(t.Secondary).Render(g[1]) +
+		sp + dot + sp +
+		lipgloss.NewStyle().Foreground(t.Primary).Render(g[2])
 
 	// Tagline
 	tagline := lipgloss.NewStyle().
@@ -126,7 +163,7 @@ func (b *Banner) View() string {
 		lipgloss.Center,
 		styledLogo,
 		"",
-		sanskrit,
+		glyphs,
 		tagline,
 		"",
 		version,
