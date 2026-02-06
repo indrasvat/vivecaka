@@ -1,6 +1,6 @@
 # Task 020: Diff Side-by-Side Mode
 
-## Status: TODO
+## Status: DONE
 
 ## Depends On: 019 (two-pane layout establishes split rendering patterns)
 

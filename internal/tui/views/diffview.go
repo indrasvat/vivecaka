@@ -122,6 +122,9 @@ type DiffViewModel struct {
 	// Two-pane layout: file tree on left, content on right.
 	treeFocus bool // true when file tree pane has focus
 	treeWidth int  // computed tree pane width
+
+	// Side-by-side mode.
+	splitMode bool // true for side-by-side, false for unified
 }
 
 // NewDiffViewModel creates a new diff viewer.
@@ -174,6 +177,9 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 
 // IsTreeFocus returns whether the file tree pane has focus.
 func (m *DiffViewModel) IsTreeFocus() bool { return m.treeFocus }
+
+// IsSplitMode returns whether the diff is in side-by-side mode.
+func (m *DiffViewModel) IsSplitMode() bool { return m.splitMode }
 
 func (m *DiffViewModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	if m.searching {
@@ -267,6 +273,10 @@ func (m *DiffViewModel) handleContentKey(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		case 'z':
 			m.pendingKey = 'z'
+			return nil
+		case 't':
+			m.splitMode = !m.splitMode
+			m.scrollY = 0
 			return nil
 		case 'e':
 			n := m.prNumber
@@ -438,17 +448,24 @@ func (m *DiffViewModel) renderFileTree() string {
 
 // renderContentPane renders the right diff content pane.
 func (m *DiffViewModel) renderContentPane() string {
+	if m.splitMode {
+		return m.renderSplitContent()
+	}
+	return m.renderUnifiedContent()
+}
+
+// renderUnifiedContent renders the standard unified diff view.
+func (m *DiffViewModel) renderUnifiedContent() string {
 	t := m.styles.Theme
 	matchStyle := lipgloss.NewStyle().Background(t.Info).Foreground(t.Bg).Bold(true)
 	lineMatches := m.matchesByLine(m.fileIdx)
 
-	contentWidth := m.width - m.treeWidth - 1 // subtract tree + border
-	contentHeight := m.height - 1
-	contentHeight = max(1, contentHeight)
+	contentWidth := m.width - m.treeWidth - 1
+	contentHeight := max(1, m.height-1)
 
-	// File header line.
 	file := m.diff.Files[m.fileIdx]
-	fileHeader := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(file.Path)
+	modeLabel := lipgloss.NewStyle().Foreground(t.Muted).Render(" Unified")
+	fileHeader := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(file.Path) + modeLabel
 
 	var lines []string
 	lineIdx := 0
@@ -469,46 +486,164 @@ func (m *DiffViewModel) renderContentPane() string {
 
 			for _, dl := range hunk.Lines {
 				matches := lineMatches[lineIdx]
-				lineNum := ""
 				highlightedContent := m.highlighter.highlight(dl.Content, file.Path)
 				switch dl.Type {
 				case domain.DiffAdd:
-					lineNum = fmt.Sprintf("%4s %4d ", "", dl.NewNum)
-					line := renderDiffLineWithSyntax(lineNum, "+", dl.Content, highlightedContent, m.styles.DiffAdd, matchStyle, matches)
-					lines = append(lines, line)
+					lineNum := fmt.Sprintf("%4s %4d ", "", dl.NewNum)
+					lines = append(lines, renderDiffLineWithSyntax(lineNum, "+", dl.Content, highlightedContent, m.styles.DiffAdd, matchStyle, matches))
 				case domain.DiffDelete:
-					lineNum = fmt.Sprintf("%4d %4s ", dl.OldNum, "")
-					line := renderDiffLineWithSyntax(lineNum, "-", dl.Content, highlightedContent, m.styles.DiffDelete, matchStyle, matches)
-					lines = append(lines, line)
+					lineNum := fmt.Sprintf("%4d %4s ", dl.OldNum, "")
+					lines = append(lines, renderDiffLineWithSyntax(lineNum, "-", dl.Content, highlightedContent, m.styles.DiffDelete, matchStyle, matches))
 				default:
-					lineNum = fmt.Sprintf("%4d %4d ", dl.OldNum, dl.NewNum)
-					line := renderDiffLineWithSyntax(lineNum, " ", dl.Content, highlightedContent, lipgloss.NewStyle().Foreground(t.Fg), matchStyle, matches)
-					lines = append(lines, line)
+					lineNum := fmt.Sprintf("%4d %4d ", dl.OldNum, dl.NewNum)
+					lines = append(lines, renderDiffLineWithSyntax(lineNum, " ", dl.Content, highlightedContent, lipgloss.NewStyle().Foreground(t.Fg), matchStyle, matches))
 				}
 				lineIdx++
 			}
 		}
 	}
 
-	// Apply scroll.
 	if m.scrollY >= len(lines) {
 		m.scrollY = max(0, len(lines)-1)
 	}
-	end := m.scrollY + contentHeight
-	end = min(end, len(lines))
+	end := min(m.scrollY+contentHeight, len(lines))
 	visible := lines[m.scrollY:end]
 
 	content := strings.Join(visible, "\n")
-
-	// Search bar.
 	if m.searching {
-		search := lipgloss.NewStyle().Foreground(t.Info).Render(m.searchBarText())
-		content += "\n" + search
+		content += "\n" + lipgloss.NewStyle().Foreground(t.Info).Render(m.searchBarText())
 	}
 
-	return lipgloss.NewStyle().
-		Width(contentWidth).
+	return lipgloss.NewStyle().Width(contentWidth).
 		Render(lipgloss.JoinVertical(lipgloss.Left, fileHeader, content))
+}
+
+// splitRow holds one row of the side-by-side view.
+type splitRow struct {
+	leftNum   string
+	leftText  string
+	leftType  domain.DiffLineType
+	rightNum  string
+	rightText string
+	rightType domain.DiffLineType
+}
+
+// renderSplitContent renders side-by-side diff columns.
+func (m *DiffViewModel) renderSplitContent() string {
+	t := m.styles.Theme
+	contentWidth := m.width - m.treeWidth - 1
+	contentHeight := max(1, m.height-1)
+	colWidth := (contentWidth - 3) / 2 // 3 for divider " │ "
+
+	file := m.diff.Files[m.fileIdx]
+	modeLabel := lipgloss.NewStyle().Foreground(t.Muted).Render(" Split")
+	fileHeader := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(file.Path) + modeLabel
+
+	rows := m.buildSplitRows(file)
+
+	// Render rows.
+	var lines []string
+	divider := lipgloss.NewStyle().Foreground(t.Border).Render(" │ ")
+	lineNumWidth := 5
+
+	for _, row := range rows {
+		leftStyle := m.splitLineStyle(row.leftType)
+		rightStyle := m.splitLineStyle(row.rightType)
+
+		leftLine := m.renderSplitHalf(row.leftNum, row.leftText, leftStyle, lineNumWidth, colWidth)
+		rightLine := m.renderSplitHalf(row.rightNum, row.rightText, rightStyle, lineNumWidth, colWidth)
+		lines = append(lines, leftLine+divider+rightLine)
+	}
+
+	if m.scrollY >= len(lines) {
+		m.scrollY = max(0, len(lines)-1)
+	}
+	end := min(m.scrollY+contentHeight, len(lines))
+	visible := lines[m.scrollY:end]
+
+	content := strings.Join(visible, "\n")
+	if m.searching {
+		content += "\n" + lipgloss.NewStyle().Foreground(t.Info).Render(m.searchBarText())
+	}
+
+	return lipgloss.NewStyle().Width(contentWidth).
+		Render(lipgloss.JoinVertical(lipgloss.Left, fileHeader, content))
+}
+
+func (m *DiffViewModel) splitLineStyle(lineType domain.DiffLineType) lipgloss.Style {
+	switch lineType {
+	case domain.DiffAdd:
+		return m.styles.DiffAdd
+	case domain.DiffDelete:
+		return m.styles.DiffDelete
+	default:
+		return lipgloss.NewStyle().Foreground(m.styles.Theme.Fg)
+	}
+}
+
+func (m *DiffViewModel) renderSplitHalf(num, text string, style lipgloss.Style, numW, colW int) string {
+	numStr := fmt.Sprintf("%*s ", numW, num)
+	maxText := colW - numW - 2
+	if maxText < 0 {
+		maxText = 0
+	}
+	if len(text) > maxText {
+		text = text[:maxText]
+	}
+	return style.Render(numStr + text)
+}
+
+func (m *DiffViewModel) buildSplitRows(file domain.FileDiff) []splitRow {
+	var rows []splitRow
+
+	for _, hunk := range file.Hunks {
+		// Hunk header spans both sides.
+		rows = append(rows, splitRow{
+			leftText: hunk.Header, leftType: domain.DiffContext,
+			rightText: hunk.Header, rightType: domain.DiffContext,
+		})
+
+		// Pair up deletions and additions within the hunk.
+		var delBuf, addBuf []domain.DiffLine
+		flushPairs := func() {
+			maxLen := max(len(delBuf), len(addBuf))
+			for i := range maxLen {
+				var row splitRow
+				if i < len(delBuf) {
+					row.leftNum = fmt.Sprintf("%d", delBuf[i].OldNum)
+					row.leftText = delBuf[i].Content
+					row.leftType = domain.DiffDelete
+				}
+				if i < len(addBuf) {
+					row.rightNum = fmt.Sprintf("%d", addBuf[i].NewNum)
+					row.rightText = addBuf[i].Content
+					row.rightType = domain.DiffAdd
+				}
+				rows = append(rows, row)
+			}
+			delBuf = delBuf[:0]
+			addBuf = addBuf[:0]
+		}
+
+		for _, dl := range hunk.Lines {
+			switch dl.Type {
+			case domain.DiffDelete:
+				delBuf = append(delBuf, dl)
+			case domain.DiffAdd:
+				addBuf = append(addBuf, dl)
+			default:
+				// Flush any pending pairs before context.
+				flushPairs()
+				rows = append(rows, splitRow{
+					leftNum: fmt.Sprintf("%d", dl.OldNum), leftText: dl.Content, leftType: domain.DiffContext,
+					rightNum: fmt.Sprintf("%d", dl.NewNum), rightText: dl.Content, rightType: domain.DiffContext,
+				})
+			}
+		}
+		flushPairs()
+	}
+
+	return rows
 }
 
 type searchMatch struct {

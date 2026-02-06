@@ -763,6 +763,67 @@ func TestDiffTreeFocusToggle(t *testing.T) {
 	}
 }
 
+func TestDiffSplitModeToggle(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	if m.splitMode {
+		t.Error("expected unified mode initially")
+	}
+
+	// Press t to toggle to split mode.
+	tKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}
+	m.Update(tKey)
+	if !m.splitMode {
+		t.Error("expected split mode after t")
+	}
+
+	// View should still render.
+	view := m.View()
+	if view == "" {
+		t.Error("split mode view should not be empty")
+	}
+	// Should contain the file path.
+	if !strings.Contains(view, "registry.go") {
+		t.Error("expected file path in split view")
+	}
+
+	// Toggle back.
+	m.Update(tKey)
+	if m.splitMode {
+		t.Error("expected unified mode after second t")
+	}
+}
+
+func TestDiffSplitModeRendering(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+	m.splitMode = true
+
+	view := m.View()
+	// Split mode should contain the divider character.
+	if !strings.Contains(view, "│") {
+		t.Error("expected vertical divider in split view")
+	}
+	// Should show the "Split" mode label.
+	if !strings.Contains(view, "Split") {
+		t.Error("expected 'Split' label in view")
+	}
+}
+
+func TestDiffUnifiedModeLabel(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	view := m.View()
+	if !strings.Contains(view, "Unified") {
+		t.Error("expected 'Unified' label in default view")
+	}
+}
+
 func TestDiffTreeWidth(t *testing.T) {
 	m := NewDiffViewModel(testStyles(), testKeys())
 

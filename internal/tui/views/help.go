@@ -228,6 +228,7 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 				title: "Actions",
 				bindings: []helpBinding{
 					{"Enter", "Select file (in tree)"},
+					{"t", "Toggle unified/split"},
 					{"/", "Search in diff"},
 					{"e", "External diff tool"},
 					{"za", "Toggle collapse"},
@@ -322,7 +323,7 @@ func StatusHints(view core.ViewState, width int) string {
 	case core.ViewPRDetail:
 		hints = "j/k scroll  Tab pane  d diff  c checkout  r review  o open  Esc back  ? help"
 	case core.ViewDiff:
-		hints = "j/k scroll  Tab pane  {/} file  / search  e ext diff  Esc back  ? help"
+		hints = "j/k scroll  Tab pane  {/} file  t split  / search  e ext diff  Esc back  ? help"
 	case core.ViewReview:
 		hints = "j/k field  Enter action  Esc back  ? help"
 	case core.ViewInbox:

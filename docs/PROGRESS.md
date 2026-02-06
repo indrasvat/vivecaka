@@ -40,7 +40,7 @@ Previously, Phases 0-13 built the scaffolding. An audit revealed ~25 features ar
 | 017 | `docs/tasks/017-external-diff-tool.md` | e key to launch external diff tool | DONE | — |
 | 018 | `docs/tasks/018-inline-comments.md` | Inline comments in diff view (c/r/x keys) | TODO | 010 |
 | 019 | `docs/tasks/019-diff-two-pane-layout.md` | File tree + content split layout for diff | DONE | — |
-| 020 | `docs/tasks/020-diff-side-by-side.md` | Side-by-side diff mode with t toggle | TODO | 019 |
+| 020 | `docs/tasks/020-diff-side-by-side.md` | Side-by-side diff mode with t toggle | DONE | 019 |
 | 021 | `docs/tasks/021-visual-selection-mode.md` | v key for multi-select, batch operations | DONE | — |
 | 022 | `docs/tasks/022-pagination.md` | Paginated PR loading with infinite scroll | DONE | — |
 | 023 | `docs/tasks/023-caching.md` | PR list caching for instant startup | DONE | — |
@@ -74,6 +74,7 @@ Banner Polish:
 - Task 024: Keybinding overrides wired via `ApplyOverrides(map[string]string)` on KeyMap. Config `[keybindings]` section parsed and applied on startup. Supports all binding names (quit, search, filter, etc.). Notification config struct already in place. Adaptive colors deferred (current hex colors work on all terminals).
 - Task 025: Per-repo state persistence via `internal/cache/state.go`. RepoState stores last sort, sort direction, filter opts, and last-viewed PR timestamps. State saved to `XDG_DATA_HOME/vivecaka/state/{owner}_{name}.json`. Filter/sort restored on startup. PR viewed timestamps tracked on detail open. IsUnread checks `updatedAt > lastViewed`. Cache coverage 80.0%.
 - Task 019: Two-pane diff layout with file tree on left (25% width, 20-40 range) and diff content on right. Tab toggles focus between panes. Tree pane: j/k navigate files, Enter selects and returns focus to content. Content pane: all existing diff keys work. Active pane has distinct border color. File tree shows status icon (+/-/~), filename, +N -N counts. Help and status hints updated.
+- Task 020: Side-by-side diff mode via `t` toggle. Split mode shows old/new files in aligned columns with `│` divider. Deletions paired with additions within hunks; context lines shown on both sides. Line numbers on each side. Mode label (Unified/Split) shown in file header. Synchronized scrolling. All existing keys (search, hunk jump, etc.) work in both modes.
 
 Open Issues:
 - ~~PR detail loading spinner appears stuck~~ **RESOLVED** (Feb 5, 2026): Spinner now animates correctly. Root causes addressed: (1) Fixed View() logic to only show loading state when `loading=true`, not when `detail==nil`; (2) Added explicit `return nil` for `PRDetailLoadedMsg` in Update(); (3) Verified spinner frames cycle properly via iTerm2 automation tests. The `gh pr checks` API call takes ~1.4s which causes visible spinner animation before PR detail loads.
