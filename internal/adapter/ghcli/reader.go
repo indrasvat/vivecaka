@@ -138,9 +138,7 @@ func (a *Adapter) ListPRs(ctx context.Context, repo domain.RepoRef, opts domain.
 	// Calculate limit for pagination
 	// For page N, we need to fetch N*PerPage items total and skip the first (N-1)*PerPage
 	page := opts.Page
-	if page < 1 {
-		page = 1
-	}
+	page = max(page, 1)
 	perPage := opts.PerPage
 	if perPage <= 0 {
 		perPage = 50 // default
@@ -153,29 +151,33 @@ func (a *Adapter) ListPRs(ctx context.Context, repo domain.RepoRef, opts domain.
 		return nil, fmt.Errorf("listing PRs: %w", err)
 	}
 
-	// For pagination, skip items from previous pages
-	startIdx := (page - 1) * perPage
-	if startIdx >= len(ghPRs) {
-		// No more items for this page
-		return []domain.PR{}, nil
-	}
-	pageItems := ghPRs[startIdx:]
-
-	prs := make([]domain.PR, 0, len(pageItems))
-	for _, g := range pageItems {
-		pr := toDomainPR(g)
-		// Client-side draft filter.
+	// Apply client-side draft filter BEFORE pagination so that excluded
+	// drafts don't reduce the effective page size.
+	filtered := ghPRs[:0:0]
+	for _, g := range ghPRs {
 		switch opts.Draft {
 		case domain.DraftExclude:
-			if pr.Draft {
+			if g.IsDraft {
 				continue
 			}
 		case domain.DraftOnly:
-			if !pr.Draft {
+			if !g.IsDraft {
 				continue
 			}
 		}
-		prs = append(prs, pr)
+		filtered = append(filtered, g)
+	}
+
+	// Paginate over the filtered set.
+	startIdx := (page - 1) * perPage
+	if startIdx >= len(filtered) {
+		return []domain.PR{}, nil
+	}
+	pageItems := filtered[startIdx:]
+
+	prs := make([]domain.PR, 0, len(pageItems))
+	for _, g := range pageItems {
+		prs = append(prs, toDomainPR(g))
 	}
 
 	return prs, nil

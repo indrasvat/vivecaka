@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/indrasvat/vivecaka/internal/config"
@@ -121,6 +120,7 @@ func (l *Locator) CacheClonePath(repo domain.RepoRef) string {
 
 // withLock acquires an exclusive file lock around read-modify-write operations.
 // This prevents concurrent vivecaka instances from losing each other's writes.
+// The actual locking mechanism is platform-specific (see locator_lock_*.go).
 func (l *Locator) withLock(fn func() error) error {
 	if err := os.MkdirAll(filepath.Dir(l.dataPath), 0o755); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
@@ -133,10 +133,10 @@ func (l *Locator) withLock(fn func() error) error {
 	}
 	defer func() { _ = f.Close() }()
 
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+	if err := lockFile(f); err != nil {
 		return fmt.Errorf("acquire lock: %w", err)
 	}
-	defer func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) }()
+	defer unlockFile(f)
 
 	return fn()
 }

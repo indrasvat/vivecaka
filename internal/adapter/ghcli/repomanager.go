@@ -77,9 +77,13 @@ func (a *Adapter) CloneRepo(ctx context.Context, repo domain.RepoRef, targetPath
 
 // CreateWorktree creates a git worktree for a PR branch at the given path.
 // It fetches the PR ref first (needed for fork branches), then creates the worktree.
+// Uses a unique local branch name (pr-<number>) to avoid collisions with existing
+// branches — e.g. a fork PR named "main" would otherwise overwrite the local main.
 func (a *Adapter) CreateWorktree(ctx context.Context, repoPath string, number int, branch, worktreePath string) error {
-	// Step 1: Fetch the PR ref so the branch exists locally.
-	localBranch := branch
+	// Use a unique local branch name to avoid colliding with existing branches.
+	localBranch := fmt.Sprintf("pr-%d", number)
+
+	// Step 1: Fetch the PR ref into our unique local branch.
 	fetchCmd := exec.CommandContext(ctx, "git", "-C", repoPath,
 		"fetch", "origin", fmt.Sprintf("pull/%d/head:%s", number, localBranch))
 	if out, err := fetchCmd.CombinedOutput(); err != nil {
