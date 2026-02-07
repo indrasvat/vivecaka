@@ -16,7 +16,7 @@ type cmdSpec struct {
 
 var lookPath = exec.LookPath
 
-func openBrowser(url string) error {
+var openBrowser = func(url string) error {
 	spec, err := openBrowserSpec(url)
 	if err != nil {
 		return err
@@ -25,7 +25,7 @@ func openBrowser(url string) error {
 	return cmd.Run()
 }
 
-func copyToClipboard(text string) error {
+var copyToClipboard = func(text string) error {
 	spec, err := copyToClipboardSpec(text)
 	if err != nil {
 		return err

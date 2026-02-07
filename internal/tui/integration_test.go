@@ -17,6 +17,14 @@ import (
 	"github.com/indrasvat/vivecaka/internal/tui/views"
 )
 
+// -- test setup ------------------------------------------------------------
+
+func init() {
+	// Stub out platform functions so tests never open a real browser or clipboard.
+	openBrowser = func(string) error { return nil }
+	copyToClipboard = func(string) error { return nil }
+}
+
 // -- helpers ---------------------------------------------------------------
 
 func integrationApp() *App {
