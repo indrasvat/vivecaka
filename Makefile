@@ -49,7 +49,7 @@ lint: ## Run golangci-lint
 
 .PHONY: test
 test: ## Run tests with race detector
-	go test -race -shuffle=on -cover -count=1 ./...
+	go test -race -shuffle=on -coverprofile=coverage.out -count=1 ./...
 
 .PHONY: coverage
 coverage: ## Generate and open coverage report
