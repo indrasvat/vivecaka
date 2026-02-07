@@ -4,14 +4,16 @@ MODULE    := github.com/indrasvat/vivecaka
 VERSION   := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT    := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE      := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+GO_VERSION := $(shell go version | cut -d' ' -f3)
 LDFLAGS   := -s -w \
 	-X main.version=$(VERSION) \
 	-X main.commit=$(COMMIT) \
-	-X main.date=$(DATE)
+	-X main.date=$(DATE) \
+	-X main.goVersion=$(GO_VERSION)
 
 .DEFAULT_GOAL := help
 
-## ── Build & Run ─────────────────────────────────────────────────────
+## -- Build & Run --------------------------------------------------------------
 
 .PHONY: build
 build: ## Build binary to bin/vivecaka
@@ -30,7 +32,7 @@ run: ## Run with go run
 dev: ## Run with auto-reload (requires air: go install github.com/air-verse/air@latest)
 	@command -v air >/dev/null 2>&1 && air || (echo "Install air: go install github.com/air-verse/air@latest" && go run ./cmd/vivecaka)
 
-## ── Quality ─────────────────────────────────────────────────────────
+## -- Quality ------------------------------------------------------------------
 
 .PHONY: fmt
 fmt: ## Format code with gofmt
@@ -42,12 +44,12 @@ vet: ## Run go vet
 
 .PHONY: lint
 lint: ## Run golangci-lint
-	@command -v golangci-lint >/dev/null 2>&1 || (echo "Install: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest" && exit 1)
+	@command -v golangci-lint >/dev/null 2>&1 || (echo "Install: make tools-ci" && exit 1)
 	golangci-lint run ./...
 
 .PHONY: test
 test: ## Run tests with race detector
-	go test -race -cover -count=1 ./...
+	go test -race -shuffle=on -cover -count=1 ./...
 
 .PHONY: coverage
 coverage: ## Generate and open coverage report
@@ -55,10 +57,23 @@ coverage: ## Generate and open coverage report
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
-.PHONY: ci
-ci: fmt vet lint test build ## Run all quality checks (fmt, vet, lint, test, build)
+.PHONY: tidy
+tidy: ## Run go mod tidy
+	go mod tidy
 
-## ── Dependencies ────────────────────────────────────────────────────
+.PHONY: verify
+verify: ## Verify module dependencies
+	go mod verify
+
+.PHONY: govulncheck
+govulncheck: ## Run govulncheck for known vulnerabilities
+	@command -v govulncheck >/dev/null 2>&1 || (echo "Install: make tools-ci" && exit 1)
+	govulncheck ./...
+
+.PHONY: ci
+ci: tidy verify fmt vet lint govulncheck test build ## Run full CI pipeline
+
+## -- Dependencies -------------------------------------------------------------
 
 .PHONY: deps
 deps: ## Download and tidy dependencies
@@ -67,11 +82,17 @@ deps: ## Download and tidy dependencies
 
 .PHONY: tools
 tools: ## Install development tools
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
+	go install golang.org/x/vuln/cmd/govulncheck@latest
 	go install github.com/evilmartians/lefthook@latest
 	go install github.com/goreleaser/goreleaser/v2@latest
 
-## ── Git Hooks ───────────────────────────────────────────────────────
+.PHONY: tools-ci
+tools-ci: ## Install CI tools (golangci-lint + govulncheck)
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
+	go install golang.org/x/vuln/cmd/govulncheck@latest
+
+## -- Git Hooks ----------------------------------------------------------------
 
 .PHONY: hooks-install
 hooks-install: ## Install lefthook git hooks
@@ -82,7 +103,7 @@ hooks-install: ## Install lefthook git hooks
 hooks-uninstall: ## Remove lefthook git hooks
 	lefthook uninstall
 
-## ── Release ─────────────────────────────────────────────────────────
+## -- Release ------------------------------------------------------------------
 
 .PHONY: snapshot
 snapshot: ## Build snapshot release with goreleaser (local only)
@@ -93,7 +114,7 @@ snapshot: ## Build snapshot release with goreleaser (local only)
 release: ## Run goreleaser (CI only, requires GITHUB_TOKEN)
 	goreleaser release --clean
 
-## ── Maintenance ─────────────────────────────────────────────────────
+## -- Maintenance --------------------------------------------------------------
 
 .PHONY: clean
 clean: ## Remove build artifacts

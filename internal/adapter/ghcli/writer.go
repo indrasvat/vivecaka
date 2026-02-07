@@ -23,7 +23,8 @@ func (a *Adapter) Checkout(ctx context.Context, repo domain.RepoRef, number int)
 	cmd := exec.CommandContext(ctx, "git", "branch", "--show-current")
 	out, err := cmd.Output()
 	if err != nil {
-		return fmt.Sprintf("PR #%d", number), nil
+		// Fallback to PR number if git branch detection fails — checkout still succeeded.
+		return fmt.Sprintf("PR #%d", number), nil //nolint:nilerr // fallback to PR number if branch detection fails
 	}
 	return strings.TrimSpace(string(out)), nil
 }

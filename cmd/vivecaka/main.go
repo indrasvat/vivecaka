@@ -16,14 +16,15 @@ import (
 
 // Build-time variables injected via ldflags.
 var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	version   = "dev"
+	commit    = "none"
+	date      = "unknown"
+	goVersion = "unknown"
 )
 
 func main() {
 	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
-		fmt.Printf("vivecaka %s (%s) built %s\n", version, commit, date)
+		fmt.Printf("vivecaka %s\n  commit:  %s\n  built:   %s\n  go:      %s\n", version, commit, date, goVersion)
 		os.Exit(0)
 	}
 

@@ -4,6 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
@@ -101,18 +102,18 @@ func (m *ReviewModel) createTheme() *huh.Theme {
 
 	// Customize to match vivecaka theme
 	theme.Focused.Title = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Primary)).
+		Foreground(t.Primary).
 		Bold(true)
 	theme.Focused.Description = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Muted))
+		Foreground(t.Muted)
 	theme.Focused.Base = lipgloss.NewStyle().
-		BorderForeground(lipgloss.Color(t.Primary)).
+		BorderForeground(t.Primary).
 		BorderStyle(lipgloss.RoundedBorder())
 	theme.Focused.SelectedOption = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Primary)).
+		Foreground(t.Primary).
 		Bold(true)
 	theme.Focused.TextInput.Cursor = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Primary))
+		Foreground(t.Primary)
 
 	return theme
 }
@@ -180,7 +181,7 @@ func (m *ReviewModel) Update(msg tea.Msg) tea.Cmd {
 func (m *ReviewModel) View() string {
 	t := m.styles.Theme
 	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Primary)).
+		Foreground(t.Primary).
 		Bold(true).
 		MarginBottom(1)
 

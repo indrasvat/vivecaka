@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/indrasvat/vivecaka/internal/domain"
 )
 
 func loadFixture(t *testing.T, name string) []byte {
@@ -210,7 +211,7 @@ func TestMapCheckStatus(t *testing.T) {
 	assert.Equal(t, domain.CIFail, mapCheckStatus("COMPLETED", "STARTUP_FAILURE"))
 	assert.Equal(t, domain.CISkipped, mapCheckStatus("COMPLETED", "SKIPPED"))
 	assert.Equal(t, domain.CISkipped, mapCheckStatus("COMPLETED", "NEUTRAL"))
-	assert.Equal(t, domain.CIFail, mapCheckStatus("COMPLETED", "CANCELLED"))
+	assert.Equal(t, domain.CIFail, mapCheckStatus("COMPLETED", "CANCELED"))
 	assert.Equal(t, domain.CIPending, mapCheckStatus("IN_PROGRESS", ""))
 	assert.Equal(t, domain.CIPending, mapCheckStatus("QUEUED", ""))
 	assert.Equal(t, domain.CIPending, mapCheckStatus("PENDING", ""))

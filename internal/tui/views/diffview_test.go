@@ -5,10 +5,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/indrasvat/vivecaka/internal/domain"
 )
 
 func testDiff() *domain.Diff {

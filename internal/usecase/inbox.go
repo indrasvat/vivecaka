@@ -45,8 +45,7 @@ func (uc *GetInboxPRs) Execute(ctx context.Context, repos []domain.RepoRef) ([]I
 			}
 			prs, err := uc.reader.ListPRs(ctx, repo, opts)
 			if err != nil {
-				// Tolerate individual repo failures — skip silently.
-				return nil
+				return nil //nolint:nilerr // tolerate individual repo failures
 			}
 			mu.Lock()
 			for _, pr := range prs {

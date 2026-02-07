@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 

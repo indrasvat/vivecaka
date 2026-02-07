@@ -1,32 +1,69 @@
 version: "2"
 
 run:
-  timeout: 3m
+  timeout: 5m
 
 linters:
   enable:
-    - govet
+    - bodyclose
     - errcheck
-    - staticcheck
-    - unused
-    - ineffassign
+    - errorlint
+    - gocognit
     - gocritic
+    - gocyclo
+    - gosec
+    - govet
+    - ineffassign
     - misspell
+    - nilerr
+    - noctx
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+      disabled-checks:
+        - evalOrder
+        - filepathJoin
+        - sprintfQuotedString
+    misspell:
+      locale: US
+    gocyclo:
+      min-complexity: 80
+    gocognit:
+      min-complexity: 70
+    gosec:
+      excludes:
+        - G204
+        - G301
+        - G302
+        - G304
+        - G306
+        - G404
+        - G602
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+      - linters:
+          - errcheck
+        text: "Error return value of `(fmt\\.Fprintf|fmt\\.Fprintln|io\\.Closer)`"
+      - path: internal/tui/platform\.go
+        linters:
+          - noctx
+      - path: internal/adapter/ghcli/plugin\.go
+        linters:
+          - noctx
 
 formatters:
   enable:
     - gofmt
-
-linters-settings:
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-  misspell:
-    locale: US
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
+    - goimports
+  settings:
+    goimports:
+      local-prefixes: github.com/indrasvat/vivecaka

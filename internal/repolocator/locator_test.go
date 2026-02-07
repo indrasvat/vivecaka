@@ -150,15 +150,15 @@ func TestConcurrentRegister(t *testing.T) {
 	loc := testLocator(t)
 	var wg sync.WaitGroup
 
-	for i := range 20 {
+	for range 20 {
 		wg.Add(1)
-		go func(n int) {
+		go func() {
 			defer wg.Done()
 			repo := domain.RepoRef{Owner: "owner", Name: "repo"}
 			_ = loc.Register(repo, "/path", "detected")
 			_, _ = loc.Lookup(repo)
 			_ = loc.Remove(domain.RepoRef{Owner: "nonexistent", Name: "repo"})
-		}(i)
+		}()
 	}
 	wg.Wait()
 }

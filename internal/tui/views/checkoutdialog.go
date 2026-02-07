@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 	"github.com/indrasvat/vivecaka/internal/usecase"
@@ -452,7 +453,7 @@ func (m *CheckoutDialogModel) viewWorktreeChoice() string {
 
 	title := m.titleStyle().Render(fmt.Sprintf("Checkout PR #%d", m.prNumber))
 	branchLine := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Info)).
+		Foreground(t.Info).
 		Render(m.branch)
 
 	options := []struct {
@@ -466,12 +467,12 @@ func (m *CheckoutDialogModel) viewWorktreeChoice() string {
 	var optLines []string
 	for i, opt := range options {
 		cursor := "  "
-		labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Fg))
+		labelStyle := lipgloss.NewStyle().Foreground(t.Fg)
 		if i == m.cursor {
-			cursor = lipgloss.NewStyle().Foreground(lipgloss.Color(t.Primary)).Bold(true).Render("▸") + " "
+			cursor = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("▸") + " "
 			labelStyle = labelStyle.Bold(true)
 		}
-		descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Subtext)).Width(boxWidth - 8)
+		descStyle := lipgloss.NewStyle().Foreground(t.Subtext).Width(boxWidth - 8)
 		optLines = append(optLines, cursor+labelStyle.Render(opt.label))
 		optLines = append(optLines, "    "+descStyle.Render(opt.desc))
 		if i < len(options)-1 {
@@ -493,13 +494,13 @@ func (m *CheckoutDialogModel) viewKnownConfirm() string {
 	boxWidth := m.boxWidth()
 
 	title := m.titleStyle().Render(fmt.Sprintf("Checkout PR #%d", m.prNumber))
-	repoLine := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Info)).Render(m.repo.String()) +
-		lipgloss.NewStyle().Foreground(lipgloss.Color(t.Muted)).Render(" → ") +
-		lipgloss.NewStyle().Foreground(lipgloss.Color(t.Info)).Render(m.branch)
+	repoLine := lipgloss.NewStyle().Foreground(t.Info).Render(m.repo.String()) +
+		lipgloss.NewStyle().Foreground(t.Muted).Render(" → ") +
+		lipgloss.NewStyle().Foreground(t.Info).Render(m.branch)
 
-	pathLabel := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Fg)).Render("Will check out in:")
+	pathLabel := lipgloss.NewStyle().Foreground(t.Fg).Render("Will check out in:")
 	pathValue := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Warning)).
+		Foreground(t.Warning).
 		Bold(true).
 		Width(boxWidth - 6).
 		Render(shortenPath(m.plan.TargetPath))
@@ -516,8 +517,8 @@ func (m *CheckoutDialogModel) viewOptions() string {
 	t := m.styles.Theme
 	boxWidth := m.boxWidth()
 
-	warning := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Warning)).Bold(true).Render("⚠ No local clone found")
-	repoLine := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Fg)).
+	warning := lipgloss.NewStyle().Foreground(t.Warning).Bold(true).Render("⚠ No local clone found")
+	repoLine := lipgloss.NewStyle().Foreground(t.Fg).
 		Width(boxWidth - 6).
 		Render(m.repo.String() + " is not cloned locally.")
 
@@ -533,12 +534,12 @@ func (m *CheckoutDialogModel) viewOptions() string {
 	var optLines []string
 	for i, opt := range options {
 		cursor := "  "
-		labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Fg))
+		labelStyle := lipgloss.NewStyle().Foreground(t.Fg)
 		if i == m.cursor {
-			cursor = lipgloss.NewStyle().Foreground(lipgloss.Color(t.Primary)).Bold(true).Render("▸") + " "
+			cursor = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("▸") + " "
 			labelStyle = labelStyle.Bold(true)
 		}
-		descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Subtext)).Width(boxWidth - 8)
+		descStyle := lipgloss.NewStyle().Foreground(t.Subtext).Width(boxWidth - 8)
 		optLines = append(optLines, cursor+labelStyle.Render(opt.label))
 		optLines = append(optLines, "    "+descStyle.Render(opt.desc))
 		if i < len(options)-1 {
@@ -560,7 +561,7 @@ func (m *CheckoutDialogModel) viewCustomPath() string {
 	boxWidth := m.boxWidth()
 
 	title := m.titleStyle().Render(fmt.Sprintf("Clone %s", m.repo.String()))
-	label := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Subtext)).Render("Enter path:")
+	label := lipgloss.NewStyle().Foreground(t.Subtext).Render("Enter path:")
 
 	m.pathInput.Width = boxWidth - 8
 	inputView := m.pathInput.View()
@@ -579,9 +580,9 @@ func (m *CheckoutDialogModel) viewCloning() string {
 
 	title := m.titleStyle().Render("Cloning Repository")
 	frame := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
-	spinner := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Primary)).Bold(true).Render(frame)
-	msg := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Fg)).Render(fmt.Sprintf("Cloning %s...", m.repo.String()))
-	pathLine := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Muted)).Italic(true).
+	spinner := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(frame)
+	msg := lipgloss.NewStyle().Foreground(t.Fg).Render(fmt.Sprintf("Cloning %s...", m.repo.String()))
+	pathLine := lipgloss.NewStyle().Foreground(t.Muted).Italic(true).
 		Width(boxWidth - 6).Render(shortenPath(m.resultPath))
 
 	inner := lipgloss.JoinVertical(lipgloss.Left,
@@ -596,11 +597,11 @@ func (m *CheckoutDialogModel) viewCheckingOut() string {
 
 	title := m.titleStyle().Render("Checking Out")
 	frame := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
-	spinner := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Primary)).Bold(true).Render(frame)
-	msg := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Fg)).
+	spinner := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(frame)
+	msg := lipgloss.NewStyle().Foreground(t.Fg).
 		Width(boxWidth - 8).
 		Render(fmt.Sprintf("Checking out \"%s\" for PR #%d...", m.branch, m.prNumber))
-	pathLine := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Muted)).Italic(true).
+	pathLine := lipgloss.NewStyle().Foreground(t.Muted).Italic(true).
 		Width(boxWidth - 6).Render("in " + shortenPath(m.resultPath))
 
 	inner := lipgloss.JoinVertical(lipgloss.Left,
@@ -613,29 +614,29 @@ func (m *CheckoutDialogModel) viewSuccess() string {
 	t := m.styles.Theme
 	boxWidth := m.boxWidth()
 
-	icon := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Success)).Bold(true).Render("✓")
-	title := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Success)).Bold(true).Render("Checkout Complete")
+	icon := lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("✓")
+	title := lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("Checkout Complete")
 
 	var lines []string
 	lines = append(lines, icon+" "+title, "")
 
 	if m.cwdCheckout {
 		// Simple CWD checkout — same as existing behavior (Mock H).
-		msg := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Fg)).Render("Checked out branch: " +
-			lipgloss.NewStyle().Foreground(lipgloss.Color(t.Info)).Render(m.resultBranch))
+		msg := lipgloss.NewStyle().Foreground(t.Fg).Render("Checked out branch: " +
+			lipgloss.NewStyle().Foreground(t.Info).Render(m.resultBranch))
 		lines = append(lines, msg)
 	} else {
 		// Remote/cached checkout — show path (Mock G).
-		branchLabel := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Subtext)).Render("Branch: ")
-		branchValue := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Info)).Render(m.resultBranch)
-		pathLabel := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Subtext)).Render("Path:   ")
-		pathValue := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Warning)).Bold(true).
+		branchLabel := lipgloss.NewStyle().Foreground(t.Subtext).Render("Branch: ")
+		branchValue := lipgloss.NewStyle().Foreground(t.Info).Render(m.resultBranch)
+		pathLabel := lipgloss.NewStyle().Foreground(t.Subtext).Render("Path:   ")
+		pathValue := lipgloss.NewStyle().Foreground(t.Warning).Bold(true).
 			Width(boxWidth - 14).Render(shortenPath(m.resultPath))
 
 		cdCmd := "cd " + m.resultPath
 		cdStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(t.Fg)).
-			Background(lipgloss.Color(t.BgDim)).
+			Foreground(t.Fg).
+			Background(t.BgDim).
 			Width(boxWidth - 6).
 			Render(cdCmd)
 
@@ -648,8 +649,8 @@ func (m *CheckoutDialogModel) viewSuccess() string {
 	if m.cwdCheckout {
 		lines = append(lines, m.hintLine("Press any key to continue"))
 	} else {
-		yKey := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Info)).Bold(true).Render("y")
-		anyKey := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Muted)).Render("any key")
+		yKey := lipgloss.NewStyle().Foreground(t.Info).Bold(true).Render("y")
+		anyKey := lipgloss.NewStyle().Foreground(t.Muted).Render("any key")
 		lines = append(lines, yKey+" copy cd command   "+anyKey+" dismiss")
 	}
 
@@ -661,16 +662,16 @@ func (m *CheckoutDialogModel) viewError() string {
 	t := m.styles.Theme
 	boxWidth := m.boxWidth()
 
-	icon := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Error)).Bold(true).Render("✗")
-	title := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Error)).Bold(true).Render("Checkout Failed")
+	icon := lipgloss.NewStyle().Foreground(t.Error).Bold(true).Render("✗")
+	title := lipgloss.NewStyle().Foreground(t.Error).Bold(true).Render("Checkout Failed")
 
 	errMsg := "Unknown error"
 	if m.resultErr != nil {
 		errMsg = m.resultErr.Error()
 	}
-	msgStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Fg)).Width(boxWidth - 6)
+	msgStyle := lipgloss.NewStyle().Foreground(t.Fg).Width(boxWidth - 6)
 
-	hint := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Muted)).Italic(true).Render("Press any key to continue")
+	hint := lipgloss.NewStyle().Foreground(t.Muted).Italic(true).Render("Press any key to continue")
 
 	inner := lipgloss.JoinVertical(lipgloss.Left,
 		icon+" "+title, "", msgStyle.Render(errMsg), "", hint,
@@ -686,20 +687,20 @@ func (m *CheckoutDialogModel) boxWidth() int {
 
 func (m *CheckoutDialogModel) titleStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color(m.styles.Theme.Primary)).
+		Foreground(m.styles.Theme.Primary).
 		Bold(true)
 }
 
 func (m *CheckoutDialogModel) hintLine(text string) string {
 	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color(m.styles.Theme.Muted)).
+		Foreground(m.styles.Theme.Muted).
 		Render(text)
 }
 
 func (m *CheckoutDialogModel) confirmHints() string {
 	t := m.styles.Theme
-	enterKey := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Success)).Bold(true).Render("Enter")
-	escKey := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Error)).Bold(true).Render("Esc")
+	enterKey := lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("Enter")
+	escKey := lipgloss.NewStyle().Foreground(t.Error).Bold(true).Render("Esc")
 	return enterKey + " confirm   " + escKey + " cancel"
 }
 

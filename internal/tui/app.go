@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/indrasvat/vivecaka/internal/cache"
 	"github.com/indrasvat/vivecaka/internal/config"
 	"github.com/indrasvat/vivecaka/internal/domain"
@@ -959,7 +960,7 @@ func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, 
 	}
 	// Use tea.ExecProcess to suspend TUI and run the external tool.
 	args := []string{"pr", "diff", fmt.Sprintf("%d", msg.Number)}
-	c := exec.Command("gh", args...)
+	c := exec.Command("gh", args...) //nolint:noctx // tea.ExecProcess requires raw *exec.Cmd, no context available
 	c.Env = append(c.Environ(), fmt.Sprintf("GH_PAGER=%s", tool))
 	return a, tea.ExecProcess(c, func(err error) tea.Msg {
 		if err != nil {

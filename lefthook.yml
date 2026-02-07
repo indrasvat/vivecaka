@@ -1,14 +1,5 @@
-pre-commit:
-  parallel: true
-  commands:
-    fmt:
-      run: gofmt -l . | grep -q . && exit 1 || exit 0
-      glob: "*.go"
-    vet:
-      run: go vet ./...
-      glob: "*.go"
-
 pre-push:
   commands:
     ci:
       run: make ci
+      fail_text: "CI failed! Fix issues before pushing."

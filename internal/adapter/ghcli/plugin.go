@@ -6,6 +6,7 @@ import (
 	"os/exec"
 
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/indrasvat/vivecaka/internal/plugin"
 )
 

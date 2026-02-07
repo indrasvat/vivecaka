@@ -1,6 +1,7 @@
 package repolocator
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -96,7 +97,7 @@ func (l *Locator) Remove(repo domain.RepoRef) error {
 	return l.withLock(func() error {
 		entries, err := l.load()
 		if err != nil {
-			return nil // nothing to remove from
+			return nil //nolint:nilerr // nothing to remove from if registry is unreadable
 		}
 		filtered := entries[:0]
 		for _, e := range entries {
@@ -184,7 +185,9 @@ func isValidRepoDir(path string, expected domain.RepoRef) bool {
 		return false
 	}
 	// Check git remote matches.
-	cmd := exec.Command("git", "-C", path, "remote", "get-url", "origin")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", path, "remote", "get-url", "origin")
 	out, err := cmd.Output()
 	if err != nil {
 		return false

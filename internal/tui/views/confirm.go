@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
@@ -193,19 +194,19 @@ func (m *ConfirmModel) viewPrompt() string {
 	boxWidth := max(30, min(60, m.width-4))
 
 	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Primary)).
+		Foreground(t.Primary).
 		Bold(true)
 
 	msgStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Fg)).
+		Foreground(t.Fg).
 		Width(boxWidth - 6)
 
 	confirmKey := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Success)).
+		Foreground(t.Success).
 		Bold(true).
 		Render("Enter/y")
 	cancelKey := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Error)).
+		Foreground(t.Error).
 		Bold(true).
 		Render("Esc/n")
 
@@ -228,17 +229,17 @@ func (m *ConfirmModel) viewLoading() string {
 	boxWidth := max(30, min(60, m.width-4))
 
 	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Primary)).
+		Foreground(t.Primary).
 		Bold(true)
 
 	frame := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
 	spinner := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Primary)).
+		Foreground(t.Primary).
 		Bold(true).
 		Render(frame)
 
 	msgStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Fg)).
+		Foreground(t.Fg).
 		Width(boxWidth - 6)
 
 	inner := lipgloss.JoinVertical(lipgloss.Left,
@@ -258,12 +259,12 @@ func (m *ConfirmModel) viewResult() string {
 	var titleColor, borderColor lipgloss.Color
 	if m.resultSuccess {
 		icon = "✓"
-		titleColor = lipgloss.Color(t.Success)
-		borderColor = lipgloss.Color(t.Success)
+		titleColor = t.Success
+		borderColor = t.Success
 	} else {
 		icon = "✗"
-		titleColor = lipgloss.Color(t.Error)
-		borderColor = lipgloss.Color(t.Error)
+		titleColor = t.Error
+		borderColor = t.Error
 	}
 
 	titleStyle := lipgloss.NewStyle().
@@ -271,11 +272,11 @@ func (m *ConfirmModel) viewResult() string {
 		Bold(true)
 
 	msgStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Fg)).
+		Foreground(t.Fg).
 		Width(boxWidth - 6)
 
 	hintStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(t.Muted)).
+		Foreground(t.Muted).
 		Italic(true)
 
 	inner := lipgloss.JoinVertical(lipgloss.Left,

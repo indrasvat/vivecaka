@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/indrasvat/vivecaka/internal/domain"
 )
 
 // --- Mock implementations ---

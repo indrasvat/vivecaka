@@ -3,6 +3,7 @@ package plugin
 import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/indrasvat/vivecaka/internal/domain"
 )
 

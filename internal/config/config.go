@@ -162,15 +162,15 @@ func LoadFrom(path string) (*Config, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr != nil {
-				return cfg, nil
+				return cfg, nil //nolint:nilerr // return defaults if dir creation fails
 			}
 			out, merr := toml.Marshal(cfg)
 			if merr == nil {
 				_ = os.WriteFile(path, out, 0o644)
 			}
-			return cfg, nil
+			return cfg, nil //nolint:nilerr // file doesn't exist yet — return defaults
 		}
-		return cfg, nil
+		return cfg, nil //nolint:nilerr // unreadable config — return defaults gracefully
 	}
 
 	if err := toml.Unmarshal(data, cfg); err != nil {
