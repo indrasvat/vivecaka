@@ -431,6 +431,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case views.CopyCdCommandMsg:
+		a.view = a.prevView
 		if err := copyToClipboard("cd " + msg.Path); err != nil {
 			cmd := a.toasts.Add(
 				fmt.Sprintf("Copy failed: %v", err),
@@ -439,7 +440,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, cmd
 		}
 		cmd := a.toasts.Add("Copied cd command", domain.ToastSuccess, 3*time.Second)
-		a.view = a.prevView
 		return a, cmd
 
 	case views.CopyURLMsg:

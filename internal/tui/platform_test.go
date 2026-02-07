@@ -44,6 +44,12 @@ func TestOpenBrowserSpec(t *testing.T) {
 func TestCopyToClipboardSpec(t *testing.T) {
 	text := "https://example.com/pr/123"
 	spec, err := copyToClipboardSpec(text)
+
+	// On Linux CI, clipboard tools (xclip/xsel) may not be installed.
+	if runtime.GOOS == "linux" && err != nil {
+		t.Skipf("skipping: %v", err)
+	}
+
 	require.NoError(t, err)
 	assert.Equal(t, text, spec.stdin)
 
