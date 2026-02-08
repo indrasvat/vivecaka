@@ -50,6 +50,10 @@ func main() {
 	)
 
 	adapter := ghcli.New()
+	if err := adapter.Check(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
 
 	app := tui.New(cfg,
 		tui.WithVersion(version),

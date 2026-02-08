@@ -746,8 +746,8 @@ func shortenPath(path string) string {
 	if err != nil {
 		return path
 	}
-	if strings.HasPrefix(path, home) {
-		return "~" + path[len(home):]
+	if after, ok := strings.CutPrefix(path, home); ok {
+		return "~" + after
 	}
 	return path
 }

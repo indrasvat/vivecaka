@@ -32,31 +32,25 @@ func (a *Adapter) Info() plugin.PluginInfo {
 	}
 }
 
-// Init checks that the gh CLI is installed and authenticated.
-func (a *Adapter) Init(_ plugin.AppContext) tea.Cmd {
+// Check verifies that the gh CLI is installed and authenticated.
+// Call this before starting the TUI to fail fast with a clear message.
+func (a *Adapter) Check() error {
 	ghPath, err := exec.LookPath("gh")
 	if err != nil {
-		return func() tea.Msg {
-			return errMsg{err: fmt.Errorf("gh CLI not found: install from https://cli.github.com")}
-		}
+		return fmt.Errorf("gh CLI not found: install from https://cli.github.com")
 	}
 	a.ghPath = ghPath
 
-	// Check authentication status.
 	cmd := exec.Command(ghPath, "auth", "status")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return func() tea.Msg {
-			return errMsg{err: fmt.Errorf("gh not authenticated: run 'gh auth login'")}
-		}
+		return fmt.Errorf("gh not authenticated: run 'gh auth login'")
 	}
 	return nil
 }
 
-// errMsg is a BubbleTea message indicating an adapter initialization error.
-type errMsg struct {
-	err error
+// Init satisfies the plugin.Plugin interface.
+func (a *Adapter) Init(_ plugin.AppContext) tea.Cmd {
+	return nil
 }
-
-func (e errMsg) Error() string { return e.err.Error() }
