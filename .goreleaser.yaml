@@ -1,0 +1,57 @@
+version: 2
+
+project_name: vivecaka
+
+builds:
+  - id: vivecaka
+    main: ./cmd/vivecaka
+    binary: vivecaka
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
+      - -X main.goVersion={{.Env.GO_VERSION}}
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: "^feat"
+    - title: Fixes
+      regexp: "^fix"
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: indrasvat
+    name: vivecaka
+  prerelease: auto
+  header: |
+    ## vivecaka {{ .Version }}
+
+    > **macOS Gatekeeper:** After downloading, run `xattr -d com.apple.quarantine vivecaka`
+    > to remove the quarantine flag before first use.
+  footer: |
+    **Full Changelog**: https://github.com/indrasvat/vivecaka/compare/{{ .PreviousTag }}...{{ .Tag }}

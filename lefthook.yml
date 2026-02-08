@@ -1,0 +1,5 @@
+pre-push:
+  commands:
+    ci:
+      run: make ci
+      fail_text: "CI failed! Fix issues before pushing."

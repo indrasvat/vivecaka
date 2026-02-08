@@ -1,0 +1,54 @@
+[
+  {
+    "number": 42,
+    "title": "Add user authentication",
+    "author": {"login": "alice"},
+    "state": "OPEN",
+    "isDraft": false,
+    "headRefName": "feat/auth",
+    "baseRefName": "main",
+    "labels": [{"name": "enhancement"}, {"name": "security"}],
+    "statusCheckRollup": [
+      {"name": "CI", "status": "COMPLETED", "conclusion": "SUCCESS", "startedAt": "2025-01-15T10:00:00Z", "completedAt": "2025-01-15T10:05:00Z", "detailsUrl": "https://github.com/checks/1"},
+      {"name": "Lint", "status": "COMPLETED", "conclusion": "SUCCESS", "startedAt": "2025-01-15T10:00:00Z", "completedAt": "2025-01-15T10:02:00Z", "detailsUrl": "https://github.com/checks/2"}
+    ],
+    "reviewDecision": "APPROVED",
+    "updatedAt": "2025-01-15T12:00:00Z",
+    "createdAt": "2025-01-10T09:00:00Z",
+    "url": "https://github.com/owner/repo/pull/42"
+  },
+  {
+    "number": 43,
+    "title": "WIP: Refactor database layer",
+    "author": {"login": "bob"},
+    "state": "OPEN",
+    "isDraft": true,
+    "headRefName": "refactor/db",
+    "baseRefName": "main",
+    "labels": [{"name": "WIP"}],
+    "statusCheckRollup": [
+      {"name": "CI", "status": "IN_PROGRESS", "conclusion": "", "startedAt": "2025-01-16T08:00:00Z", "completedAt": null, "detailsUrl": "https://github.com/checks/3"}
+    ],
+    "reviewDecision": "REVIEW_REQUIRED",
+    "updatedAt": "2025-01-16T10:00:00Z",
+    "createdAt": "2025-01-14T14:00:00Z",
+    "url": "https://github.com/owner/repo/pull/43"
+  },
+  {
+    "number": 44,
+    "title": "Fix memory leak in worker pool",
+    "author": {"login": "charlie"},
+    "state": "OPEN",
+    "isDraft": false,
+    "headRefName": "fix/memory-leak",
+    "baseRefName": "main",
+    "labels": [{"name": "bug"}, {"name": "critical"}],
+    "statusCheckRollup": [
+      {"name": "CI", "status": "COMPLETED", "conclusion": "FAILURE", "startedAt": "2025-01-16T09:00:00Z", "completedAt": "2025-01-16T09:03:00Z", "detailsUrl": "https://github.com/checks/4"}
+    ],
+    "reviewDecision": "CHANGES_REQUESTED",
+    "updatedAt": "2025-01-16T11:00:00Z",
+    "createdAt": "2025-01-15T16:00:00Z",
+    "url": "https://github.com/owner/repo/pull/44"
+  }
+]
