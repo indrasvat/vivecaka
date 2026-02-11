@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -950,11 +951,39 @@ func (a *App) handlePRDetailLoaded(msg views.PRDetailLoadedMsg) (tea.Model, tea.
 	return a, nil
 }
 
+// detectDiffTool probes git config and PATH for a diff tool.
+// Returns empty string if nothing found.
+func detectDiffTool() string {
+	ctx := context.Background()
+	// 1. git config diff.external
+	if out, err := exec.CommandContext(ctx, "git", "config", "diff.external").Output(); err == nil {
+		if t := strings.TrimSpace(string(out)); t != "" {
+			return t
+		}
+	}
+	// 2. git config diff.tool
+	if out, err := exec.CommandContext(ctx, "git", "config", "diff.tool").Output(); err == nil {
+		if t := strings.TrimSpace(string(out)); t != "" {
+			return t
+		}
+	}
+	// 3. Common diff tools in PATH.
+	for _, t := range []string{"difft", "delta", "difftastic", "icdiff", "colordiff"} {
+		if _, err := exec.LookPath(t); err == nil {
+			return t
+		}
+	}
+	return ""
+}
+
 func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, tea.Cmd) {
 	tool := a.cfg.Diff.ExternalTool
 	if tool == "" {
+		tool = detectDiffTool()
+	}
+	if tool == "" {
 		cmd := a.toasts.Add(
-			"No external diff tool configured. Set [diff] external_tool in config.",
+			"No external diff tool found. Set [diff] external_tool in config.",
 			domain.ToastWarning, 5*time.Second,
 		)
 		return a, cmd
