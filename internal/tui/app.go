@@ -1001,11 +1001,10 @@ func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, 
 				)
 				return a, cmd
 			}
-			script := fmt.Sprintf(
-				"git fetch origin %s %s 2>/dev/null; GIT_EXTERNAL_DIFF=%s git diff origin/%s...origin/%s",
-				branch.Base, branch.Head, tool, branch.Base, branch.Head,
+			c := exec.Command("sh", "-c", //nolint:noctx
+				`git fetch origin "$1" "$2" && GIT_EXTERNAL_DIFF="$3" git diff "origin/$1"..."origin/$2"`,
+				"_", branch.Base, branch.Head, tool,
 			)
-			c := exec.Command("sh", "-c", script) //nolint:noctx
 			c.Dir = repoDir
 			return a, tea.ExecProcess(c, func(err error) tea.Msg {
 				return externalDiffDoneMsg{Err: err}
