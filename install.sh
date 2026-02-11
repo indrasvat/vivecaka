@@ -160,7 +160,7 @@ get_latest_version() {
         response="$(wget -qO- "${url}" 2>/dev/null)" || error_exit "Failed to query GitHub releases"
     fi
 
-    VERSION="$(echo "${response}" | grep '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
+    VERSION="$(echo "${response}" | grep '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/' || true)"
     [[ -z "${VERSION}" ]] && error_exit "Could not determine latest version"
 }
 
@@ -188,7 +188,7 @@ verify_checksum() {
     local checksums_file="$1" tarball_file="$2"
     local expected actual
 
-    expected="$(grep "${TARBALL}" "${checksums_file}" | awk '{print $1}')"
+    expected="$(grep "${TARBALL}" "${checksums_file}" | awk '{print $1}' || true)"
     [[ -z "${expected}" ]] && error_exit "Checksum not found for ${TARBALL} in checksums.txt"
 
     if [[ "${HASHER}" == "shasum" ]]; then
