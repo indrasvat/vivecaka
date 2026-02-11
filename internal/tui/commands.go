@@ -11,12 +11,16 @@ import (
 	"github.com/indrasvat/vivecaka/internal/adapter/ghcli"
 	"github.com/indrasvat/vivecaka/internal/cache"
 	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/indrasvat/vivecaka/internal/logging"
 	"github.com/indrasvat/vivecaka/internal/tui/views"
 	"github.com/indrasvat/vivecaka/internal/usecase"
 )
 
 // Default timeout for gh CLI operations.
 const ghTimeout = 15 * time.Second
+
+// diffTimeout is longer than ghTimeout because large PRs legitimately take time.
+const diffTimeout = 60 * time.Second
 
 // detectRepoCmd detects the current repo from git remote.
 func detectRepoCmd() tea.Cmd {
@@ -71,10 +75,25 @@ func loadPRDetailCmd(uc *usecase.GetPRDetail, repo domain.RepoRef, number int) t
 	}
 }
 
-// loadDiffCmd fetches the diff for a PR.
+// loadDiffCmd fetches the diff for a PR with a timeout.
 func loadDiffCmd(reader domain.PRReader, repo domain.RepoRef, number int) tea.Cmd {
 	return func() tea.Msg {
-		diff, err := reader.GetDiff(context.Background(), repo, number)
+		ctx, cancel := context.WithTimeout(context.Background(), diffTimeout)
+		defer cancel()
+
+		start := time.Now()
+		logging.Log.Debug("loading diff", "pr", number, "repo", repo.String())
+		diff, err := reader.GetDiff(ctx, repo, number)
+		elapsed := time.Since(start)
+		if err != nil {
+			logging.Log.Debug("diff load failed", "pr", number, "elapsed", elapsed, "err", err)
+		} else {
+			files := 0
+			if diff != nil {
+				files = len(diff.Files)
+			}
+			logging.Log.Debug("diff loaded", "pr", number, "elapsed", elapsed, "files", files)
+		}
 		return views.DiffLoadedMsg{Diff: diff, Err: err}
 	}
 }

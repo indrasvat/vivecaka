@@ -129,7 +129,7 @@ page_size = 50
 
 [diff]
 mode = "unified"          # unified or side-by-side
-external_tool = ""        # e.g. "delta", "difftastic"
+external_tool = ""        # auto-detects from git config / PATH (difft, delta, etc.)
 
 [repos]
 favorites = ["owner/repo1", "owner/repo2"]
@@ -163,10 +163,11 @@ tui → usecase → domain ← adapter
 ## Development
 
 ```bash
-make build    # Build binary → bin/vivecaka
-make test     # Tests with -race
-make lint     # golangci-lint
-make ci       # Full pipeline: fmt → vet → lint → test → build
+make build         # Build binary → bin/vivecaka
+make test          # Tests with -race
+make lint          # golangci-lint
+make ci            # Full pipeline: fmt → vet → lint → test → build
+make install-local # Install to ~/.local/bin
 ```
 
 ## License

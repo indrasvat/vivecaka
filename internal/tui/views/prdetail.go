@@ -108,6 +108,14 @@ func (m *PRDetailModel) GetComments() []domain.CommentThread {
 	return m.detail.Comments
 }
 
+// GetBranch returns the branch info for the loaded PR detail.
+func (m *PRDetailModel) GetBranch() domain.BranchInfo {
+	if m.detail == nil {
+		return domain.BranchInfo{}
+	}
+	return m.detail.Branch
+}
+
 // StartLoading shows loading state while detail is fetched.
 func (m *PRDetailModel) StartLoading(number int) tea.Cmd {
 	m.loading = true

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -376,6 +377,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case views.DiffLoadedMsg:
+		// Always forward to diff view — it handles both error and success states.
 		cmd := a.diffView.Update(msg)
 		if cmd != nil {
 			cmds = append(cmds, cmd)
@@ -949,16 +951,68 @@ func (a *App) handlePRDetailLoaded(msg views.PRDetailLoadedMsg) (tea.Model, tea.
 	return a, nil
 }
 
+// detectDiffTool probes git config and PATH for a diff tool.
+// Returns empty string if nothing found.
+func detectDiffTool() string {
+	ctx := context.Background()
+	// 1. git config diff.external
+	if out, err := exec.CommandContext(ctx, "git", "config", "diff.external").Output(); err == nil {
+		if t := strings.TrimSpace(string(out)); t != "" {
+			return t
+		}
+	}
+	// 2. git config diff.tool
+	if out, err := exec.CommandContext(ctx, "git", "config", "diff.tool").Output(); err == nil {
+		if t := strings.TrimSpace(string(out)); t != "" {
+			return t
+		}
+	}
+	// 3. Common diff tools in PATH.
+	for _, t := range []string{"difft", "delta", "difftastic", "icdiff", "colordiff"} {
+		if _, err := exec.LookPath(t); err == nil {
+			return t
+		}
+	}
+	return ""
+}
+
 func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, tea.Cmd) {
 	tool := a.cfg.Diff.ExternalTool
 	if tool == "" {
+		tool = detectDiffTool()
+	}
+	if tool == "" {
 		cmd := a.toasts.Add(
-			"No external diff tool configured. Set [diff] external_tool in config.",
+			"No external diff tool found. Set [diff] external_tool in config.",
 			domain.ToastWarning, 5*time.Second,
 		)
 		return a, cmd
 	}
-	// Use tea.ExecProcess to suspend TUI and run the external tool.
+
+	// If the API diff failed (e.g. too large), fall back to local git diff.
+	if msg.LoadErr != nil {
+		branch := a.prDetail.GetBranch()
+		if branch.Base != "" && branch.Head != "" {
+			repoDir := a.findRepoDir()
+			if repoDir == "" {
+				cmd := a.toasts.Add(
+					"No local repo found. Press Esc → c to checkout the branch first.",
+					domain.ToastWarning, 5*time.Second,
+				)
+				return a, cmd
+			}
+			c := exec.Command("sh", "-c", //nolint:noctx
+				`git fetch origin "$1" "$2" && GIT_EXTERNAL_DIFF="$3" git diff "origin/$1"..."origin/$2"`,
+				"_", branch.Base, branch.Head, tool,
+			)
+			c.Dir = repoDir
+			return a, tea.ExecProcess(c, func(err error) tea.Msg {
+				return externalDiffDoneMsg{Err: err}
+			})
+		}
+	}
+
+	// Default: pipe gh pr diff through the tool as GH_PAGER.
 	args := []string{"pr", "diff", fmt.Sprintf("%d", msg.Number)}
 	c := exec.Command("gh", args...) //nolint:noctx // tea.ExecProcess requires raw *exec.Cmd, no context available
 	c.Env = append(c.Environ(), fmt.Sprintf("GH_PAGER=%s", tool))
@@ -977,12 +1031,14 @@ type externalDiffDoneMsg struct {
 func (a *App) handleOpenDiff(msg views.OpenDiffMsg) (tea.Model, tea.Cmd) {
 	a.view = core.ViewDiff
 	a.diffView.SetPRNumber(msg.Number)
+	a.diffView.SetHeadBranch(a.prDetail.GetBranch().Head)
 	// Pass inline comments from the loaded PR detail to the diff view.
 	a.diffView.SetComments(a.prDetail.GetComments())
+	spinnerCmd := a.diffView.StartLoading()
 	if a.reader != nil && a.repo.Owner != "" {
-		return a, loadDiffCmd(a.reader, a.repo, msg.Number)
+		return a, tea.Batch(spinnerCmd, loadDiffCmd(a.reader, a.repo, msg.Number))
 	}
-	return a, nil
+	return a, spinnerCmd
 }
 
 func (a *App) handleAddInlineComment(msg views.AddInlineCommentMsg) (tea.Model, tea.Cmd) {
@@ -1141,6 +1197,20 @@ func (a *App) handleSmartCheckoutDone(msg views.SmartCheckoutDoneMsg) (tea.Model
 
 func reposMatchRef(a, b domain.RepoRef) bool {
 	return strings.EqualFold(a.Owner, b.Owner) && strings.EqualFold(a.Name, b.Name)
+}
+
+// findRepoDir returns a local directory for the currently browsed repo.
+// It checks the CWD first, then the repo locator's known paths.
+func (a *App) findRepoDir() string {
+	if reposMatchRef(a.repo, a.cwdRepo) && a.cwdPath != "" {
+		return a.cwdPath
+	}
+	if a.repoLocator != nil {
+		if p, ok := a.repoLocator.Validate(a.repo); ok {
+			return p
+		}
+	}
+	return ""
 }
 
 func (a *App) handleCheckoutConfirm(msg views.CheckoutPRMsg) (tea.Model, tea.Cmd) {
