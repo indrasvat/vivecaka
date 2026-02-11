@@ -137,6 +137,7 @@ type DiffViewModel struct {
 	highlighter      *syntaxHighlighter
 	spinnerFrame     int
 	fileChangeCounts [][2]int // cached [adds, dels] per file
+	loadErr          error    // non-nil after DiffLoadedMsg with error
 
 	// Two-pane layout: file tree on left, content on right.
 	treeFocus bool // true when file tree pane has focus
@@ -220,6 +221,7 @@ func (m *DiffViewModel) spinnerTick() tea.Cmd {
 func (m *DiffViewModel) StartLoading() tea.Cmd {
 	m.loading = true
 	m.diff = nil
+	m.loadErr = nil
 	m.fileIdx = 0
 	m.scrollY = 0
 	m.spinnerFrame = 0
@@ -257,8 +259,10 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 	case DiffLoadedMsg:
 		if msg.Err != nil {
 			m.loading = false
+			m.loadErr = msg.Err
 			return nil
 		}
+		m.loadErr = nil
 		m.SetDiff(msg.Diff)
 	}
 	return nil
@@ -554,12 +558,26 @@ func (m *DiffViewModel) computeTreeWidth() int {
 
 // View renders the diff viewer.
 func (m *DiffViewModel) View() string {
-	if m.loading || m.diff == nil {
+	// Show animated spinner only while actively loading.
+	if m.loading {
 		frame := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
 		spinner := lipgloss.NewStyle().Foreground(m.styles.Theme.Primary).Render(frame)
 		text := lipgloss.NewStyle().Foreground(m.styles.Theme.Muted).Render(" Loading diff...")
 		content := spinner + text
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+	}
+
+	// Error state: loading finished but no diff (e.g. diff too large, network error).
+	if m.diff == nil {
+		errText := "Diff not available"
+		if m.loadErr != nil {
+			errText = fmt.Sprintf("Error: %v", m.loadErr)
+		}
+		hint := "Press 'e' for external diff tool, or Esc to go back"
+		msg := lipgloss.NewStyle().Foreground(m.styles.Theme.Error).Render(errText) +
+			"\n\n" +
+			lipgloss.NewStyle().Foreground(m.styles.Theme.Muted).Render(hint)
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, msg)
 	}
 
 	if len(m.diff.Files) == 0 {

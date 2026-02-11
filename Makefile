@@ -24,6 +24,11 @@ build: ## Build binary to bin/vivecaka
 install: ## Install to $GOPATH/bin
 	go install -ldflags "$(LDFLAGS)" ./cmd/vivecaka
 
+.PHONY: install-local
+install-local: build ## Install to ~/.local/bin
+	@mkdir -p $(HOME)/.local/bin
+	cp $(BINDIR)/$(BINARY) $(HOME)/.local/bin/$(BINARY)
+
 .PHONY: run
 run: ## Run with go run
 	go run -ldflags "$(LDFLAGS)" ./cmd/vivecaka

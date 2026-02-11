@@ -376,14 +376,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case views.DiffLoadedMsg:
-		if msg.Err != nil {
-			a.diffView.Update(msg) // stops spinner
-			cmd := a.toasts.Add(
-				fmt.Sprintf("Error loading diff: %v", msg.Err),
-				domain.ToastError, 5*time.Second,
-			)
-			return a, cmd
-		}
+		// Always forward to diff view — it handles both error and success states.
 		cmd := a.diffView.Update(msg)
 		if cmd != nil {
 			cmds = append(cmds, cmd)

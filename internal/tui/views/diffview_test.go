@@ -1028,6 +1028,24 @@ func TestDiffLoadedError(t *testing.T) {
 
 	assert.False(t, m.loading, "loading should be false after error")
 	assert.Nil(t, m.diff, "diff should be nil on error")
+	assert.NotNil(t, m.loadErr, "loadErr should be set")
+}
+
+func TestDiffErrorViewState(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+
+	// Start loading then receive error.
+	m.StartLoading()
+	m.Update(DiffLoadedMsg{Diff: nil, Err: fmt.Errorf("diff too large")})
+
+	view := m.View()
+	// Should NOT show "Loading diff..." (spinner is stopped).
+	assert.NotContains(t, view, "Loading diff", "should not show loading text after error")
+	// Should show the error message.
+	assert.Contains(t, view, "diff too large", "should show error message")
+	// Should show the hint about external diff.
+	assert.Contains(t, view, "external diff", "should show external diff hint")
 }
 
 func TestDiffFileChangeCountCache(t *testing.T) {

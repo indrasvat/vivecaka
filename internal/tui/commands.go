@@ -11,6 +11,7 @@ import (
 	"github.com/indrasvat/vivecaka/internal/adapter/ghcli"
 	"github.com/indrasvat/vivecaka/internal/cache"
 	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/indrasvat/vivecaka/internal/logging"
 	"github.com/indrasvat/vivecaka/internal/tui/views"
 	"github.com/indrasvat/vivecaka/internal/usecase"
 )
@@ -80,7 +81,19 @@ func loadDiffCmd(reader domain.PRReader, repo domain.RepoRef, number int) tea.Cm
 		ctx, cancel := context.WithTimeout(context.Background(), diffTimeout)
 		defer cancel()
 
+		start := time.Now()
+		logging.Log.Debug("loading diff", "pr", number, "repo", repo.String())
 		diff, err := reader.GetDiff(ctx, repo, number)
+		elapsed := time.Since(start)
+		if err != nil {
+			logging.Log.Debug("diff load failed", "pr", number, "elapsed", elapsed, "err", err)
+		} else {
+			files := 0
+			if diff != nil {
+				files = len(diff.Files)
+			}
+			logging.Log.Debug("diff loaded", "pr", number, "elapsed", elapsed, "files", files)
+		}
 		return views.DiffLoadedMsg{Diff: diff, Err: err}
 	}
 }
