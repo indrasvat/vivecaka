@@ -556,6 +556,56 @@ func (m *DiffViewModel) computeTreeWidth() int {
 	return w
 }
 
+// viewError renders a themed error card when the diff fails to load.
+func (m *DiffViewModel) viewError() string {
+	t := m.styles.Theme
+	boxWidth := max(40, min(70, m.width-4))
+
+	titleStyle := lipgloss.NewStyle().
+		Foreground(t.Error).
+		Bold(true)
+
+	msgStyle := lipgloss.NewStyle().
+		Foreground(t.Fg).
+		Width(boxWidth - 6)
+
+	hintStyle := lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Italic(true)
+
+	detail := "Unable to load diff."
+	if m.loadErr != nil {
+		raw := m.loadErr.Error()
+		switch {
+		case strings.Contains(raw, "too_large") || strings.Contains(raw, "exceeded"):
+			detail = "This diff is too large for GitHub's API (>20,000 lines)."
+		case strings.Contains(raw, "context deadline"):
+			detail = "Request timed out. The diff may be very large."
+		default:
+			detail = raw
+		}
+	}
+
+	inner := lipgloss.JoinVertical(lipgloss.Left,
+		titleStyle.Render("✗ Diff unavailable"),
+		"",
+		msgStyle.Render(detail),
+		"",
+		hintStyle.Render("e  open external diff tool"),
+		hintStyle.Render("Esc  go back"),
+	)
+
+	boxStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(t.Error).
+		Padding(1, 2).
+		Width(boxWidth)
+
+	box := boxStyle.Render(inner)
+	centered := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+	return ensureExactHeight(centered, m.height, m.width)
+}
+
 // View renders the diff viewer.
 func (m *DiffViewModel) View() string {
 	// Show animated spinner only while actively loading.
@@ -569,15 +619,7 @@ func (m *DiffViewModel) View() string {
 
 	// Error state: loading finished but no diff (e.g. diff too large, network error).
 	if m.diff == nil {
-		errText := "Diff not available"
-		if m.loadErr != nil {
-			errText = fmt.Sprintf("Error: %v", m.loadErr)
-		}
-		hint := "Press 'e' for external diff tool, or Esc to go back"
-		msg := lipgloss.NewStyle().Foreground(m.styles.Theme.Error).Render(errText) +
-			"\n\n" +
-			lipgloss.NewStyle().Foreground(m.styles.Theme.Muted).Render(hint)
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, msg)
+		return m.viewError()
 	}
 
 	if len(m.diff.Files) == 0 {
