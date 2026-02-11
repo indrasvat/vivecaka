@@ -82,12 +82,12 @@ parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --version)
-                [[ $# -lt 2 ]] && error_exit "--version requires a value"
+                if [[ $# -lt 2 ]]; then error_exit "--version requires a value"; fi
                 VERSION="$2"
                 shift 2
                 ;;
             --dir)
-                [[ $# -lt 2 ]] && error_exit "--dir requires a value"
+                if [[ $# -lt 2 ]]; then error_exit "--dir requires a value"; fi
                 INSTALL_DIR="$2"
                 shift 2
                 ;;
@@ -161,7 +161,9 @@ get_latest_version() {
     fi
 
     VERSION="$(echo "${response}" | grep '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/' || true)"
-    [[ -z "${VERSION}" ]] && error_exit "Could not determine latest version"
+    if [[ -z "${VERSION}" ]]; then
+        error_exit "Could not determine latest version"
+    fi
 }
 
 # --- Download helpers ---------------------------------------------------------
@@ -189,7 +191,9 @@ verify_checksum() {
     local expected actual
 
     expected="$(grep "${TARBALL}" "${checksums_file}" | awk '{print $1}' || true)"
-    [[ -z "${expected}" ]] && error_exit "Checksum not found for ${TARBALL} in checksums.txt"
+    if [[ -z "${expected}" ]]; then
+        error_exit "Checksum not found for ${TARBALL} in checksums.txt"
+    fi
 
     if [[ "${HASHER}" == "shasum" ]]; then
         actual="$(shasum -a 256 "${tarball_file}" | awk '{print $1}')"
