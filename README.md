@@ -12,6 +12,24 @@
     ▀▀     ▀▀▀▀▀▀▀▀     ▀▀       ▀▀▀▀▀     ▀▀▀▀▀    ▀▀▀▀ ▀▀  ▀▀   ▀▀▀   ▀▀▀▀ ▀▀
 ```
 
+## Quick Install
+
+```bash
+curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | bash
+```
+
+Installs the latest release to `~/.local/bin`. Options:
+
+```bash
+# Specific version
+curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | bash -s -- --version v0.1.1
+
+# Custom directory
+curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | bash -s -- --dir /usr/local/bin
+```
+
+> **Requires macOS** (Apple Silicon or Intel). Linux support coming soon.
+
 ## Features
 
 - **Full PR workflow** — Browse, review, comment, and checkout PRs without leaving the terminal
@@ -27,7 +45,7 @@
 - Go 1.25+
 - [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated
 
-## Installation
+## Building from Source
 
 ```bash
 # From source
