@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
@@ -96,6 +97,10 @@ func (h *syntaxHighlighter) highlight(content, filename string) string {
 	return result
 }
 
+// maxHighlightLines is the threshold above which syntax highlighting is disabled
+// for a single file to prevent Chroma tokenization from stalling the UI.
+const maxHighlightLines = 5000
+
 // OpenExternalDiffMsg is sent when the user wants to open an external diff tool.
 type OpenExternalDiffMsg struct {
 	Number int
@@ -114,22 +119,24 @@ type InlineCommentAddedMsg struct {
 
 // DiffViewModel implements the diff viewer.
 type DiffViewModel struct {
-	diff          *domain.Diff
-	prNumber      int
-	width         int
-	height        int
-	styles        core.Styles
-	keys          core.KeyMap
-	fileIdx       int
-	scrollY       int
-	loading       bool
-	searchQuery   string
-	searching     bool
-	searchMatches []searchMatch
-	currentMatch  int
-	pendingKey    rune
-	collapsed     map[int]bool
-	highlighter   *syntaxHighlighter
+	diff             *domain.Diff
+	prNumber         int
+	width            int
+	height           int
+	styles           core.Styles
+	keys             core.KeyMap
+	fileIdx          int
+	scrollY          int
+	loading          bool
+	searchQuery      string
+	searching        bool
+	searchMatches    []searchMatch
+	currentMatch     int
+	pendingKey       rune
+	collapsed        map[int]bool
+	highlighter      *syntaxHighlighter
+	spinnerFrame     int
+	fileChangeCounts [][2]int // cached [adds, dels] per file
 
 	// Two-pane layout: file tree on left, content on right.
 	treeFocus bool // true when file tree pane has focus
@@ -178,6 +185,16 @@ func (m *DiffViewModel) SetDiff(d *domain.Diff) {
 	m.loading = false
 	m.fileIdx = 0
 	m.scrollY = 0
+	// Pre-compute file change counts so renderFileTree doesn't recount every frame.
+	if d != nil {
+		m.fileChangeCounts = make([][2]int, len(d.Files))
+		for i, f := range d.Files {
+			adds, dels := countFileChanges(f)
+			m.fileChangeCounts[i] = [2]int{adds, dels}
+		}
+	} else {
+		m.fileChangeCounts = nil
+	}
 	if m.searchQuery != "" {
 		m.updateSearchMatches()
 	}
@@ -191,6 +208,22 @@ func (m *DiffViewModel) SetComments(threads []domain.CommentThread) {
 		key := fmt.Sprintf("%s:%d", t.Path, t.Line)
 		m.commentMap[key] = append(m.commentMap[key], t)
 	}
+}
+
+func (m *DiffViewModel) spinnerTick() tea.Cmd {
+	return tea.Tick(80*time.Millisecond, func(_ time.Time) tea.Msg {
+		return diffSpinnerTickMsg{}
+	})
+}
+
+// StartLoading resets the diff view to loading state and starts the spinner.
+func (m *DiffViewModel) StartLoading() tea.Cmd {
+	m.loading = true
+	m.diff = nil
+	m.fileIdx = 0
+	m.scrollY = 0
+	m.spinnerFrame = 0
+	return m.spinnerTick()
 }
 
 // commentsForLine returns comment threads anchored to a specific file and line.
@@ -207,12 +240,25 @@ type DiffLoadedMsg struct {
 	Err  error
 }
 
+// diffSpinnerTickMsg drives the diff loading spinner animation.
+type diffSpinnerTickMsg struct{}
+
 // Update handles messages for the diff view.
 func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+	case diffSpinnerTickMsg:
+		if m.loading {
+			m.spinnerFrame++
+			return m.spinnerTick()
+		}
+		return nil
 	case DiffLoadedMsg:
+		if msg.Err != nil {
+			m.loading = false
+			return nil
+		}
 		m.SetDiff(msg.Diff)
 	}
 	return nil
@@ -509,11 +555,11 @@ func (m *DiffViewModel) computeTreeWidth() int {
 // View renders the diff viewer.
 func (m *DiffViewModel) View() string {
 	if m.loading || m.diff == nil {
-		return lipgloss.NewStyle().
-			Width(m.width).Height(m.height).
-			Align(lipgloss.Center, lipgloss.Center).
-			Foreground(m.styles.Theme.Muted).
-			Render("Loading diff...")
+		frame := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
+		spinner := lipgloss.NewStyle().Foreground(m.styles.Theme.Primary).Render(frame)
+		text := lipgloss.NewStyle().Foreground(m.styles.Theme.Muted).Render(" Loading diff...")
+		content := spinner + text
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
 	}
 
 	if len(m.diff.Files) == 0 {
@@ -543,7 +589,12 @@ func (m *DiffViewModel) renderFileTree() string {
 
 	var lines []string
 	for i, f := range m.diff.Files {
-		adds, dels := countFileChanges(f)
+		var adds, dels int
+		if i < len(m.fileChangeCounts) {
+			adds, dels = m.fileChangeCounts[i][0], m.fileChangeCounts[i][1]
+		} else {
+			adds, dels = countFileChanges(f)
+		}
 		// Status icon.
 		icon := "~"
 		if adds > 0 && dels == 0 {
@@ -616,6 +667,7 @@ func (m *DiffViewModel) renderContentPane() string {
 }
 
 // renderUnifiedContent renders the standard unified diff view.
+// Only syntax-highlights lines in the visible window for performance.
 func (m *DiffViewModel) renderUnifiedContent() string {
 	t := m.styles.Theme
 	matchStyle := lipgloss.NewStyle().Background(t.Info).Foreground(t.Bg).Bold(true)
@@ -628,38 +680,79 @@ func (m *DiffViewModel) renderUnifiedContent() string {
 	modeLabel := lipgloss.NewStyle().Foreground(t.Muted).Render(" Unified")
 	fileHeader := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(file.Path) + modeLabel
 
-	var lines []string
-	lineIdx := 0
-
 	if m.isCollapsed(m.fileIdx) {
-		lines = append(lines, m.renderCollapsedFile(file))
-	} else {
-		for _, hunk := range file.Hunks {
+		content := m.renderCollapsedFile(file, m.fileIdx)
+		if m.searching {
+			content += "\n" + lipgloss.NewStyle().Foreground(t.Info).Render(m.searchBarText())
+		}
+		return lipgloss.NewStyle().Width(contentWidth).
+			Render(lipgloss.JoinVertical(lipgloss.Left, fileHeader, content))
+	}
+
+	// Clamp scrollY using diff line count.
+	totalLines := m.fileLineCount(m.fileIdx)
+	if m.scrollY >= totalLines {
+		m.scrollY = max(0, totalLines-1)
+	}
+
+	// Disable syntax highlighting for very large files to prevent UI stalls.
+	largeFile := totalLines > maxHighlightLines
+
+	// Build only the visible slice: skip lines before scrollY, break after viewport.
+	var visible []string
+	lineIdx := 0
+	visibleCount := 0
+
+	if largeFile && m.scrollY == 0 {
+		warnStyle := lipgloss.NewStyle().Foreground(t.Warning).Bold(true)
+		visible = append(visible, warnStyle.Render("  ⚠ Large file — syntax highlighting disabled. Press 'e' for external diff."))
+		visibleCount++
+	}
+
+	for _, hunk := range file.Hunks {
+		if visibleCount >= contentHeight {
+			break
+		}
+
+		// Hunk header.
+		if lineIdx >= m.scrollY {
 			hunkStyle := lipgloss.NewStyle().Foreground(t.Info)
 			header := hunk.Header
 			if matches := lineMatches[lineIdx]; len(matches) > 0 {
 				header = applyHighlights(header, matches, hunkStyle, matchStyle)
-				lines = append(lines, header)
+				visible = append(visible, header)
 			} else {
-				lines = append(lines, hunkStyle.Render(header))
+				visible = append(visible, hunkStyle.Render(header))
 			}
-			lineIdx++
+			visibleCount++
+		}
+		lineIdx++
 
-			for _, dl := range hunk.Lines {
+		for _, dl := range hunk.Lines {
+			if visibleCount >= contentHeight {
+				break
+			}
+
+			if lineIdx >= m.scrollY {
 				matches := lineMatches[lineIdx]
-				highlightedContent := m.highlighter.highlight(dl.Content, file.Path)
+				var highlightedContent string
+				if largeFile {
+					highlightedContent = dl.Content // skip Chroma tokenization
+				} else {
+					highlightedContent = m.highlighter.highlight(dl.Content, file.Path)
+				}
 				switch dl.Type {
 				case domain.DiffAdd:
 					lineNum := fmt.Sprintf("%4s %4d ", "", dl.NewNum)
-					lines = append(lines, renderDiffLineWithSyntax(lineNum, "+", dl.Content, highlightedContent, m.styles.DiffAdd, matchStyle, matches))
+					visible = append(visible, renderDiffLineWithSyntax(lineNum, "+", dl.Content, highlightedContent, m.styles.DiffAdd, matchStyle, matches))
 				case domain.DiffDelete:
 					lineNum := fmt.Sprintf("%4d %4s ", dl.OldNum, "")
-					lines = append(lines, renderDiffLineWithSyntax(lineNum, "-", dl.Content, highlightedContent, m.styles.DiffDelete, matchStyle, matches))
+					visible = append(visible, renderDiffLineWithSyntax(lineNum, "-", dl.Content, highlightedContent, m.styles.DiffDelete, matchStyle, matches))
 				default:
 					lineNum := fmt.Sprintf("%4d %4d ", dl.OldNum, dl.NewNum)
-					lines = append(lines, renderDiffLineWithSyntax(lineNum, " ", dl.Content, highlightedContent, lipgloss.NewStyle().Foreground(t.Fg), matchStyle, matches))
+					visible = append(visible, renderDiffLineWithSyntax(lineNum, " ", dl.Content, highlightedContent, lipgloss.NewStyle().Foreground(t.Fg), matchStyle, matches))
 				}
-				lineIdx++
+				visibleCount++
 
 				// Render inline comments anchored to this line.
 				commentLine := dl.NewNum
@@ -667,17 +760,18 @@ func (m *DiffViewModel) renderUnifiedContent() string {
 					commentLine = dl.OldNum
 				}
 				for _, thread := range m.commentsForLine(file.Path, commentLine) {
-					lines = append(lines, m.renderCommentThread(thread)...)
+					for _, cl := range m.renderCommentThread(thread) {
+						if visibleCount >= contentHeight {
+							break
+						}
+						visible = append(visible, cl)
+						visibleCount++
+					}
 				}
 			}
+			lineIdx++
 		}
 	}
-
-	if m.scrollY >= len(lines) {
-		m.scrollY = max(0, len(lines)-1)
-	}
-	end := min(m.scrollY+contentHeight, len(lines))
-	visible := lines[m.scrollY:end]
 
 	content := strings.Join(visible, "\n")
 	if m.searching {
@@ -757,6 +851,7 @@ type splitRow struct {
 }
 
 // renderSplitContent renders side-by-side diff columns.
+// Only renders rows in the visible window for performance.
 func (m *DiffViewModel) renderSplitContent() string {
 	t := m.styles.Theme
 	contentWidth := m.width - m.treeWidth - 1
@@ -769,25 +864,25 @@ func (m *DiffViewModel) renderSplitContent() string {
 
 	rows := m.buildSplitRows(file)
 
-	// Render rows.
-	var lines []string
+	// Clamp scrollY.
+	if m.scrollY >= len(rows) {
+		m.scrollY = max(0, len(rows)-1)
+	}
+	end := min(m.scrollY+contentHeight, len(rows))
+
+	// Only render rows in the visible window.
+	var visible []string
 	divider := lipgloss.NewStyle().Foreground(t.Border).Render(" │ ")
 	lineNumWidth := 5
 
-	for _, row := range rows {
+	for _, row := range rows[m.scrollY:end] {
 		leftStyle := m.splitLineStyle(row.leftType)
 		rightStyle := m.splitLineStyle(row.rightType)
 
 		leftLine := m.renderSplitHalf(row.leftNum, row.leftText, leftStyle, lineNumWidth, colWidth)
 		rightLine := m.renderSplitHalf(row.rightNum, row.rightText, rightStyle, lineNumWidth, colWidth)
-		lines = append(lines, leftLine+divider+rightLine)
+		visible = append(visible, leftLine+divider+rightLine)
 	}
-
-	if m.scrollY >= len(lines) {
-		m.scrollY = max(0, len(lines)-1)
-	}
-	end := min(m.scrollY+contentHeight, len(lines))
-	visible := lines[m.scrollY:end]
 
 	content := strings.Join(visible, "\n")
 	if m.searching {
@@ -1130,9 +1225,14 @@ func (m *DiffViewModel) isCollapsed(fileIdx int) bool {
 	return m.collapsed[fileIdx]
 }
 
-func (m *DiffViewModel) renderCollapsedFile(file domain.FileDiff) string {
+func (m *DiffViewModel) renderCollapsedFile(file domain.FileDiff, fileIdx int) string {
 	t := m.styles.Theme
-	adds, dels := countFileChanges(file)
+	var adds, dels int
+	if fileIdx >= 0 && fileIdx < len(m.fileChangeCounts) {
+		adds, dels = m.fileChangeCounts[fileIdx][0], m.fileChangeCounts[fileIdx][1]
+	} else {
+		adds, dels = countFileChanges(file)
+	}
 	addStyle := lipgloss.NewStyle().Foreground(t.Success)
 	delStyle := lipgloss.NewStyle().Foreground(t.Error)
 	line := fmt.Sprintf("%s  %s %s",

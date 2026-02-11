@@ -18,6 +18,9 @@ import (
 // Default timeout for gh CLI operations.
 const ghTimeout = 15 * time.Second
 
+// diffTimeout is longer than ghTimeout because large PRs legitimately take time.
+const diffTimeout = 60 * time.Second
+
 // detectRepoCmd detects the current repo from git remote.
 func detectRepoCmd() tea.Cmd {
 	return func() tea.Msg {
@@ -71,10 +74,13 @@ func loadPRDetailCmd(uc *usecase.GetPRDetail, repo domain.RepoRef, number int) t
 	}
 }
 
-// loadDiffCmd fetches the diff for a PR.
+// loadDiffCmd fetches the diff for a PR with a timeout.
 func loadDiffCmd(reader domain.PRReader, repo domain.RepoRef, number int) tea.Cmd {
 	return func() tea.Msg {
-		diff, err := reader.GetDiff(context.Background(), repo, number)
+		ctx, cancel := context.WithTimeout(context.Background(), diffTimeout)
+		defer cancel()
+
+		diff, err := reader.GetDiff(ctx, repo, number)
 		return views.DiffLoadedMsg{Diff: diff, Err: err}
 	}
 }

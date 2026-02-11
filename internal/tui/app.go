@@ -376,6 +376,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case views.DiffLoadedMsg:
+		if msg.Err != nil {
+			a.diffView.Update(msg) // stops spinner
+			cmd := a.toasts.Add(
+				fmt.Sprintf("Error loading diff: %v", msg.Err),
+				domain.ToastError, 5*time.Second,
+			)
+			return a, cmd
+		}
 		cmd := a.diffView.Update(msg)
 		if cmd != nil {
 			cmds = append(cmds, cmd)
@@ -979,10 +987,11 @@ func (a *App) handleOpenDiff(msg views.OpenDiffMsg) (tea.Model, tea.Cmd) {
 	a.diffView.SetPRNumber(msg.Number)
 	// Pass inline comments from the loaded PR detail to the diff view.
 	a.diffView.SetComments(a.prDetail.GetComments())
+	spinnerCmd := a.diffView.StartLoading()
 	if a.reader != nil && a.repo.Owner != "" {
-		return a, loadDiffCmd(a.reader, a.repo, msg.Number)
+		return a, tea.Batch(spinnerCmd, loadDiffCmd(a.reader, a.repo, msg.Number))
 	}
-	return a, nil
+	return a, spinnerCmd
 }
 
 func (a *App) handleAddInlineComment(msg views.AddInlineCommentMsg) (tea.Model, tea.Cmd) {

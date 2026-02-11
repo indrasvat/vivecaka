@@ -1,6 +1,7 @@
 package views
 
 import (
+	"fmt"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -975,4 +976,162 @@ func TestDiffNoCommentOnHunkHeader(t *testing.T) {
 	cKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
 	m.Update(cKey)
 	assert.False(t, m.editing, "should not open editor on hunk header")
+}
+
+func TestDiffSpinnerTick(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+
+	// When loading, spinner tick increments frame.
+	assert.True(t, m.loading, "new model should be loading")
+	m.spinnerFrame = 3
+	cmd := m.Update(diffSpinnerTickMsg{})
+	assert.Equal(t, 4, m.spinnerFrame, "spinnerFrame should increment on tick")
+	assert.NotNil(t, cmd, "should return another tick command when loading")
+
+	// When not loading, tick is a no-op.
+	m.loading = false
+	m.spinnerFrame = 10
+	cmd = m.Update(diffSpinnerTickMsg{})
+	assert.Equal(t, 10, m.spinnerFrame, "spinnerFrame should not change when not loading")
+	assert.Nil(t, cmd, "should return nil when not loading")
+}
+
+func TestDiffStartLoading(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(testDiff())
+
+	// After SetDiff, loading is false.
+	assert.False(t, m.loading)
+	assert.NotNil(t, m.diff)
+	m.fileIdx = 1
+	m.scrollY = 5
+	m.spinnerFrame = 7
+
+	cmd := m.StartLoading()
+
+	assert.True(t, m.loading, "StartLoading should set loading to true")
+	assert.Nil(t, m.diff, "StartLoading should clear diff")
+	assert.Equal(t, 0, m.fileIdx, "StartLoading should reset fileIdx")
+	assert.Equal(t, 0, m.scrollY, "StartLoading should reset scrollY")
+	assert.Equal(t, 0, m.spinnerFrame, "StartLoading should reset spinnerFrame")
+	assert.NotNil(t, cmd, "StartLoading should return a spinner tick command")
+}
+
+func TestDiffLoadedError(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+
+	// Simulate error loading diff.
+	m.Update(DiffLoadedMsg{Diff: nil, Err: fmt.Errorf("timeout")})
+
+	assert.False(t, m.loading, "loading should be false after error")
+	assert.Nil(t, m.diff, "diff should be nil on error")
+}
+
+func TestDiffFileChangeCountCache(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+
+	d := testDiff()
+	m.SetDiff(d)
+
+	require.Len(t, m.fileChangeCounts, 2, "should have counts for each file")
+
+	// Verify cached counts match countFileChanges.
+	for i, f := range d.Files {
+		expectedAdds, expectedDels := countFileChanges(f)
+		assert.Equal(t, expectedAdds, m.fileChangeCounts[i][0], "adds mismatch for file %d", i)
+		assert.Equal(t, expectedDels, m.fileChangeCounts[i][1], "dels mismatch for file %d", i)
+	}
+}
+
+func TestDiffLazyRendering(t *testing.T) {
+	// Create a large diff with many lines.
+	var lines []domain.DiffLine
+	for i := 1; i <= 2000; i++ {
+		lines = append(lines, domain.DiffLine{
+			Type:    domain.DiffAdd,
+			Content: fmt.Sprintf("line %d: some code content here", i),
+			NewNum:  i,
+		})
+	}
+	largeDiff := &domain.Diff{
+		Files: []domain.FileDiff{
+			{
+				Path: "large.go",
+				Hunks: []domain.Hunk{
+					{
+						Header: "@@ -0,0 +1,2000 @@",
+						Lines:  lines,
+					},
+				},
+			},
+		},
+	}
+
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(largeDiff)
+
+	// View should render without hanging. Timeout would fail the test.
+	view := m.View()
+	assert.NotEmpty(t, view, "large diff view should not be empty")
+
+	// Scroll to middle and render again.
+	m.scrollY = 1000
+	view = m.View()
+	assert.NotEmpty(t, view, "scrolled large diff view should not be empty")
+}
+
+func TestDiffLargeFileWarning(t *testing.T) {
+	// Create a diff with > maxHighlightLines (5000) lines.
+	var lines []domain.DiffLine
+	for i := 1; i <= 5500; i++ {
+		lines = append(lines, domain.DiffLine{
+			Type:    domain.DiffContext,
+			Content: fmt.Sprintf("line %d", i),
+			OldNum:  i,
+			NewNum:  i,
+		})
+	}
+	hugeDiff := &domain.Diff{
+		Files: []domain.FileDiff{
+			{
+				Path: "huge.go",
+				Hunks: []domain.Hunk{
+					{
+						Header: "@@ -1,5500 +1,5500 @@",
+						Lines:  lines,
+					},
+				},
+			},
+		},
+	}
+
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetDiff(hugeDiff)
+
+	// At scrollY=0, the warning banner should appear.
+	view := m.View()
+	assert.Contains(t, view, "Large file", "expected large file warning in view")
+	assert.Contains(t, view, "syntax highlighting disabled", "expected highlighting disabled message")
+
+	// Scrolled down, warning should not appear (only shown at top).
+	m.scrollY = 100
+	view = m.View()
+	assert.NotContains(t, view, "Large file", "warning should not appear when scrolled")
+}
+
+func TestDiffSpinnerViewRendering(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(80, 24)
+
+	// Advance spinner a few frames.
+	m.spinnerFrame = 3
+	view := m.View()
+	assert.NotEmpty(t, view, "spinner view should not be empty")
+	assert.Contains(t, view, "Loading diff", "should show loading text with spinner")
 }
