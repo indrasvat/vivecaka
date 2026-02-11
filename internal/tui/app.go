@@ -988,7 +988,32 @@ func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, 
 		)
 		return a, cmd
 	}
-	// Use tea.ExecProcess to suspend TUI and run the external tool.
+
+	// If the API diff failed (e.g. too large), fall back to local git diff.
+	if msg.LoadErr != nil {
+		branch := a.prDetail.GetBranch()
+		if branch.Base != "" && branch.Head != "" {
+			repoDir := a.findRepoDir()
+			if repoDir == "" {
+				cmd := a.toasts.Add(
+					"No local repo found. Press Esc → c to checkout the branch first.",
+					domain.ToastWarning, 5*time.Second,
+				)
+				return a, cmd
+			}
+			script := fmt.Sprintf(
+				"git fetch origin %s %s 2>/dev/null; GIT_EXTERNAL_DIFF=%s git diff origin/%s...origin/%s",
+				branch.Base, branch.Head, tool, branch.Base, branch.Head,
+			)
+			c := exec.Command("sh", "-c", script) //nolint:noctx
+			c.Dir = repoDir
+			return a, tea.ExecProcess(c, func(err error) tea.Msg {
+				return externalDiffDoneMsg{Err: err}
+			})
+		}
+	}
+
+	// Default: pipe gh pr diff through the tool as GH_PAGER.
 	args := []string{"pr", "diff", fmt.Sprintf("%d", msg.Number)}
 	c := exec.Command("gh", args...) //nolint:noctx // tea.ExecProcess requires raw *exec.Cmd, no context available
 	c.Env = append(c.Environ(), fmt.Sprintf("GH_PAGER=%s", tool))
@@ -1007,6 +1032,7 @@ type externalDiffDoneMsg struct {
 func (a *App) handleOpenDiff(msg views.OpenDiffMsg) (tea.Model, tea.Cmd) {
 	a.view = core.ViewDiff
 	a.diffView.SetPRNumber(msg.Number)
+	a.diffView.SetHeadBranch(a.prDetail.GetBranch().Head)
 	// Pass inline comments from the loaded PR detail to the diff view.
 	a.diffView.SetComments(a.prDetail.GetComments())
 	spinnerCmd := a.diffView.StartLoading()
@@ -1172,6 +1198,20 @@ func (a *App) handleSmartCheckoutDone(msg views.SmartCheckoutDoneMsg) (tea.Model
 
 func reposMatchRef(a, b domain.RepoRef) bool {
 	return strings.EqualFold(a.Owner, b.Owner) && strings.EqualFold(a.Name, b.Name)
+}
+
+// findRepoDir returns a local directory for the currently browsed repo.
+// It checks the CWD first, then the repo locator's known paths.
+func (a *App) findRepoDir() string {
+	if reposMatchRef(a.repo, a.cwdRepo) && a.cwdPath != "" {
+		return a.cwdPath
+	}
+	if a.repoLocator != nil {
+		if p, ok := a.repoLocator.Validate(a.repo); ok {
+			return p
+		}
+	}
+	return ""
 }
 
 func (a *App) handleCheckoutConfirm(msg views.CheckoutPRMsg) (tea.Model, tea.Cmd) {

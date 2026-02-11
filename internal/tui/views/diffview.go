@@ -103,7 +103,8 @@ const maxHighlightLines = 5000
 
 // OpenExternalDiffMsg is sent when the user wants to open an external diff tool.
 type OpenExternalDiffMsg struct {
-	Number int
+	Number  int
+	LoadErr error // non-nil when the API diff failed (triggers local git fallback)
 }
 
 // AddInlineCommentMsg is sent when the user submits an inline comment.
@@ -121,6 +122,7 @@ type InlineCommentAddedMsg struct {
 type DiffViewModel struct {
 	diff             *domain.Diff
 	prNumber         int
+	headBranch       string
 	width            int
 	height           int
 	styles           core.Styles
@@ -179,6 +181,9 @@ func (m *DiffViewModel) SetSize(w, h int) {
 
 // SetPRNumber sets the PR number for external tool launches.
 func (m *DiffViewModel) SetPRNumber(n int) { m.prNumber = n }
+
+// SetHeadBranch sets the head branch name for checkout from error state.
+func (m *DiffViewModel) SetHeadBranch(b string) { m.headBranch = b }
 
 // SetDiff updates the displayed diff.
 func (m *DiffViewModel) SetDiff(d *domain.Diff) {
@@ -275,6 +280,23 @@ func (m *DiffViewModel) IsTreeFocus() bool { return m.treeFocus }
 func (m *DiffViewModel) IsSplitMode() bool { return m.splitMode }
 
 func (m *DiffViewModel) handleKey(msg tea.KeyMsg) tea.Cmd {
+	// Error state: only allow e (external diff) and c (checkout).
+	if !m.loading && m.diff == nil {
+		if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
+			switch msg.Runes[0] {
+			case 'e':
+				n, e := m.prNumber, m.loadErr
+				return func() tea.Msg { return OpenExternalDiffMsg{Number: n, LoadErr: e} }
+			case 'c':
+				if m.prNumber > 0 {
+					num, branch := m.prNumber, m.headBranch
+					return func() tea.Msg { return CheckoutPRMsg{Number: num, Branch: branch} }
+				}
+			}
+		}
+		return nil
+	}
+
 	// Comment editor intercepts all keys.
 	if m.editing {
 		return m.handleEditKey(msg)
@@ -316,8 +338,8 @@ func (m *DiffViewModel) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 
 	// Rune-based keys in tree.
 	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == 'e' {
-		n := m.prNumber
-		return func() tea.Msg { return OpenExternalDiffMsg{Number: n} }
+		n, e := m.prNumber, m.loadErr
+		return func() tea.Msg { return OpenExternalDiffMsg{Number: n, LoadErr: e} }
 	}
 	return nil
 }
@@ -490,8 +512,8 @@ func (m *DiffViewModel) handleContentKey(msg tea.KeyMsg) tea.Cmd {
 			}
 			return nil
 		case 'e':
-			n := m.prNumber
-			return func() tea.Msg { return OpenExternalDiffMsg{Number: n} }
+			n, e := m.prNumber, m.loadErr
+			return func() tea.Msg { return OpenExternalDiffMsg{Number: n, LoadErr: e} }
 		}
 	}
 
@@ -578,7 +600,7 @@ func (m *DiffViewModel) viewError() string {
 		raw := m.loadErr.Error()
 		switch {
 		case strings.Contains(raw, "too_large") || strings.Contains(raw, "exceeded"):
-			detail = "This diff is too large for GitHub's API (>20,000 lines)."
+			detail = "This diff is too large for GitHub's API (>20,000 lines).\nCheck out the branch locally, then use an external diff tool."
 		case strings.Contains(raw, "context deadline"):
 			detail = "Request timed out. The diff may be very large."
 		default:
@@ -591,8 +613,8 @@ func (m *DiffViewModel) viewError() string {
 		"",
 		msgStyle.Render(detail),
 		"",
-		hintStyle.Render("e  open external diff tool"),
-		hintStyle.Render("Esc  go back"),
+		hintStyle.Render("e    open external diff tool"),
+		hintStyle.Render("Esc  go back  ·  c  checkout branch"),
 	)
 
 	boxStyle := lipgloss.NewStyle().

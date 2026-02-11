@@ -28,6 +28,7 @@ install: ## Install to $GOPATH/bin
 install-local: build ## Install to ~/.local/bin
 	@mkdir -p $(HOME)/.local/bin
 	cp $(BINDIR)/$(BINARY) $(HOME)/.local/bin/$(BINARY)
+	@codesign --force --sign - $(HOME)/.local/bin/$(BINARY) 2>/dev/null || true
 
 .PHONY: run
 run: ## Run with go run
