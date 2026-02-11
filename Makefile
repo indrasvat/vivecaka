@@ -70,6 +70,10 @@ govulncheck: ## Run govulncheck for known vulnerabilities
 	@command -v govulncheck >/dev/null 2>&1 || (echo "Install: make tools-ci" && exit 1)
 	govulncheck ./...
 
+.PHONY: shellcheck
+shellcheck: ## Lint install.sh with shellcheck
+	shellcheck install.sh
+
 .PHONY: ci
 ci: tidy verify fmt vet lint govulncheck test build ## Run full CI pipeline
 
