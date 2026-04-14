@@ -48,6 +48,7 @@ const (
 )
 
 const numTabs = 4
+const collapseDiscussionThreshold = 20
 
 type markdownCache struct {
 	width    int
@@ -89,6 +90,11 @@ func (m *PRDetailModel) SetDetail(d *domain.PRDetail) {
 	m.commentCache = make(map[string]markdownCache)
 	m.pendingNum = 0
 	m.commentCollapsed = make(map[int]bool)
+	if len(d.Discussion) > collapseDiscussionThreshold {
+		for i := range d.Discussion {
+			m.commentCollapsed[i] = true
+		}
+	}
 	m.commentCursor = 0
 }
 
@@ -100,12 +106,12 @@ func (m *PRDetailModel) GetPRNumber() int {
 	return m.pendingNum
 }
 
-// GetComments returns the comment threads from the loaded PR detail.
-func (m *PRDetailModel) GetComments() []domain.CommentThread {
+// GetInlineComments returns the inline comment threads from the loaded PR detail.
+func (m *PRDetailModel) GetInlineComments() []domain.CommentThread {
 	if m.detail == nil {
 		return nil
 	}
-	return m.detail.Comments
+	return m.detail.InlineComments
 }
 
 // GetBranch returns the branch info for the loaded PR detail.
@@ -193,8 +199,8 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		m.scrollY = 0
 		return nil
 	case key.Matches(msg, m.keys.Down):
-		if m.tab == TabComments && m.detail != nil && len(m.detail.Comments) > 0 {
-			if m.commentCursor < len(m.detail.Comments)-1 {
+		if m.tab == TabComments && m.detail != nil && len(m.detail.Discussion) > 0 {
+			if m.commentCursor < len(m.detail.Discussion)-1 {
 				m.commentCursor++
 			}
 		} else {
@@ -202,7 +208,7 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	case key.Matches(msg, m.keys.Up):
-		if m.tab == TabComments && m.detail != nil && len(m.detail.Comments) > 0 {
+		if m.tab == TabComments && m.detail != nil && len(m.detail.Discussion) > 0 {
 			if m.commentCursor > 0 {
 				m.commentCursor--
 			}
@@ -251,10 +257,11 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		case 'r':
 			if m.detail != nil {
-				if m.tab == TabComments && len(m.detail.Comments) > 0 {
-					thread := m.detail.Comments[m.commentCursor]
-					return func() tea.Msg {
-						return ReplyToThreadMsg{ThreadID: thread.ID, Body: ""}
+				if m.tab == TabComments {
+					if item, ok := m.currentDiscussionItem(); ok && item.Kind == domain.DiscussionInlineThread && item.ReplyToID != "" {
+						return func() tea.Msg {
+							return ReplyToThreadMsg{ThreadID: item.ReplyToID, Body: ""}
+						}
 					}
 				}
 				return func() tea.Msg { return StartReviewMsg{Number: m.detail.Number} }
@@ -272,17 +279,15 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 				m.toggleCommentCollapse()
 			}
 		case 'x':
-			if m.tab == TabComments && m.detail != nil && len(m.detail.Comments) > 0 {
-				thread := m.detail.Comments[m.commentCursor]
-				if !thread.Resolved {
-					return func() tea.Msg { return ResolveThreadMsg{ThreadID: thread.ID} }
+			if m.tab == TabComments {
+				if item, ok := m.currentDiscussionItem(); ok && item.Kind == domain.DiscussionInlineThread && !item.Resolved && item.ThreadID != "" {
+					return func() tea.Msg { return ResolveThreadMsg{ThreadID: item.ThreadID} }
 				}
 			}
 		case 'X':
-			if m.tab == TabComments && m.detail != nil && len(m.detail.Comments) > 0 {
-				thread := m.detail.Comments[m.commentCursor]
-				if thread.Resolved {
-					return func() tea.Msg { return UnresolveThreadMsg{ThreadID: thread.ID} }
+			if m.tab == TabComments {
+				if item, ok := m.currentDiscussionItem(); ok && item.Kind == domain.DiscussionInlineThread && item.Resolved && item.ThreadID != "" {
+					return func() tea.Msg { return UnresolveThreadMsg{ThreadID: item.ThreadID} }
 				}
 			}
 		case 'g':
@@ -296,7 +301,7 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *PRDetailModel) toggleCommentCollapse() {
-	if m.detail == nil || len(m.detail.Comments) == 0 {
+	if m.detail == nil || len(m.detail.Discussion) == 0 {
 		return
 	}
 	if m.commentCollapsed == nil {
@@ -314,7 +319,25 @@ func (m *PRDetailModel) openURL() string {
 			return url
 		}
 	}
+	if m.tab == TabComments {
+		if item, ok := m.currentDiscussionItem(); ok && item.URL != "" {
+			return item.URL
+		}
+	}
 	return m.detail.URL
+}
+
+func (m *PRDetailModel) currentDiscussionItem() (domain.DiscussionItem, bool) {
+	if m.detail == nil || len(m.detail.Discussion) == 0 {
+		return domain.DiscussionItem{}, false
+	}
+	if m.commentCursor < 0 {
+		m.commentCursor = 0
+	}
+	if m.commentCursor >= len(m.detail.Discussion) {
+		m.commentCursor = len(m.detail.Discussion) - 1
+	}
+	return m.detail.Discussion[m.commentCursor], true
 }
 
 func (m *PRDetailModel) selectedCheckURL() string {
@@ -433,7 +456,7 @@ func (m *PRDetailModel) renderTabBar() string {
 		{"Description", 0, TabDescription},
 		{"Checks", len(d.Checks), TabChecks},
 		{"Files", len(d.Files), TabFiles},
-		{"Comments", len(d.Comments), TabComments},
+		{"Comments", len(d.Discussion), TabComments},
 	}
 
 	var tabStrings []string
@@ -475,7 +498,7 @@ func (m *PRDetailModel) renderTabContent(height int) string {
 	case TabFiles:
 		content = m.renderFilesTab()
 	case TabComments:
-		content = m.renderCommentsTab()
+		return m.renderCommentsTab(height)
 	}
 
 	// Apply scrolling
@@ -734,15 +757,18 @@ func (m *PRDetailModel) renderFilesTab() string {
 }
 
 // renderCommentsTab renders the Comments tab content.
-func (m *PRDetailModel) renderCommentsTab() string {
+func (m *PRDetailModel) renderCommentsTab(height int) string {
 	t := m.styles.Theme
 	d := m.detail
 
-	if len(d.Comments) == 0 {
-		return lipgloss.NewStyle().Foreground(t.Muted).Italic(true).Render("No comments.")
+	if len(d.Discussion) == 0 {
+		return ensureExactHeight(
+			lipgloss.NewStyle().Foreground(t.Muted).Italic(true).Render("No comments."),
+			height,
+			m.width,
+		)
 	}
 
-	var lines []string
 	commentWidth := max(20, m.width-10)
 
 	if m.commentCache == nil {
@@ -751,55 +777,159 @@ func (m *PRDetailModel) renderCommentsTab() string {
 	if m.commentCollapsed == nil {
 		m.commentCollapsed = make(map[int]bool)
 	}
-
-	for i, thread := range d.Comments {
-		isSelected := i == m.commentCursor
-		isCollapsed := m.commentCollapsed[i]
-
-		// Thread header
-		marker := "▼"
-		if isCollapsed {
-			marker = "▶"
-		}
-		cursor := " "
-		if isSelected {
-			cursor = ">"
-		}
-
-		header := fmt.Sprintf("%s%s %s:%d", cursor, marker, thread.Path, thread.Line)
-		if thread.Resolved {
-			header += lipgloss.NewStyle().Foreground(t.Success).Render(" [resolved]")
-		}
-		if isCollapsed && len(thread.Comments) > 0 {
-			preview := thread.Comments[0].Body
-			preview = strings.ReplaceAll(preview, "\n", " ")
-			if len(preview) > 40 {
-				preview = preview[:40] + "..."
-			}
-			header += lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf(" %s", preview))
-		}
-
-		headerStyle := lipgloss.NewStyle().Foreground(t.Info).Bold(true)
-		if isSelected {
-			headerStyle = headerStyle.Background(t.Primary).Foreground(t.Bg)
-		}
-		lines = append(lines, headerStyle.Render(header))
-
-		// Thread comments (if expanded)
-		if !isCollapsed {
-			for _, c := range thread.Comments {
-				authorLine := fmt.Sprintf("    @%s:", c.Author)
-				lines = append(lines, lipgloss.NewStyle().Foreground(t.Muted).Render(authorLine))
-				rendered := renderMarkdownCachedMap(m.commentCache, c.ID, c.Body, commentWidth)
-				for _, l := range strings.Split(rendered, "\n") {
-					lines = append(lines, "      "+l)
-				}
-			}
-		}
-		lines = append(lines, "") // Spacer between threads
+	if m.commentCursor >= len(d.Discussion) {
+		m.commentCursor = max(0, len(d.Discussion)-1)
 	}
 
-	return strings.Join(lines, "\n")
+	m.ensureSelectedCommentVisible(height, commentWidth)
+
+	start := m.scrollY
+	end := start + height
+	linePos := 0
+	var visible []string
+
+	for i, item := range d.Discussion {
+		blockHeight := m.commentBlockHeight(item, i, commentWidth)
+		nextPos := linePos + blockHeight
+		if nextPos <= start {
+			linePos = nextPos
+			continue
+		}
+		if linePos >= end {
+			break
+		}
+
+		block := m.renderDiscussionBlock(item, i, commentWidth)
+		from := max(0, start-linePos)
+		to := min(len(block), end-linePos)
+		if from < to {
+			visible = append(visible, block[from:to]...)
+		}
+		linePos = nextPos
+	}
+
+	return ensureExactHeight(strings.Join(visible, "\n"), height, m.width)
+}
+
+func (m *PRDetailModel) ensureSelectedCommentVisible(height, commentWidth int) {
+	if m.detail == nil || len(m.detail.Discussion) == 0 {
+		m.scrollY = 0
+		return
+	}
+
+	if m.commentCursor < 0 {
+		m.commentCursor = 0
+	}
+	if m.commentCursor >= len(m.detail.Discussion) {
+		m.commentCursor = len(m.detail.Discussion) - 1
+	}
+
+	linePos := 0
+	for i, item := range m.detail.Discussion {
+		blockHeight := m.commentBlockHeight(item, i, commentWidth)
+		if i == m.commentCursor {
+			switch {
+			case blockHeight > height:
+				// Keep oversized blocks anchored at their header so selection stays visible.
+				m.scrollY = linePos
+			case linePos < m.scrollY:
+				m.scrollY = linePos
+			case linePos+blockHeight > m.scrollY+height:
+				m.scrollY = linePos + blockHeight - height
+			}
+			if m.scrollY < 0 {
+				m.scrollY = 0
+			}
+			return
+		}
+		linePos += blockHeight
+	}
+}
+
+func (m *PRDetailModel) commentBlockHeight(item domain.DiscussionItem, idx, commentWidth int) int {
+	return len(m.renderDiscussionBlock(item, idx, commentWidth))
+}
+
+func (m *PRDetailModel) renderDiscussionBlock(item domain.DiscussionItem, idx, commentWidth int) []string {
+	t := m.styles.Theme
+	isSelected := idx == m.commentCursor
+	isCollapsed := m.commentCollapsed[idx]
+
+	marker := "▼"
+	if isCollapsed {
+		marker = "▶"
+	}
+	cursor := " "
+	if isSelected {
+		cursor = ">"
+	}
+
+	header := m.formatDiscussionHeader(item, cursor, marker)
+	if item.Resolved {
+		header += lipgloss.NewStyle().Foreground(t.Success).Render(" [resolved]")
+	}
+	if isCollapsed && len(item.Comments) > 0 {
+		preview := item.Comments[0].Body
+		preview = strings.ReplaceAll(preview, "\n", " ")
+		if len(preview) > 48 {
+			preview = preview[:48] + "..."
+		}
+		header += lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf(" %s", preview))
+	}
+
+	headerStyle := lipgloss.NewStyle().Foreground(t.Info).Bold(true)
+	if isSelected {
+		headerStyle = headerStyle.Background(t.Primary).Foreground(t.Bg)
+	}
+
+	lines := []string{headerStyle.Render(header)}
+	if !isCollapsed {
+		for _, c := range item.Comments {
+			authorLine := fmt.Sprintf("    @%s", c.Author)
+			switch item.Kind {
+			case domain.DiscussionReview:
+				if item.StateLabel != "" {
+					authorLine += " " + lipgloss.NewStyle().Foreground(t.Warning).Render("["+item.StateLabel+"]")
+				}
+			case domain.DiscussionInlineThread:
+				if item.Path != "" && item.Line > 0 {
+					authorLine += lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("  %s:%d", item.Path, item.Line))
+				}
+			}
+			lines = append(lines, lipgloss.NewStyle().Foreground(t.Muted).Render(authorLine+":"))
+			rendered := renderMarkdownCachedMap(m.commentCache, c.ID, c.Body, commentWidth)
+			for _, l := range strings.Split(rendered, "\n") {
+				lines = append(lines, "      "+l)
+			}
+		}
+	}
+	lines = append(lines, "")
+	return lines
+}
+
+func (m *PRDetailModel) formatDiscussionHeader(item domain.DiscussionItem, cursor, marker string) string {
+	switch item.Kind {
+	case domain.DiscussionInlineThread:
+		if item.Path != "" && item.Line > 0 {
+			return fmt.Sprintf("%s%s %s:%d", cursor, marker, item.Path, item.Line)
+		}
+		return fmt.Sprintf("%s%s inline thread", cursor, marker)
+	case domain.DiscussionReview:
+		author := "review"
+		if len(item.Comments) > 0 && item.Comments[0].Author != "" {
+			author = "review by @" + item.Comments[0].Author
+		}
+		if item.StateLabel != "" {
+			return fmt.Sprintf("%s%s %s [%s]", cursor, marker, author, item.StateLabel)
+		}
+		return fmt.Sprintf("%s%s %s", cursor, marker, author)
+	default:
+		author := "comment"
+		if len(item.Comments) > 0 && item.Comments[0].Author != "" {
+			author = "comment by @" + item.Comments[0].Author
+		}
+		return fmt.Sprintf("%s%s %s", cursor, marker, author)
+	}
 }
 
 // Helper functions

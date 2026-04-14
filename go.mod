@@ -1,6 +1,6 @@
 module github.com/indrasvat/vivecaka
 
-go 1.25.7
+go 1.26.2
 
 require (
 	github.com/alecthomas/chroma/v2 v2.14.0

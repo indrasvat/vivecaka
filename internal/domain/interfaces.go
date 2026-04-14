@@ -9,6 +9,7 @@ type PRReader interface {
 	GetDiff(ctx context.Context, repo RepoRef, number int) (*Diff, error)
 	GetChecks(ctx context.Context, repo RepoRef, number int) ([]Check, error)
 	GetComments(ctx context.Context, repo RepoRef, number int) ([]CommentThread, error)
+	GetDiscussion(ctx context.Context, repo RepoRef, number int) ([]DiscussionItem, error)
 	GetPRCount(ctx context.Context, repo RepoRef, state PRState) (int, error)
 }
 

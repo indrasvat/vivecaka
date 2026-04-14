@@ -1,6 +1,7 @@
 package ghcli
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"testing"
@@ -92,18 +93,39 @@ func TestToDomainPRDetail_FromFixture(t *testing.T) {
 	assert.Equal(t, domain.CISkipped, detail.Checks[1].Status)
 }
 
-func TestGroupCommentsIntoThreads_FromFixture(t *testing.T) {
-	data := loadFixture(t, "pr_comments.json")
-	var ghComments []ghAPIComment
-	require.NoError(t, json.Unmarshal(data, &ghComments))
+func TestToDomainCommentThreads(t *testing.T) {
+	line45 := 45
+	line20 := 20
+	threads := toDomainCommentThreads([]ghReviewThread{
+		{
+			ID:         "PRRT_1",
+			IsResolved: false,
+			Path:       "internal/auth/middleware.go",
+			Line:       &line45,
+			Comments: ghGraphQLCommentConnection{
+				Nodes: []ghGraphQLComment{
+					{DatabaseID: 1001, Body: "Please add logging.", CreatedAt: time.Now(), Author: ghActor{Login: "frank"}},
+					{DatabaseID: 1002, Body: "Fixing in next commit.", CreatedAt: time.Now(), Author: ghActor{Login: "alice"}},
+				},
+			},
+		},
+		{
+			ID:         "PRRT_2",
+			IsResolved: true,
+			Path:       "internal/auth/token.go",
+			Line:       &line20,
+			Comments: ghGraphQLCommentConnection{
+				Nodes: []ghGraphQLComment{
+					{DatabaseID: 1003, Body: "Looks good.", CreatedAt: time.Now(), Author: ghActor{Login: "bob"}},
+				},
+			},
+		},
+	})
 
-	threads := groupCommentsIntoThreads(ghComments)
-
-	// Should have 3 threads: comment 1001 (with reply 1002), 1003, 1004.
-	require.Len(t, threads, 3)
-
-	// Thread 1: root + reply.
+	require.Len(t, threads, 2)
 	assert.Equal(t, "1001", threads[0].ID)
+	assert.Equal(t, "PRRT_1", threads[0].ThreadID)
+	assert.Equal(t, "1001", threads[0].ReplyToID)
 	assert.Equal(t, "internal/auth/middleware.go", threads[0].Path)
 	assert.Equal(t, 45, threads[0].Line)
 	require.Len(t, threads[0].Comments, 2)
@@ -111,20 +133,92 @@ func TestGroupCommentsIntoThreads_FromFixture(t *testing.T) {
 	assert.Equal(t, "alice", threads[0].Comments[1].Author)
 	assert.Contains(t, threads[0].Comments[1].Body, "next commit")
 
-	// Thread 2: standalone.
 	assert.Equal(t, "1003", threads[1].ID)
+	assert.Equal(t, "PRRT_2", threads[1].ThreadID)
+	assert.True(t, threads[1].Resolved)
 	assert.Equal(t, "internal/auth/token.go", threads[1].Path)
 	assert.Equal(t, 20, threads[1].Line)
-	require.Len(t, threads[1].Comments, 1)
-
-	// Thread 3: null line → line=0.
-	assert.Equal(t, "1004", threads[2].ID)
-	assert.Equal(t, 0, threads[2].Line)
 }
 
-func TestGroupCommentsIntoThreads_Empty(t *testing.T) {
-	threads := groupCommentsIntoThreads(nil)
+func TestToDomainCommentThreads_Empty(t *testing.T) {
+	threads := toDomainCommentThreads(nil)
 	assert.Empty(t, threads)
+}
+
+func TestExpandReviewThreadComments(t *testing.T) {
+	t0 := time.Now()
+	threads := []ghReviewThread{{
+		ID: "PRRT_1",
+		Comments: ghGraphQLCommentConnection{
+			Nodes: []ghGraphQLComment{
+				{DatabaseID: 1001, Body: "root", CreatedAt: t0, Author: ghActor{Login: "alice"}},
+			},
+			PageInfo: ghPageInfo{HasNextPage: true, EndCursor: "cursor-1"},
+		},
+	}}
+
+	var calls int
+	expanded, err := expandReviewThreadComments(context.Background(), threads, func(_ context.Context, threadID, cursor string) (*ghGraphQLCommentConnection, error) {
+		calls++
+		require.Equal(t, "PRRT_1", threadID)
+		switch calls {
+		case 1:
+			require.Equal(t, "cursor-1", cursor)
+			return &ghGraphQLCommentConnection{
+				Nodes: []ghGraphQLComment{
+					{DatabaseID: 1002, Body: "reply-1", CreatedAt: t0.Add(time.Minute), Author: ghActor{Login: "bob"}},
+				},
+				PageInfo: ghPageInfo{HasNextPage: true, EndCursor: "cursor-2"},
+			}, nil
+		case 2:
+			require.Equal(t, "cursor-2", cursor)
+			return &ghGraphQLCommentConnection{
+				Nodes: []ghGraphQLComment{
+					{DatabaseID: 1003, Body: "reply-2", CreatedAt: t0.Add(2 * time.Minute), Author: ghActor{Login: "carol"}},
+				},
+				PageInfo: ghPageInfo{HasNextPage: false},
+			}, nil
+		default:
+			t.Fatalf("unexpected extra fetch for cursor %q", cursor)
+			return nil, nil
+		}
+	})
+
+	require.NoError(t, err)
+	require.Len(t, expanded, 1)
+	require.Len(t, expanded[0].Comments.Nodes, 3)
+	assert.Equal(t, []int{1001, 1002, 1003}, []int{
+		expanded[0].Comments.Nodes[0].DatabaseID,
+		expanded[0].Comments.Nodes[1].DatabaseID,
+		expanded[0].Comments.Nodes[2].DatabaseID,
+	})
+	assert.Equal(t, 2, calls)
+	assert.False(t, expanded[0].Comments.PageInfo.HasNextPage)
+}
+
+func TestToDomainReviewItems(t *testing.T) {
+	items := toDomainReviewItems([]ghReviewSummary{
+		{ID: "PRR_1", Body: "LGTM", State: "APPROVED", SubmittedAt: time.Now(), URL: "https://example.com/review/1", Author: ghActor{Login: "indrasvat"}},
+		{ID: "PRR_2", Body: "   ", State: "COMMENTED", SubmittedAt: time.Now(), Author: ghActor{Login: "skip"}},
+	})
+
+	require.Len(t, items, 1)
+	assert.Equal(t, domain.DiscussionReview, items[0].Kind)
+	assert.Equal(t, "approved", items[0].StateLabel)
+	assert.Equal(t, "indrasvat", items[0].Comments[0].Author)
+	assert.Equal(t, "LGTM", items[0].Comments[0].Body)
+}
+
+func TestToDomainIssueComments(t *testing.T) {
+	items := toDomainIssueComments([]ghIssueComment{
+		{ID: "IC_1", Body: "Please test the binary.", CreatedAt: time.Now(), URL: "https://example.com/comment/1", Author: ghActor{Login: "indrasvat"}},
+		{ID: "IC_2", Body: "   ", CreatedAt: time.Now(), Author: ghActor{Login: "skip"}},
+	})
+
+	require.Len(t, items, 1)
+	assert.Equal(t, domain.DiscussionComment, items[0].Kind)
+	assert.Equal(t, "indrasvat", items[0].Comments[0].Author)
+	assert.Equal(t, "Please test the binary.", items[0].Comments[0].Body)
 }
 
 func TestToDomainCheck_AllStatuses(t *testing.T) {

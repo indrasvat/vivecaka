@@ -42,7 +42,7 @@ curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh 
 
 ## Requirements
 
-- Go 1.25+
+- Go 1.26+
 - [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated
 
 ## Building from Source

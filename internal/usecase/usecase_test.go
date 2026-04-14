@@ -20,9 +20,11 @@ type mockReader struct {
 	diff        *domain.Diff
 	checks      []domain.Check
 	comments    []domain.CommentThread
+	discussion  []domain.DiscussionItem
 	err         error
 	checksErr   error
 	commentsErr error
+	discussErr  error
 }
 
 func (m *mockReader) ListPRs(_ context.Context, _ domain.RepoRef, _ domain.ListOpts) ([]domain.PR, error) {
@@ -39,6 +41,9 @@ func (m *mockReader) GetChecks(_ context.Context, _ domain.RepoRef, _ int) ([]do
 }
 func (m *mockReader) GetComments(_ context.Context, _ domain.RepoRef, _ int) ([]domain.CommentThread, error) {
 	return m.comments, m.commentsErr
+}
+func (m *mockReader) GetDiscussion(_ context.Context, _ domain.RepoRef, _ int) ([]domain.DiscussionItem, error) {
+	return m.discussion, m.discussErr
 }
 func (m *mockReader) GetPRCount(_ context.Context, _ domain.RepoRef, _ domain.PRState) (int, error) {
 	return len(m.prs), m.err
@@ -109,15 +114,17 @@ func TestGetPRDetailExecute(t *testing.T) {
 		Checks: []domain.Check{{Name: "ci", Status: domain.CIPass}},
 	}
 	comments := []domain.CommentThread{{ID: "t1"}}
+	discussion := []domain.DiscussionItem{{ID: "c1", Kind: domain.DiscussionComment}}
 
-	reader := &mockReader{detail: detail, comments: comments}
+	reader := &mockReader{detail: detail, comments: comments, discussion: discussion}
 	uc := NewGetPRDetail(reader)
 
 	got, err := uc.Execute(context.Background(), testRepo, 42)
 	require.NoError(t, err)
 	assert.Equal(t, 42, got.Number)
 	assert.Len(t, got.Checks, 1)
-	assert.Len(t, got.Comments, 1)
+	assert.Len(t, got.InlineComments, 1)
+	assert.Len(t, got.Discussion, 2)
 }
 
 func TestGetPRDetailPartialFailure(t *testing.T) {
@@ -137,8 +144,9 @@ func TestGetPRDetailPartialFailure(t *testing.T) {
 	assert.Equal(t, 42, got.Number)
 	// Checks come from GetPR (statusCheckRollup), so they should be present.
 	assert.Len(t, got.Checks, 1, "checks should be present")
-	// Comments should be nil due to tolerated failure.
-	assert.Nil(t, got.Comments, "comments should be nil on failure")
+	// Inline comments should be nil due to tolerated failure.
+	assert.Nil(t, got.InlineComments, "inline comments should be nil on failure")
+	assert.Empty(t, got.Discussion, "discussion should be empty on failure")
 }
 
 func TestGetPRDetailMainFailure(t *testing.T) {

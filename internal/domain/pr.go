@@ -74,12 +74,13 @@ func (s ReviewState) String() string { return string(s) }
 // PRDetail is the full representation for the detail view.
 type PRDetail struct {
 	PR
-	Body      string          `json:"body"`
-	Assignees []string        `json:"assignees"`
-	Reviewers []ReviewerInfo  `json:"reviewers"`
-	Checks    []Check         `json:"checks"`
-	Files     []FileChange    `json:"files"`
-	Comments  []CommentThread `json:"comments"`
+	Body           string           `json:"body"`
+	Assignees      []string         `json:"assignees"`
+	Reviewers      []ReviewerInfo   `json:"reviewers"`
+	Checks         []Check          `json:"checks"`
+	Files          []FileChange     `json:"files"`
+	InlineComments []CommentThread  `json:"inline_comments"`
+	Discussion     []DiscussionItem `json:"discussion"`
 }
 
 // BranchInfo represents head and base branches.

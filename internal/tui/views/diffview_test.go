@@ -679,7 +679,7 @@ func TestDiffSetComments(t *testing.T) {
 
 	threads := []domain.CommentThread{
 		{
-			ID:   "t1",
+			ID: "t1", ReplyToID: "comment-1",
 			Path: "internal/plugin/registry.go",
 			Line: 11,
 			Comments: []domain.Comment{
@@ -717,7 +717,7 @@ func TestDiffInlineCommentRendering(t *testing.T) {
 
 	threads := []domain.CommentThread{
 		{
-			ID:   "t1",
+			ID: "t1", ReplyToID: "comment-1",
 			Path: "internal/plugin/registry.go",
 			Line: 11,
 			Comments: []domain.Comment{
@@ -833,7 +833,7 @@ func TestDiffCommentReply(t *testing.T) {
 
 	threads := []domain.CommentThread{
 		{
-			ID:   "t1",
+			ID: "t1", ReplyToID: "comment-1",
 			Path: "internal/plugin/registry.go",
 			Line: 11,
 			Comments: []domain.Comment{
@@ -851,7 +851,7 @@ func TestDiffCommentReply(t *testing.T) {
 	m.Update(rKey)
 
 	assert.True(t, m.editing, "expected editing mode for reply")
-	assert.Equal(t, "t1", m.editReplyTo)
+	assert.Equal(t, "comment-1", m.editReplyTo)
 }
 
 func TestDiffCommentResolve(t *testing.T) {
@@ -861,7 +861,7 @@ func TestDiffCommentResolve(t *testing.T) {
 
 	threads := []domain.CommentThread{
 		{
-			ID:   "t1",
+			ID: "t1", ThreadID: "PRRT_thread_1",
 			Path: "internal/plugin/registry.go",
 			Line: 11,
 			Comments: []domain.Comment{
@@ -882,7 +882,7 @@ func TestDiffCommentResolve(t *testing.T) {
 	msg := cmd()
 	resolveMsg, ok := msg.(ResolveThreadMsg)
 	require.True(t, ok, "expected ResolveThreadMsg, got %T", msg)
-	assert.Equal(t, "t1", resolveMsg.ThreadID)
+	assert.Equal(t, "PRRT_thread_1", resolveMsg.ThreadID)
 }
 
 func TestDiffCommentEditorBackspace(t *testing.T) {

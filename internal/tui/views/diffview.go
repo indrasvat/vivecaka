@@ -494,20 +494,20 @@ func (m *DiffViewModel) handleContentKey(msg tea.KeyMsg) tea.Cmd {
 		case 'r':
 			// Reply to thread at current line.
 			thread := m.threadAtCurrentLine()
-			if thread != nil {
+			if thread != nil && thread.ReplyToID != "" {
 				m.editing = true
 				m.editBuffer = ""
 				m.editPath = thread.Path
 				m.editLine = thread.Line
 				m.editSide = "RIGHT"
-				m.editReplyTo = thread.ID
+				m.editReplyTo = thread.ReplyToID
 			}
 			return nil
 		case 'x':
 			// Resolve thread at current line.
 			thread := m.threadAtCurrentLine()
-			if thread != nil {
-				threadID := thread.ID
+			if thread != nil && thread.ThreadID != "" {
+				threadID := thread.ThreadID
 				return func() tea.Msg { return ResolveThreadMsg{ThreadID: threadID} }
 			}
 			return nil
