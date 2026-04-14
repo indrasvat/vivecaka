@@ -828,9 +828,13 @@ func (m *PRDetailModel) ensureSelectedCommentVisible(height, commentWidth int) {
 	for i, item := range m.detail.Discussion {
 		blockHeight := m.commentBlockHeight(item, i, commentWidth)
 		if i == m.commentCursor {
-			if linePos < m.scrollY {
+			switch {
+			case blockHeight > height:
+				// Keep oversized blocks anchored at their header so selection stays visible.
 				m.scrollY = linePos
-			} else if linePos+blockHeight > m.scrollY+height {
+			case linePos < m.scrollY:
+				m.scrollY = linePos
+			case linePos+blockHeight > m.scrollY+height:
 				m.scrollY = linePos + blockHeight - height
 			}
 			if m.scrollY < 0 {

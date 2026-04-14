@@ -241,7 +241,11 @@ func (a *Adapter) GetComments(ctx context.Context, repo domain.RepoRef, number i
 		if err != nil {
 			return nil, fmt.Errorf("getting comments for PR #%d: %w", number, err)
 		}
-		threads = append(threads, toDomainCommentThreads(page.Nodes)...)
+		pageThreads, err := expandReviewThreadComments(ctx, page.Nodes, fetchReviewThreadCommentsPage)
+		if err != nil {
+			return nil, fmt.Errorf("getting comments for PR #%d: %w", number, err)
+		}
+		threads = append(threads, toDomainCommentThreads(pageThreads)...)
 		if !page.PageInfo.HasNextPage {
 			break
 		}
@@ -298,14 +302,17 @@ type ghGraphQLComment struct {
 	Author     ghActor   `json:"author"`
 }
 
+type ghGraphQLCommentConnection struct {
+	Nodes    []ghGraphQLComment `json:"nodes"`
+	PageInfo ghPageInfo         `json:"pageInfo"`
+}
+
 type ghReviewThread struct {
-	ID         string `json:"id"`
-	IsResolved bool   `json:"isResolved"`
-	Path       string `json:"path"`
-	Line       *int   `json:"line"`
-	Comments   struct {
-		Nodes []ghGraphQLComment `json:"nodes"`
-	} `json:"comments"`
+	ID         string                     `json:"id"`
+	IsResolved bool                       `json:"isResolved"`
+	Path       string                     `json:"path"`
+	Line       *int                       `json:"line"`
+	Comments   ghGraphQLCommentConnection `json:"comments"`
 }
 
 type ghReviewThreadsPage struct {
@@ -355,17 +362,18 @@ func fetchReviewThreadsPage(ctx context.Context, repo domain.RepoRef, number int
           isResolved
           path
           line
-          comments(first: 100) {
-            nodes {
-              id
-              databaseId
-              body
-              createdAt
-              url
-              author { login }
-            }
-          }
-        }
+	          comments(first: 100) {
+	            nodes {
+	              id
+	              databaseId
+	              body
+	              createdAt
+	              url
+	              author { login }
+	            }
+	            pageInfo { hasNextPage endCursor }
+	          }
+	        }
         pageInfo { hasNextPage endCursor }
       }
     }
@@ -385,6 +393,76 @@ func fetchReviewThreadsPage(ctx context.Context, repo domain.RepoRef, number int
 		return nil, err
 	}
 	return &result.Data.Repository.PullRequest.ReviewThreads, nil
+}
+
+func fetchReviewThreadCommentsPage(ctx context.Context, threadID, cursor string) (*ghGraphQLCommentConnection, error) {
+	after := "null"
+	if cursor != "" {
+		after = fmt.Sprintf("%q", cursor)
+	}
+
+	query := fmt.Sprintf(`query {
+  node(id: %q) {
+    ... on PullRequestReviewThread {
+      comments(first: 100, after: %s) {
+        nodes {
+          id
+          databaseId
+          body
+          createdAt
+          url
+          author { login }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}`, threadID, after)
+
+	var result struct {
+		Data struct {
+			Node struct {
+				Comments ghGraphQLCommentConnection `json:"comments"`
+			} `json:"node"`
+		} `json:"data"`
+	}
+	if err := ghJSON(ctx, &result, "api", "graphql", "-f", "query="+query); err != nil {
+		return nil, err
+	}
+	return &result.Data.Node.Comments, nil
+}
+
+func expandReviewThreadComments(
+	ctx context.Context,
+	threads []ghReviewThread,
+	fetchPage func(context.Context, string, string) (*ghGraphQLCommentConnection, error),
+) ([]ghReviewThread, error) {
+	out := make([]ghReviewThread, len(threads))
+	copy(out, threads)
+
+	for i := range out {
+		commentPage := out[i].Comments
+		if !commentPage.PageInfo.HasNextPage {
+			continue
+		}
+
+		allComments := append([]ghGraphQLComment(nil), commentPage.Nodes...)
+		cursor := commentPage.PageInfo.EndCursor
+
+		for commentPage.PageInfo.HasNextPage {
+			page, err := fetchPage(ctx, out[i].ID, cursor)
+			if err != nil {
+				return nil, err
+			}
+			allComments = append(allComments, page.Nodes...)
+			commentPage = *page
+			cursor = commentPage.PageInfo.EndCursor
+		}
+
+		out[i].Comments = ghGraphQLCommentConnection{Nodes: allComments}
+	}
+
+	return out, nil
 }
 
 func fetchReviewsPage(ctx context.Context, repo domain.RepoRef, number int, cursor string) (*ghReviewsPage, error) {

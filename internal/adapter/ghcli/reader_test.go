@@ -1,6 +1,7 @@
 package ghcli
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"testing"
@@ -101,9 +102,7 @@ func TestToDomainCommentThreads(t *testing.T) {
 			IsResolved: false,
 			Path:       "internal/auth/middleware.go",
 			Line:       &line45,
-			Comments: struct {
-				Nodes []ghGraphQLComment `json:"nodes"`
-			}{
+			Comments: ghGraphQLCommentConnection{
 				Nodes: []ghGraphQLComment{
 					{DatabaseID: 1001, Body: "Please add logging.", CreatedAt: time.Now(), Author: ghActor{Login: "frank"}},
 					{DatabaseID: 1002, Body: "Fixing in next commit.", CreatedAt: time.Now(), Author: ghActor{Login: "alice"}},
@@ -115,9 +114,7 @@ func TestToDomainCommentThreads(t *testing.T) {
 			IsResolved: true,
 			Path:       "internal/auth/token.go",
 			Line:       &line20,
-			Comments: struct {
-				Nodes []ghGraphQLComment `json:"nodes"`
-			}{
+			Comments: ghGraphQLCommentConnection{
 				Nodes: []ghGraphQLComment{
 					{DatabaseID: 1003, Body: "Looks good.", CreatedAt: time.Now(), Author: ghActor{Login: "bob"}},
 				},
@@ -146,6 +143,57 @@ func TestToDomainCommentThreads(t *testing.T) {
 func TestToDomainCommentThreads_Empty(t *testing.T) {
 	threads := toDomainCommentThreads(nil)
 	assert.Empty(t, threads)
+}
+
+func TestExpandReviewThreadComments(t *testing.T) {
+	t0 := time.Now()
+	threads := []ghReviewThread{{
+		ID: "PRRT_1",
+		Comments: ghGraphQLCommentConnection{
+			Nodes: []ghGraphQLComment{
+				{DatabaseID: 1001, Body: "root", CreatedAt: t0, Author: ghActor{Login: "alice"}},
+			},
+			PageInfo: ghPageInfo{HasNextPage: true, EndCursor: "cursor-1"},
+		},
+	}}
+
+	var calls int
+	expanded, err := expandReviewThreadComments(context.Background(), threads, func(_ context.Context, threadID, cursor string) (*ghGraphQLCommentConnection, error) {
+		calls++
+		require.Equal(t, "PRRT_1", threadID)
+		switch calls {
+		case 1:
+			require.Equal(t, "cursor-1", cursor)
+			return &ghGraphQLCommentConnection{
+				Nodes: []ghGraphQLComment{
+					{DatabaseID: 1002, Body: "reply-1", CreatedAt: t0.Add(time.Minute), Author: ghActor{Login: "bob"}},
+				},
+				PageInfo: ghPageInfo{HasNextPage: true, EndCursor: "cursor-2"},
+			}, nil
+		case 2:
+			require.Equal(t, "cursor-2", cursor)
+			return &ghGraphQLCommentConnection{
+				Nodes: []ghGraphQLComment{
+					{DatabaseID: 1003, Body: "reply-2", CreatedAt: t0.Add(2 * time.Minute), Author: ghActor{Login: "carol"}},
+				},
+				PageInfo: ghPageInfo{HasNextPage: false},
+			}, nil
+		default:
+			t.Fatalf("unexpected extra fetch for cursor %q", cursor)
+			return nil, nil
+		}
+	})
+
+	require.NoError(t, err)
+	require.Len(t, expanded, 1)
+	require.Len(t, expanded[0].Comments.Nodes, 3)
+	assert.Equal(t, []int{1001, 1002, 1003}, []int{
+		expanded[0].Comments.Nodes[0].DatabaseID,
+		expanded[0].Comments.Nodes[1].DatabaseID,
+		expanded[0].Comments.Nodes[2].DatabaseID,
+	})
+	assert.Equal(t, 2, calls)
+	assert.False(t, expanded[0].Comments.PageInfo.HasNextPage)
 }
 
 func TestToDomainReviewItems(t *testing.T) {

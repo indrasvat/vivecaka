@@ -1,6 +1,7 @@
 package views
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -601,6 +602,43 @@ func TestCommentPaneCollapsedView(t *testing.T) {
 	view := m.View()
 	// Collapsed view should show preview of first comment
 	assert.Contains(t, view, "Needs error handling")
+}
+
+func TestEnsureSelectedCommentVisible_AnchorsTallSelectedBlockAtHeader(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(80, 8)
+
+	detail := testDetail()
+	detail.Discussion = []domain.DiscussionItem{
+		{
+			ID:        "short",
+			Kind:      domain.DiscussionComment,
+			CreatedAt: time.Now().Add(-time.Hour),
+			Comments: []domain.Comment{
+				{ID: "short", Author: "alice", Body: "short comment", CreatedAt: time.Now().Add(-time.Hour)},
+			},
+		},
+		{
+			ID:        "long",
+			Kind:      domain.DiscussionComment,
+			CreatedAt: time.Now(),
+			Comments: []domain.Comment{
+				{ID: "long", Author: "indrasvat", Body: strings.Repeat("very long comment line\n", 24), CreatedAt: time.Now()},
+			},
+		},
+	}
+	m.SetDetail(detail)
+	m.tab = TabComments
+	m.commentCursor = 1
+
+	commentWidth := max(20, m.width-10)
+	linePos := m.commentBlockHeight(detail.Discussion[0], 0, commentWidth)
+	blockHeight := m.commentBlockHeight(detail.Discussion[1], 1, commentWidth)
+	require.Greater(t, blockHeight, 8, "selected block must exceed viewport height for this test")
+
+	m.ensureSelectedCommentVisible(8, commentWidth)
+
+	assert.Equal(t, linePos, m.scrollY, "oversized selected block should stay anchored at its header")
 }
 
 func TestGetPRNumber(t *testing.T) {
