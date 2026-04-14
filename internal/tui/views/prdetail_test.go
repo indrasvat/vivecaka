@@ -37,8 +37,9 @@ func testDetail() *domain.PRDetail {
 			{Name: "ci/lint", Status: domain.CIFail, Duration: 12 * time.Second, URL: "https://example.com/checks/lint"},
 			{Name: "ci/test", Status: domain.CIPending},
 		},
-		Comments: []domain.CommentThread{
+		InlineComments: []domain.CommentThread{
 			{
+				ID: "comment-1", ThreadID: "thread-1", ReplyToID: "comment-1",
 				Path: "plugin.go", Line: 42, Resolved: false,
 				Comments: []domain.Comment{
 					{Author: "alice", Body: "Needs error handling here."},
@@ -46,9 +47,57 @@ func testDetail() *domain.PRDetail {
 				},
 			},
 			{
+				ID: "comment-2", ThreadID: "thread-2", ReplyToID: "comment-2",
 				Path: "registry.go", Line: 10, Resolved: true,
 				Comments: []domain.Comment{
 					{Author: "bob", Body: "Consider using sync.Map."},
+				},
+			},
+		},
+		Discussion: []domain.DiscussionItem{
+			{
+				ID:         "review-1",
+				Kind:       domain.DiscussionReview,
+				StateLabel: "approved",
+				CreatedAt:  time.Now().Add(-2 * time.Hour),
+				URL:        "https://example.com/reviews/1",
+				Comments: []domain.Comment{
+					{ID: "review-1", Author: "indrasvat", Body: "LGTM", CreatedAt: time.Now().Add(-2 * time.Hour)},
+				},
+			},
+			{
+				ID:        "conversation-1",
+				Kind:      domain.DiscussionComment,
+				CreatedAt: time.Now().Add(-time.Hour),
+				URL:       "https://example.com/comments/1",
+				Comments: []domain.Comment{
+					{ID: "conversation-1", Author: "alice", Body: "Please verify the migration path.", CreatedAt: time.Now().Add(-time.Hour)},
+				},
+			},
+			{
+				ID:        "comment-1",
+				Kind:      domain.DiscussionInlineThread,
+				Path:      "plugin.go",
+				Line:      42,
+				ThreadID:  "thread-1",
+				ReplyToID: "comment-1",
+				CreatedAt: time.Now().Add(-30 * time.Minute),
+				Comments: []domain.Comment{
+					{ID: "comment-1", Author: "alice", Body: "Needs error handling here.", CreatedAt: time.Now().Add(-30 * time.Minute)},
+					{ID: "comment-1-reply", Author: "indrasvat", Body: "Good catch, fixing.", CreatedAt: time.Now().Add(-25 * time.Minute)},
+				},
+			},
+			{
+				ID:        "comment-2",
+				Kind:      domain.DiscussionInlineThread,
+				Path:      "registry.go",
+				Line:      10,
+				Resolved:  true,
+				ThreadID:  "thread-2",
+				ReplyToID: "comment-2",
+				CreatedAt: time.Now().Add(-20 * time.Minute),
+				Comments: []domain.Comment{
+					{ID: "comment-2", Author: "bob", Body: "Consider using sync.Map.", CreatedAt: time.Now().Add(-20 * time.Minute)},
 				},
 			},
 		},
@@ -389,7 +438,7 @@ func TestDetailViewEmptyComments(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
 	d := testDetail()
-	d.Comments = nil
+	d.Discussion = nil
 	m.SetDetail(d)
 	m.tab = TabComments
 
@@ -473,9 +522,10 @@ func TestCommentPaneResolve(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
 	detail := testDetail()
-	detail.Comments[0].ID = "thread-1"
+	detail.Discussion[2].ThreadID = "thread-1"
 	m.SetDetail(detail)
 	m.tab = TabComments
+	m.commentCursor = 2
 
 	// 'x' should produce ResolveThreadMsg for unresolved thread
 	x := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
@@ -492,10 +542,10 @@ func TestCommentPaneUnresolve(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
 	detail := testDetail()
-	detail.Comments[1].ID = "thread-2" // This one is resolved
+	detail.Discussion[3].ThreadID = "thread-2" // This one is resolved
 	m.SetDetail(detail)
 	m.tab = TabComments
-	m.commentCursor = 1 // Move to resolved thread
+	m.commentCursor = 3 // Move to resolved thread
 
 	// 'X' should produce UnresolveThreadMsg for resolved thread
 	X := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}}
@@ -512,9 +562,10 @@ func TestCommentPaneReplyKey(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
 	detail := testDetail()
-	detail.Comments[0].ID = "thread-1"
+	detail.Discussion[2].ReplyToID = "comment-1"
 	m.SetDetail(detail)
 	m.tab = TabComments
+	m.commentCursor = 2
 
 	// 'r' in comments pane should produce ReplyToThreadMsg
 	r := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
@@ -524,7 +575,7 @@ func TestCommentPaneReplyKey(t *testing.T) {
 	msg := cmd()
 	reply, ok := msg.(ReplyToThreadMsg)
 	require.True(t, ok, "expected ReplyToThreadMsg, got %T", msg)
-	assert.Equal(t, "thread-1", reply.ThreadID)
+	assert.Equal(t, "comment-1", reply.ThreadID)
 }
 
 func TestCommentPaneViewRendering(t *testing.T) {
@@ -537,6 +588,7 @@ func TestCommentPaneViewRendering(t *testing.T) {
 	assert.NotEmpty(t, view, "comments pane view should not be empty")
 	// Should contain thread info
 	assert.Contains(t, view, "plugin.go")
+	assert.Contains(t, view, "review by @indrasvat")
 }
 
 func TestCommentPaneCollapsedView(t *testing.T) {

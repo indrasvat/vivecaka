@@ -1033,7 +1033,7 @@ func (a *App) handleOpenDiff(msg views.OpenDiffMsg) (tea.Model, tea.Cmd) {
 	a.diffView.SetPRNumber(msg.Number)
 	a.diffView.SetHeadBranch(a.prDetail.GetBranch().Head)
 	// Pass inline comments from the loaded PR detail to the diff view.
-	a.diffView.SetComments(a.prDetail.GetComments())
+	a.diffView.SetComments(a.prDetail.GetInlineComments())
 	spinnerCmd := a.diffView.StartLoading()
 	if a.reader != nil && a.repo.Owner != "" {
 		return a, tea.Batch(spinnerCmd, loadDiffCmd(a.reader, a.repo, msg.Number))
@@ -1081,6 +1081,9 @@ func (a *App) handleReviewSubmitted(msg views.ReviewSubmittedMsg) (tea.Model, te
 	}
 	cmd := a.toasts.Add("Review submitted", domain.ToastSuccess, 3*time.Second)
 	a.view = core.ViewPRDetail
+	if a.getPRDetail != nil && a.prDetail.GetPRNumber() > 0 {
+		return a, tea.Batch(cmd, loadPRDetailCmd(a.getPRDetail, a.repo, a.prDetail.GetPRNumber()))
+	}
 	return a, cmd
 }
 

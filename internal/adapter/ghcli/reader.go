@@ -3,6 +3,7 @@ package ghcli
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/indrasvat/vivecaka/internal/domain"
@@ -228,74 +229,328 @@ func (a *Adapter) GetChecks(ctx context.Context, repo domain.RepoRef, number int
 	return checks, nil
 }
 
-// GetComments fetches review comments for a PR via gh api.
+// GetComments fetches inline review threads for a PR via GraphQL.
 func (a *Adapter) GetComments(ctx context.Context, repo domain.RepoRef, number int) ([]domain.CommentThread, error) {
-	endpoint := fmt.Sprintf("repos/%s/pulls/%d/comments", repo, number)
-	args := []string{"api", endpoint, "--paginate"}
+	var (
+		cursor  string
+		threads []domain.CommentThread
+	)
 
-	var ghComments []ghAPIComment
-	if err := ghJSON(ctx, &ghComments, args...); err != nil {
-		return nil, fmt.Errorf("getting comments for PR #%d: %w", number, err)
+	for {
+		page, err := fetchReviewThreadsPage(ctx, repo, number, cursor)
+		if err != nil {
+			return nil, fmt.Errorf("getting comments for PR #%d: %w", number, err)
+		}
+		threads = append(threads, toDomainCommentThreads(page.Nodes)...)
+		if !page.PageInfo.HasNextPage {
+			break
+		}
+		cursor = page.PageInfo.EndCursor
 	}
 
-	return groupCommentsIntoThreads(ghComments), nil
+	return threads, nil
 }
 
-// ghAPIComment is the shape of a review comment from the REST API.
-type ghAPIComment struct {
-	ID                  int       `json:"id"`
-	NodeID              string    `json:"node_id"`
-	Path                string    `json:"path"`
-	Line                *int      `json:"line"`
-	OriginalLine        *int      `json:"original_line"`
-	Body                string    `json:"body"`
-	User                ghActor   `json:"user"`
-	CreatedAt           time.Time `json:"created_at"`
-	InReplyToID         *int      `json:"in_reply_to_id"`
-	PullRequestReviewID int       `json:"pull_request_review_id"`
+// GetDiscussion fetches non-inline PR discussion items (review bodies + top-level PR comments).
+func (a *Adapter) GetDiscussion(ctx context.Context, repo domain.RepoRef, number int) ([]domain.DiscussionItem, error) {
+	var discussion []domain.DiscussionItem
+
+	commentCursor := ""
+	for {
+		page, err := fetchIssueCommentsPage(ctx, repo, number, commentCursor)
+		if err != nil {
+			return nil, fmt.Errorf("getting PR conversation comments for PR #%d: %w", number, err)
+		}
+		discussion = append(discussion, toDomainIssueComments(page.Nodes)...)
+		if !page.PageInfo.HasNextPage {
+			break
+		}
+		commentCursor = page.PageInfo.EndCursor
+	}
+
+	reviewCursor := ""
+	for {
+		page, err := fetchReviewsPage(ctx, repo, number, reviewCursor)
+		if err != nil {
+			return nil, fmt.Errorf("getting reviews for PR #%d: %w", number, err)
+		}
+		discussion = append(discussion, toDomainReviewItems(page.Nodes)...)
+		if !page.PageInfo.HasNextPage {
+			break
+		}
+		reviewCursor = page.PageInfo.EndCursor
+	}
+
+	return discussion, nil
 }
 
-// groupCommentsIntoThreads groups flat comments into threads by in_reply_to_id.
-func groupCommentsIntoThreads(comments []ghAPIComment) []domain.CommentThread {
-	threadMap := make(map[int]*domain.CommentThread)
-	var threadOrder []int
+type ghPageInfo struct {
+	HasNextPage bool   `json:"hasNextPage"`
+	EndCursor   string `json:"endCursor"`
+}
 
-	for _, c := range comments {
-		comment := domain.Comment{
-			ID:        fmt.Sprintf("%d", c.ID),
-			Author:    c.User.Login,
-			Body:      c.Body,
-			CreatedAt: c.CreatedAt,
+type ghGraphQLComment struct {
+	ID         string    `json:"id"`
+	DatabaseID int       `json:"databaseId"`
+	Body       string    `json:"body"`
+	CreatedAt  time.Time `json:"createdAt"`
+	URL        string    `json:"url"`
+	Author     ghActor   `json:"author"`
+}
+
+type ghReviewThread struct {
+	ID         string `json:"id"`
+	IsResolved bool   `json:"isResolved"`
+	Path       string `json:"path"`
+	Line       *int   `json:"line"`
+	Comments   struct {
+		Nodes []ghGraphQLComment `json:"nodes"`
+	} `json:"comments"`
+}
+
+type ghReviewThreadsPage struct {
+	Nodes    []ghReviewThread `json:"nodes"`
+	PageInfo ghPageInfo       `json:"pageInfo"`
+}
+
+type ghReviewSummary struct {
+	ID          string    `json:"id"`
+	Body        string    `json:"body"`
+	State       string    `json:"state"`
+	SubmittedAt time.Time `json:"submittedAt"`
+	URL         string    `json:"url"`
+	Author      ghActor   `json:"author"`
+}
+
+type ghReviewsPage struct {
+	Nodes    []ghReviewSummary `json:"nodes"`
+	PageInfo ghPageInfo        `json:"pageInfo"`
+}
+
+type ghIssueComment struct {
+	ID        string    `json:"id"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+	URL       string    `json:"url"`
+	Author    ghActor   `json:"author"`
+}
+
+type ghIssueCommentsPage struct {
+	Nodes    []ghIssueComment `json:"nodes"`
+	PageInfo ghPageInfo       `json:"pageInfo"`
+}
+
+func fetchReviewThreadsPage(ctx context.Context, repo domain.RepoRef, number int, cursor string) (*ghReviewThreadsPage, error) {
+	after := "null"
+	if cursor != "" {
+		after = fmt.Sprintf("%q", cursor)
+	}
+
+	query := fmt.Sprintf(`query {
+  repository(owner: %q, name: %q) {
+    pullRequest(number: %d) {
+      reviewThreads(first: 100, after: %s) {
+        nodes {
+          id
+          isResolved
+          path
+          line
+          comments(first: 100) {
+            nodes {
+              id
+              databaseId
+              body
+              createdAt
+              url
+              author { login }
+            }
+          }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}`, repo.Owner, repo.Name, number, after)
+
+	var result struct {
+		Data struct {
+			Repository struct {
+				PullRequest struct {
+					ReviewThreads ghReviewThreadsPage `json:"reviewThreads"`
+				} `json:"pullRequest"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+	if err := ghJSON(ctx, &result, "api", "graphql", "-f", "query="+query); err != nil {
+		return nil, err
+	}
+	return &result.Data.Repository.PullRequest.ReviewThreads, nil
+}
+
+func fetchReviewsPage(ctx context.Context, repo domain.RepoRef, number int, cursor string) (*ghReviewsPage, error) {
+	after := "null"
+	if cursor != "" {
+		after = fmt.Sprintf("%q", cursor)
+	}
+
+	query := fmt.Sprintf(`query {
+  repository(owner: %q, name: %q) {
+    pullRequest(number: %d) {
+      reviews(first: 100, after: %s) {
+        nodes {
+          id
+          body
+          state
+          submittedAt
+          url
+          author { login }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}`, repo.Owner, repo.Name, number, after)
+
+	var result struct {
+		Data struct {
+			Repository struct {
+				PullRequest struct {
+					Reviews ghReviewsPage `json:"reviews"`
+				} `json:"pullRequest"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+	if err := ghJSON(ctx, &result, "api", "graphql", "-f", "query="+query); err != nil {
+		return nil, err
+	}
+	return &result.Data.Repository.PullRequest.Reviews, nil
+}
+
+func fetchIssueCommentsPage(ctx context.Context, repo domain.RepoRef, number int, cursor string) (*ghIssueCommentsPage, error) {
+	after := "null"
+	if cursor != "" {
+		after = fmt.Sprintf("%q", cursor)
+	}
+
+	query := fmt.Sprintf(`query {
+  repository(owner: %q, name: %q) {
+    pullRequest(number: %d) {
+      comments(first: 100, after: %s) {
+        nodes {
+          id
+          body
+          createdAt
+          url
+          author { login }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}`, repo.Owner, repo.Name, number, after)
+
+	var result struct {
+		Data struct {
+			Repository struct {
+				PullRequest struct {
+					Comments ghIssueCommentsPage `json:"comments"`
+				} `json:"pullRequest"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+	if err := ghJSON(ctx, &result, "api", "graphql", "-f", "query="+query); err != nil {
+		return nil, err
+	}
+	return &result.Data.Repository.PullRequest.Comments, nil
+}
+
+func toDomainCommentThreads(threads []ghReviewThread) []domain.CommentThread {
+	out := make([]domain.CommentThread, 0, len(threads))
+	for _, thread := range threads {
+		if len(thread.Comments.Nodes) == 0 {
+			continue
 		}
-
-		if c.InReplyToID != nil {
-			// Reply to existing thread.
-			if thread, ok := threadMap[*c.InReplyToID]; ok {
-				thread.Comments = append(thread.Comments, comment)
-				continue
-			}
-		}
-
-		// New thread root.
 		line := 0
-		if c.Line != nil {
-			line = *c.Line
+		if thread.Line != nil {
+			line = *thread.Line
 		}
-		thread := domain.CommentThread{
-			ID:       fmt.Sprintf("%d", c.ID),
-			Path:     c.Path,
-			Line:     line,
-			Comments: []domain.Comment{comment},
-		}
-		threadMap[c.ID] = &thread
-		threadOrder = append(threadOrder, c.ID)
-	}
 
-	threads := make([]domain.CommentThread, 0, len(threadOrder))
-	for _, id := range threadOrder {
-		threads = append(threads, *threadMap[id])
+		comments := make([]domain.Comment, 0, len(thread.Comments.Nodes))
+		replyToID := ""
+		rootID := ""
+		for i, c := range thread.Comments.Nodes {
+			if i == 0 {
+				rootID = fmt.Sprintf("%d", c.DatabaseID)
+				replyToID = rootID
+			}
+			comments = append(comments, domain.Comment{
+				ID:        fmt.Sprintf("%d", c.DatabaseID),
+				Author:    c.Author.Login,
+				Body:      c.Body,
+				CreatedAt: c.CreatedAt,
+				URL:       c.URL,
+			})
+		}
+
+		out = append(out, domain.CommentThread{
+			ID:        rootID,
+			ThreadID:  thread.ID,
+			ReplyToID: replyToID,
+			Path:      thread.Path,
+			Line:      line,
+			Resolved:  thread.IsResolved,
+			Comments:  comments,
+		})
 	}
-	return threads
+	return out
+}
+
+func toDomainReviewItems(reviews []ghReviewSummary) []domain.DiscussionItem {
+	items := make([]domain.DiscussionItem, 0, len(reviews))
+	for _, review := range reviews {
+		if strings.TrimSpace(review.Body) == "" {
+			continue
+		}
+		items = append(items, domain.DiscussionItem{
+			ID:          review.ID,
+			Kind:        domain.DiscussionReview,
+			ReviewState: mapReviewState(review.State),
+			StateLabel:  strings.ToLower(strings.ReplaceAll(review.State, "_", " ")),
+			CreatedAt:   review.SubmittedAt,
+			URL:         review.URL,
+			Comments: []domain.Comment{{
+				ID:        review.ID,
+				Author:    review.Author.Login,
+				Body:      review.Body,
+				CreatedAt: review.SubmittedAt,
+				URL:       review.URL,
+			}},
+		})
+	}
+	return items
+}
+
+func toDomainIssueComments(comments []ghIssueComment) []domain.DiscussionItem {
+	items := make([]domain.DiscussionItem, 0, len(comments))
+	for _, comment := range comments {
+		if strings.TrimSpace(comment.Body) == "" {
+			continue
+		}
+		items = append(items, domain.DiscussionItem{
+			ID:        comment.ID,
+			Kind:      domain.DiscussionComment,
+			CreatedAt: comment.CreatedAt,
+			URL:       comment.URL,
+			Comments: []domain.Comment{{
+				ID:        comment.ID,
+				Author:    comment.Author.Login,
+				Body:      comment.Body,
+				CreatedAt: comment.CreatedAt,
+				URL:       comment.URL,
+			}},
+		})
+	}
+	return items
 }
 
 // toDomainPR converts a ghPR to a domain.PR.

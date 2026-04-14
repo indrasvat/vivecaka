@@ -42,6 +42,10 @@ func (m *mockInboxReader) GetComments(_ context.Context, _ domain.RepoRef, _ int
 	return nil, nil
 }
 
+func (m *mockInboxReader) GetDiscussion(_ context.Context, _ domain.RepoRef, _ int) ([]domain.DiscussionItem, error) {
+	return nil, nil
+}
+
 func (m *mockInboxReader) GetPRCount(_ context.Context, _ domain.RepoRef, _ domain.PRState) (int, error) {
 	return 0, nil
 }
