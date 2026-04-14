@@ -25,20 +25,24 @@ type cliOptions struct {
 	showVersion bool
 }
 
-func executeCLI(args []string, stdout, stderr io.Writer, getenv func(string) string) error {
-	opts, err := optionsFromEnv(getenv)
-	if err != nil {
-		return err
-	}
+type cliEnvDefaults struct {
+	debug   bool
+	repoRaw string
+}
 
-	cmd := newRootCommand(opts, stdout, stderr, runApp)
+func executeCLI(args []string, stdout, stderr io.Writer, getenv func(string) string) error {
+	envDefaults := optionsFromEnv(getenv)
+	cmd := newRootCommand(envDefaults, stdout, stderr, runApp)
 	cmd.SetArgs(args)
 	return cmd.Execute()
 }
 
-func newRootCommand(opts cliOptions, stdout, stderr io.Writer, run func(cliOptions) error) *cobra.Command {
+func newRootCommand(envDefaults cliEnvDefaults, stdout, stderr io.Writer, run func(cliOptions) error) *cobra.Command {
+	opts := cliOptions{
+		debug: envDefaults.debug,
+	}
 	theme := helpTheme()
-	helpRenderer := newCLIHelpRenderer(theme, opts)
+	helpRenderer := newCLIHelpRenderer(theme, opts, envDefaults)
 
 	cmd := &cobra.Command{
 		Use:           "vivecaka",
@@ -51,6 +55,14 @@ func newRootCommand(opts cliOptions, stdout, stderr io.Writer, run func(cliOptio
 			if opts.showVersion {
 				_, err := fmt.Fprint(cmd.OutOrStdout(), formatVersion())
 				return err
+			}
+			if opts.repo.Owner == "" && envDefaults.repoRaw != "" {
+				repo, err := parseRepoRef(envDefaults.repoRaw)
+				if err != nil {
+					return fmt.Errorf("invalid %s: %w", repoEnvVar, err)
+				}
+				opts.repo = repo
+				opts.repoSource = repoEnvVar
 			}
 			return run(opts)
 		},
@@ -82,21 +94,11 @@ func formatVersion() string {
 	return fmt.Sprintf("vivecaka %s\n  commit:  %s\n  built:   %s\n  go:      %s\n", version, commit, date, goVersion)
 }
 
-func optionsFromEnv(getenv func(string) string) (cliOptions, error) {
-	opts := cliOptions{
-		debug: parseBoolEnv(getenv(debugEnvVar)),
+func optionsFromEnv(getenv func(string) string) cliEnvDefaults {
+	return cliEnvDefaults{
+		debug:   parseBoolEnv(getenv(debugEnvVar)),
+		repoRaw: strings.TrimSpace(getenv(repoEnvVar)),
 	}
-
-	if repoValue := strings.TrimSpace(getenv(repoEnvVar)); repoValue != "" {
-		repo, err := parseRepoRef(repoValue)
-		if err != nil {
-			return cliOptions{}, fmt.Errorf("invalid %s: %w", repoEnvVar, err)
-		}
-		opts.repo = repo
-		opts.repoSource = repoEnvVar
-	}
-
-	return opts, nil
 }
 
 func parseBoolEnv(value string) bool {
@@ -160,12 +162,13 @@ func helpTheme() core.Theme {
 }
 
 type cliHelpRenderer struct {
-	theme core.Theme
-	opts  cliOptions
+	theme       core.Theme
+	opts        cliOptions
+	envDefaults cliEnvDefaults
 }
 
-func newCLIHelpRenderer(theme core.Theme, opts cliOptions) cliHelpRenderer {
-	return cliHelpRenderer{theme: theme, opts: opts}
+func newCLIHelpRenderer(theme core.Theme, opts cliOptions, envDefaults cliEnvDefaults) cliHelpRenderer {
+	return cliHelpRenderer{theme: theme, opts: opts, envDefaults: envDefaults}
 }
 
 func (r cliHelpRenderer) Render(cmd *cobra.Command) string {
@@ -227,6 +230,12 @@ func (r cliHelpRenderer) Render(cmd *cobra.Command) string {
 			"",
 			sectionStyle.Render("Resolved Defaults"),
 			renderRow("repo", valueStyle.Render(r.opts.repo.String())+" "+mutedStyle.Render("("+r.opts.repoSource+")")),
+		)
+	} else if r.envDefaults.repoRaw != "" {
+		usage = append(usage,
+			"",
+			sectionStyle.Render("Resolved Defaults"),
+			renderRow("repo", mutedStyle.Render(r.envDefaults.repoRaw)+" "+mutedStyle.Render("(from env; validated on run)")),
 		)
 	}
 	if r.opts.debug {

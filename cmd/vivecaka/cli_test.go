@@ -7,8 +7,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/indrasvat/vivecaka/internal/domain"
 )
 
 func TestParseRepoRef(t *testing.T) {
@@ -30,7 +28,7 @@ func TestParseRepoRefRejectsInvalidValue(t *testing.T) {
 func TestOptionsFromEnv(t *testing.T) {
 	t.Parallel()
 
-	opts, err := optionsFromEnv(func(key string) string {
+	opts := optionsFromEnv(func(key string) string {
 		switch key {
 		case debugEnvVar:
 			return "true"
@@ -40,29 +38,14 @@ func TestOptionsFromEnv(t *testing.T) {
 			return ""
 		}
 	})
-	require.NoError(t, err)
 	assert.True(t, opts.debug)
-	assert.Equal(t, "indrasvat", opts.repo.Owner)
-	assert.Equal(t, repoEnvVar, opts.repoSource)
-}
-
-func TestOptionsFromEnvRejectsInvalidRepo(t *testing.T) {
-	t.Parallel()
-
-	_, err := optionsFromEnv(func(key string) string {
-		if key == repoEnvVar {
-			return "bad"
-		}
-		return ""
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), repoEnvVar)
+	assert.Equal(t, "indrasvat/vivecaka", opts.repoRaw)
 }
 
 func TestRootCommandHelpDoesNotRunApp(t *testing.T) {
 	t.Parallel()
 
-	cmd, stdout, _, called, _ := newTestRootCommand(cliOptions{})
+	cmd, stdout, _, called, _ := newTestRootCommand(cliEnvDefaults{})
 	cmd.SetArgs([]string{"--help"})
 
 	require.NoError(t, cmd.Execute())
@@ -75,7 +58,7 @@ func TestRootCommandHelpDoesNotRunApp(t *testing.T) {
 func TestRootCommandVersionIgnoresFlagOrder(t *testing.T) {
 	t.Parallel()
 
-	cmd, stdout, _, called, _ := newTestRootCommand(cliOptions{})
+	cmd, stdout, _, called, _ := newTestRootCommand(cliEnvDefaults{})
 	cmd.SetArgs([]string{"--repo", "indrasvat/vivecaka", "--version"})
 
 	require.NoError(t, cmd.Execute())
@@ -87,7 +70,7 @@ func TestRootCommandVersionIgnoresFlagOrder(t *testing.T) {
 func TestRootCommandPassesParsedRepoToRun(t *testing.T) {
 	t.Parallel()
 
-	cmd, _, _, called, received := newTestRootCommand(cliOptions{})
+	cmd, _, _, called, received := newTestRootCommand(cliEnvDefaults{})
 	cmd.SetArgs([]string{"--repo", "indrasvat/vivecaka"})
 
 	require.NoError(t, cmd.Execute())
@@ -100,9 +83,8 @@ func TestRootCommandPassesParsedRepoToRun(t *testing.T) {
 func TestRootCommandFlagOverridesEnvRepo(t *testing.T) {
 	t.Parallel()
 
-	cmd, _, _, called, received := newTestRootCommand(cliOptions{
-		repo:       mustParseRepoRef(t, "owner/from-env"),
-		repoSource: repoEnvVar,
+	cmd, _, _, called, received := newTestRootCommand(cliEnvDefaults{
+		repoRaw: "owner/from-env",
 	})
 	cmd.SetArgs([]string{"--repo", "indrasvat/vivecaka"})
 
@@ -115,7 +97,7 @@ func TestRootCommandFlagOverridesEnvRepo(t *testing.T) {
 func TestRootCommandRejectsUnexpectedArgs(t *testing.T) {
 	t.Parallel()
 
-	cmd, _, stderr, called, _ := newTestRootCommand(cliOptions{})
+	cmd, _, stderr, called, _ := newTestRootCommand(cliEnvDefaults{})
 	cmd.SetArgs([]string{"unexpected"})
 
 	err := cmd.Execute()
@@ -125,23 +107,50 @@ func TestRootCommandRejectsUnexpectedArgs(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
-func newTestRootCommand(opts cliOptions) (*cobra.Command, *bytes.Buffer, *bytes.Buffer, *bool, *cliOptions) {
+func TestRootCommandAllowsVersionWithInvalidEnvRepo(t *testing.T) {
+	t.Parallel()
+
+	cmd, stdout, _, called, _ := newTestRootCommand(cliEnvDefaults{repoRaw: "bad"})
+	cmd.SetArgs([]string{"--version"})
+
+	require.NoError(t, cmd.Execute())
+	assert.False(t, *called)
+	assert.Contains(t, stdout.String(), "vivecaka ")
+}
+
+func TestRootCommandAllowsHelpWithInvalidEnvRepo(t *testing.T) {
+	t.Parallel()
+
+	cmd, stdout, _, called, _ := newTestRootCommand(cliEnvDefaults{repoRaw: "bad"})
+	cmd.SetArgs([]string{"--help"})
+
+	require.NoError(t, cmd.Execute())
+	assert.False(t, *called)
+	assert.Contains(t, stdout.String(), "Usage")
+}
+
+func TestRootCommandRejectsInvalidEnvRepoOnRun(t *testing.T) {
+	t.Parallel()
+
+	cmd, _, _, called, _ := newTestRootCommand(cliEnvDefaults{repoRaw: "bad"})
+	cmd.SetArgs([]string{})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.False(t, *called)
+	assert.Contains(t, err.Error(), repoEnvVar)
+}
+
+func newTestRootCommand(envDefaults cliEnvDefaults) (*cobra.Command, *bytes.Buffer, *bytes.Buffer, *bool, *cliOptions) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	called := false
 	var received cliOptions
 
-	cmd := newRootCommand(opts, &stdout, &stderr, func(parsed cliOptions) error {
+	cmd := newRootCommand(envDefaults, &stdout, &stderr, func(parsed cliOptions) error {
 		called = true
 		received = parsed
 		return nil
 	})
 	return cmd, &stdout, &stderr, &called, &received
-}
-
-func mustParseRepoRef(t *testing.T, value string) domain.RepoRef {
-	t.Helper()
-	repo, err := parseRepoRef(value)
-	require.NoError(t, err)
-	return repo
 }
