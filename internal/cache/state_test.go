@@ -26,6 +26,14 @@ func TestSaveAndLoadRepoState(t *testing.T) {
 		LastViewedPRs: map[int]time.Time{
 			42: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
+		PRReviews: map[int]PRReviewState{
+			42: {
+				LastReviewHeadSHA: "abc123",
+				ActiveScope:       "since_review",
+				LastReviewFiles:   map[string]string{"README.md": "digest-1"},
+				ViewedFiles:       map[string]FileReviewState{"README.md": {PatchDigest: "digest-1"}},
+			},
+		},
 	}
 
 	err := SaveRepoState(repo, state)
@@ -39,6 +47,8 @@ func TestSaveAndLoadRepoState(t *testing.T) {
 	assert.Equal(t, domain.CIPass, loaded.LastFilter.CI)
 	_, ok := loaded.LastViewedPRs[42]
 	assert.True(t, ok, "expected PR 42 in last viewed")
+	assert.Equal(t, "abc123", loaded.PRReviews[42].LastReviewHeadSHA)
+	assert.Equal(t, "since_review", loaded.PRReviews[42].ActiveScope)
 }
 
 func TestLoadRepoStateMissing(t *testing.T) {
@@ -74,4 +84,14 @@ func TestIsUnread(t *testing.T) {
 
 	// Never viewed → not unread (avoids flood on first use).
 	assert.False(t, state.IsUnread(99, time.Now()), "expected not unread for unknown PR")
+}
+
+func TestSetAndGetReviewState(t *testing.T) {
+	state := RepoState{}
+	review := PRReviewState{ActiveScope: "since_review"}
+
+	state.SetReviewState(42, review)
+
+	assert.Equal(t, review, state.ReviewState(42))
+	assert.Equal(t, PRReviewState{}, state.ReviewState(999))
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/indrasvat/vivecaka/internal/reviewprogress"
 )
 
 func testDetail() *domain.PRDetail {
@@ -118,6 +119,63 @@ func TestSetDetail(t *testing.T) {
 	assert.False(t, m.loading, "loading should be false after SetDetail")
 	assert.Equal(t, 42, m.detail.Number)
 	assert.Equal(t, 0, m.pendingNum)
+}
+
+func TestSelectedFilePathWithNilDetail(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+
+	assert.Equal(t, "", m.SelectedFilePath())
+}
+
+func TestDetailReviewContextRenders(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 24)
+	m.SetDetail(testDetail())
+	m.SetReviewContext(&reviewprogress.Context{
+		Scope:              reviewprogress.ScopeSinceReview,
+		ViewedFiles:        1,
+		TotalFiles:         2,
+		SinceReviewFiles:   1,
+		NextActionablePath: "plugin.go",
+	})
+
+	view := m.View()
+	assert.Contains(t, view, "Review")
+	assert.Contains(t, view, "Since Review")
+	assert.Contains(t, view, "plugin.go")
+}
+
+func TestReviewFileMarkerPrefersViewedState(t *testing.T) {
+	file := reviewprogress.File{
+		Path:               "plugin.go",
+		Viewed:             true,
+		ChangedSinceReview: true,
+		Actionable:         true,
+	}
+
+	assert.Equal(t, "✓", reviewFileMarker(file))
+	assert.Contains(t, reviewFileMeta(file, testStyles().Theme), "viewed")
+	assert.Contains(t, reviewFileMeta(file, testStyles().Theme), "changed since review")
+}
+
+func TestDetailViewFitsAssignedHeight(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 24)
+	m.SetDetail(testDetail())
+	m.SetReviewContext(&reviewprogress.Context{
+		Scope:            reviewprogress.ScopeSinceReview,
+		ViewedFiles:      1,
+		TotalFiles:       2,
+		SinceReviewFiles: 1,
+	})
+
+	view := m.View()
+	lines := strings.Split(view, "\n")
+
+	assert.Len(t, lines, 24)
+	assert.Contains(t, view, "#42")
+	assert.Contains(t, view, "Description")
+	assert.Contains(t, view, "Review")
 }
 
 func TestDetailStartLoading(t *testing.T) {
@@ -233,6 +291,37 @@ func TestDetailEnterOnFilesPane(t *testing.T) {
 	diff, ok := msg.(OpenDiffMsg)
 	require.True(t, ok, "expected OpenDiffMsg, got %T", msg)
 	assert.Equal(t, 42, diff.Number)
+}
+
+func TestDetailCycleScopeKey(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 24)
+	m.SetDetail(testDetail())
+
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	require.NotNil(t, cmd)
+	_, ok := cmd().(CycleReviewScopeMsg)
+	assert.True(t, ok)
+}
+
+func TestDetailToggleViewedKeyInFilesTab(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(120, 24)
+	m.SetDetail(testDetail())
+	m.tab = TabFiles
+	m.SetReviewContext(&reviewprogress.Context{
+		Scope: reviewprogress.ScopeAll,
+		Files: []reviewprogress.File{
+			{Path: "plugin.go", Additions: 120, Deletions: 5},
+			{Path: "registry.go", Additions: 80, Deletions: 0},
+		},
+	})
+
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'V'}})
+	require.NotNil(t, cmd)
+	msg, ok := cmd().(ToggleViewedFileMsg)
+	require.True(t, ok)
+	assert.Equal(t, "plugin.go", msg.Path)
 }
 
 func TestDetailEnterOnInfoPane(t *testing.T) {

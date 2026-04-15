@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/indrasvat/vivecaka/internal/reviewprogress"
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
@@ -35,6 +36,7 @@ type PRDetailModel struct {
 	commentCollapsed map[int]bool
 	commentCursor    int
 	pendingCollapseZ bool
+	reviewContext    *reviewprogress.Context
 }
 
 // DetailTab represents the active tab in detail view.
@@ -96,6 +98,15 @@ func (m *PRDetailModel) SetDetail(d *domain.PRDetail) {
 		}
 	}
 	m.commentCursor = 0
+	m.reviewContext = nil
+}
+
+// SetReviewContext updates the incremental review context shown in detail view.
+func (m *PRDetailModel) SetReviewContext(ctx *reviewprogress.Context) {
+	m.reviewContext = ctx
+	if m.tab == TabFiles {
+		m.clampFilesCursor()
+	}
 }
 
 // GetPRNumber returns the current PR number (0 if no PR loaded).
@@ -104,6 +115,11 @@ func (m *PRDetailModel) GetPRNumber() int {
 		return m.detail.Number
 	}
 	return m.pendingNum
+}
+
+// GetDetail returns the currently loaded PR detail.
+func (m *PRDetailModel) GetDetail() *domain.PRDetail {
+	return m.detail
 }
 
 // GetInlineComments returns the inline comment threads from the loaded PR detail.
@@ -120,6 +136,31 @@ func (m *PRDetailModel) GetBranch() domain.BranchInfo {
 		return domain.BranchInfo{}
 	}
 	return m.detail.Branch
+}
+
+// SelectedFilePath returns the currently selected file path in the Files tab.
+func (m *PRDetailModel) SelectedFilePath() string {
+	files := m.filteredFiles()
+	if len(files) == 0 {
+		return ""
+	}
+	m.clampFilesCursor()
+	return files[m.scrollY].Path
+}
+
+// JumpToFile selects a file in the Files tab by path.
+func (m *PRDetailModel) JumpToFile(path string) {
+	if path == "" {
+		return
+	}
+	files := m.filteredFiles()
+	for i, file := range files {
+		if file.Path == path {
+			m.tab = TabFiles
+			m.scrollY = i
+			return
+		}
+	}
 }
 
 // StartLoading shows loading state while detail is fetched.
@@ -188,16 +229,29 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		}
 	}
 
-	// Tab navigation
+	if cmd, handled := m.handleNavigationKey(msg); handled {
+		return cmd
+	}
+
+	// Number keys for direct tab access
+	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
+		if cmd, handled := m.handleRuneKey(msg.Runes[0]); handled {
+			return cmd
+		}
+	}
+	return nil
+}
+
+func (m *PRDetailModel) handleNavigationKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	switch {
 	case key.Matches(msg, m.keys.Tab):
 		m.tab = (m.tab + 1) % numTabs
 		m.scrollY = 0
-		return nil
+		return nil, true
 	case key.Matches(msg, m.keys.ShiftTab):
 		m.tab = (m.tab + numTabs - 1) % numTabs
 		m.scrollY = 0
-		return nil
+		return nil, true
 	case key.Matches(msg, m.keys.Down):
 		if m.tab == TabComments && m.detail != nil && len(m.detail.Discussion) > 0 {
 			if m.commentCursor < len(m.detail.Discussion)-1 {
@@ -206,7 +260,7 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		} else {
 			m.scrollY++
 		}
-		return nil
+		return nil, true
 	case key.Matches(msg, m.keys.Up):
 		if m.tab == TabComments && m.detail != nil && len(m.detail.Discussion) > 0 {
 			if m.commentCursor > 0 {
@@ -215,89 +269,108 @@ func (m *PRDetailModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		} else if m.scrollY > 0 {
 			m.scrollY--
 		}
-		return nil
+		return nil, true
 	case key.Matches(msg, m.keys.Enter):
 		if m.detail != nil && m.tab == TabFiles {
-			return func() tea.Msg { return OpenDiffMsg{Number: m.detail.Number} }
+			return func() tea.Msg { return OpenDiffMsg{Number: m.detail.Number} }, true
 		}
-		return nil
+		return nil, true
 	case key.Matches(msg, m.keys.Open):
 		if url := m.openURL(); url != "" {
-			return func() tea.Msg { return OpenBrowserMsg{URL: url} }
+			return func() tea.Msg { return OpenBrowserMsg{URL: url} }, true
 		}
-		return nil
+		return nil, true
 	case key.Matches(msg, m.keys.Checkout):
 		if m.detail != nil {
 			return func() tea.Msg {
 				return CheckoutPRMsg{Number: m.detail.Number, Branch: m.detail.Branch.Head}
-			}
+			}, true
 		}
-		return nil
+		return nil, true
+	default:
+		return nil, false
 	}
+}
 
-	// Number keys for direct tab access
-	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
-		r := msg.Runes[0]
-		switch r {
-		case '1':
-			m.tab = TabDescription
-			m.scrollY = 0
-			return nil
-		case '2':
-			m.tab = TabChecks
-			m.scrollY = 0
-			return nil
-		case '3':
-			m.tab = TabFiles
-			m.scrollY = 0
-			return nil
-		case '4':
-			m.tab = TabComments
-			m.scrollY = 0
-			return nil
-		case 'r':
-			if m.detail != nil {
-				if m.tab == TabComments {
-					if item, ok := m.currentDiscussionItem(); ok && item.Kind == domain.DiscussionInlineThread && item.ReplyToID != "" {
-						return func() tea.Msg {
-							return ReplyToThreadMsg{ThreadID: item.ReplyToID, Body: ""}
-						}
-					}
-				}
-				return func() tea.Msg { return StartReviewMsg{Number: m.detail.Number} }
-			}
-		case 'd':
-			if m.detail != nil {
-				return func() tea.Msg { return OpenDiffMsg{Number: m.detail.Number} }
-			}
-		case 'z':
-			if m.tab == TabComments {
-				m.pendingCollapseZ = true
-			}
-		case ' ':
-			if m.tab == TabComments {
-				m.toggleCommentCollapse()
-			}
-		case 'x':
-			if m.tab == TabComments {
-				if item, ok := m.currentDiscussionItem(); ok && item.Kind == domain.DiscussionInlineThread && !item.Resolved && item.ThreadID != "" {
-					return func() tea.Msg { return ResolveThreadMsg{ThreadID: item.ThreadID} }
-				}
-			}
-		case 'X':
-			if m.tab == TabComments {
-				if item, ok := m.currentDiscussionItem(); ok && item.Kind == domain.DiscussionInlineThread && item.Resolved && item.ThreadID != "" {
-					return func() tea.Msg { return UnresolveThreadMsg{ThreadID: item.ThreadID} }
-				}
-			}
-		case 'g':
-			m.scrollY = 0
-		case 'G':
-			// Scroll to bottom - will be clamped in render
-			m.scrollY = 9999
+func (m *PRDetailModel) handleRuneKey(r rune) (tea.Cmd, bool) {
+	switch r {
+	case '1':
+		m.tab = TabDescription
+		m.scrollY = 0
+		return nil, true
+	case '2':
+		m.tab = TabChecks
+		m.scrollY = 0
+		return nil, true
+	case '3':
+		m.tab = TabFiles
+		m.scrollY = 0
+		return nil, true
+	case '4':
+		m.tab = TabComments
+		m.scrollY = 0
+		return nil, true
+	case 'r':
+		if m.detail == nil {
+			return nil, true
 		}
+		if m.tab == TabComments {
+			if item, ok := m.currentDiscussionItem(); ok && item.Kind == domain.DiscussionInlineThread && item.ReplyToID != "" {
+				return func() tea.Msg {
+					return ReplyToThreadMsg{ThreadID: item.ReplyToID, Body: ""}
+				}, true
+			}
+		}
+		return func() tea.Msg { return StartReviewMsg{Number: m.detail.Number} }, true
+	case 'd':
+		if m.detail != nil {
+			return func() tea.Msg { return OpenDiffMsg{Number: m.detail.Number} }, true
+		}
+		return nil, true
+	case 'z':
+		if m.tab == TabComments {
+			m.pendingCollapseZ = true
+		}
+		return nil, true
+	case ' ':
+		if m.tab == TabComments {
+			m.toggleCommentCollapse()
+		}
+		return nil, true
+	case 'x':
+		if m.tab == TabComments {
+			if item, ok := m.currentDiscussionItem(); ok && item.Kind == domain.DiscussionInlineThread && !item.Resolved && item.ThreadID != "" {
+				return func() tea.Msg { return ResolveThreadMsg{ThreadID: item.ThreadID} }, true
+			}
+		}
+		return nil, true
+	case 'X':
+		if m.tab == TabComments {
+			if item, ok := m.currentDiscussionItem(); ok && item.Kind == domain.DiscussionInlineThread && item.Resolved && item.ThreadID != "" {
+				return func() tea.Msg { return UnresolveThreadMsg{ThreadID: item.ThreadID} }, true
+			}
+		}
+		return nil, true
+	case 'g':
+		m.scrollY = 0
+		return nil, true
+	case 'G':
+		m.scrollY = 9999
+		return nil, true
+	case 'i':
+		return func() tea.Msg { return CycleReviewScopeMsg{} }, true
+	case 'u':
+		return func() tea.Msg { return JumpNextReviewTargetMsg{CurrentPath: m.SelectedFilePath()} }, true
+	case 'V':
+		if m.tab == TabFiles {
+			if path := m.SelectedFilePath(); path != "" {
+				return func() tea.Msg { return ToggleViewedFileMsg{Path: path} }, true
+			}
+		}
+		return nil, true
+	default:
+		return nil, false
 	}
-	return nil
 }
 
 func (m *PRDetailModel) toggleCommentCollapse() {
@@ -384,16 +457,15 @@ func (m *PRDetailModel) View() string {
 			Render("No PR detail available")
 	}
 
-	// Layout:
-	// Line 1: PR header
-	// Line 2: Tab bar
-	// Line 3+: Content area (scrollable)
 	prHeader := m.renderPRHeader()
 	tabBar := m.renderTabBar()
-	contentHeight := max(1, m.height-2) // -2 for header and tab bar
+	contextBar := m.renderReviewContextBar()
+	chromeHeight := lipgloss.Height(prHeader) + lipgloss.Height(tabBar) + lipgloss.Height(contextBar)
+	contentHeight := max(1, m.height-chromeHeight)
 	content := m.renderTabContent(contentHeight)
 
-	return lipgloss.JoinVertical(lipgloss.Left, prHeader, tabBar, content)
+	view := lipgloss.JoinVertical(lipgloss.Left, prHeader, tabBar, contextBar, content)
+	return ensureExactHeight(view, m.height, m.width)
 }
 
 // renderPRHeader renders the PR title line.
@@ -489,14 +561,16 @@ func (m *PRDetailModel) renderTabBar() string {
 
 // renderTabContent renders the content for the active tab.
 func (m *PRDetailModel) renderTabContent(height int) string {
+	if m.tab == TabFiles {
+		return m.renderFilesTab(height)
+	}
+
 	var content string
 	switch m.tab {
 	case TabDescription:
 		content = m.renderDescriptionTab()
 	case TabChecks:
 		content = m.renderChecksTab()
-	case TabFiles:
-		content = m.renderFilesTab()
 	case TabComments:
 		return m.renderCommentsTab(height)
 	}
@@ -539,6 +613,54 @@ func (m *PRDetailModel) renderTabContent(height int) string {
 
 	// Ensure exact height with full-width padding
 	return ensureExactHeight(strings.Join(visibleLines, "\n"), height, m.width)
+}
+
+func (m *PRDetailModel) renderReviewContextBar() string {
+	t := m.styles.Theme
+	borderStyle := lipgloss.NewStyle().
+		BorderBottom(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(t.Border).
+		Width(m.width)
+
+	if m.reviewContext == nil {
+		return borderStyle.Render(lipgloss.NewStyle().Foreground(t.Muted).Render("  Review context loading..."))
+	}
+
+	leftParts := []string{
+		lipgloss.NewStyle().Foreground(t.Warning).Bold(true).Render("Review"),
+		lipgloss.NewStyle().Foreground(t.Fg).Render(fmt.Sprintf("%d/%d viewed", m.reviewContext.ViewedFiles, m.reviewContext.TotalFiles)),
+	}
+	if m.reviewContext.HasReviewBaseline {
+		leftParts = append(leftParts, lipgloss.NewStyle().Foreground(t.Warning).Render(fmt.Sprintf("Δ %d since review", m.reviewContext.SinceReviewFiles)))
+	} else {
+		leftParts = append(leftParts, lipgloss.NewStyle().Foreground(t.Muted).Render("no prior review baseline"))
+	}
+	left := "  " + strings.Join(leftParts, "   ")
+
+	scope := lipgloss.NewStyle().Foreground(t.Info).Render(m.reviewContext.Scope.Label())
+	right := fmt.Sprintf("scope: %s [i]", scope)
+	if next := m.reviewContext.NextActionablePath; next != "" && m.width >= 100 {
+		next = truncatePath(next, max(16, m.width/5))
+		right += lipgloss.NewStyle().Foreground(t.Muted).Render("   next: ") +
+			lipgloss.NewStyle().Foreground(t.Warning).Render(next) +
+			lipgloss.NewStyle().Foreground(t.Muted).Render("   u jump  V viewed")
+	} else {
+		right += lipgloss.NewStyle().Foreground(t.Muted).Render("   u jump  V viewed")
+	}
+
+	if lipgloss.Width(left)+lipgloss.Width(right) < m.width {
+		padding := strings.Repeat(" ", m.width-lipgloss.Width(left)-lipgloss.Width(right))
+		return borderStyle.Render(left + padding + right)
+	}
+
+	compact := fmt.Sprintf("  Review %d/%d viewed · Δ%d · %s [i]    u next  V viewed",
+		m.reviewContext.ViewedFiles,
+		m.reviewContext.TotalFiles,
+		m.reviewContext.SinceReviewFiles,
+		m.reviewContext.Scope.Label(),
+	)
+	return borderStyle.Render(truncateLine(compact, m.width))
 }
 
 // renderDescriptionTab renders the Description tab content.
@@ -712,48 +834,63 @@ func formatCheckSummary(checks []domain.Check) string {
 }
 
 // renderFilesTab renders the Files tab content.
-func (m *PRDetailModel) renderFilesTab() string {
+func (m *PRDetailModel) renderFilesTab(height int) string {
 	t := m.styles.Theme
 	d := m.detail
 
 	if len(d.Files) == 0 {
-		return lipgloss.NewStyle().Foreground(t.Muted).Italic(true).Render("No files changed.")
+		return ensureExactHeight(lipgloss.NewStyle().Foreground(t.Muted).Italic(true).Render("No files changed."), height, m.width)
 	}
+
+	files := m.filteredFiles()
+	if len(files) == 0 {
+		return ensureExactHeight(lipgloss.NewStyle().Foreground(t.Muted).Italic(true).Render("No files match the current scope."), height, m.width)
+	}
+
+	m.clampFilesCursor()
 
 	var lines []string
 
 	// Summary
 	var totalAdds, totalDels int
-	for _, f := range d.Files {
+	for _, f := range files {
 		totalAdds += f.Additions
 		totalDels += f.Deletions
 	}
 	summaryStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Fg)
 	addStyle := lipgloss.NewStyle().Foreground(t.Success)
 	delStyle := lipgloss.NewStyle().Foreground(t.Error)
-	lines = append(lines, summaryStyle.Render(fmt.Sprintf("%d files changed  %s  %s",
-		len(d.Files),
+	lines = append(lines, summaryStyle.Render(fmt.Sprintf("%d files shown  %s  %s",
+		len(files),
 		addStyle.Render(fmt.Sprintf("+%d", totalAdds)),
 		delStyle.Render(fmt.Sprintf("-%d", totalDels)),
 	)))
-	lines = append(lines, "") // Spacer
+	lines = append(lines, "")
 
-	// File list
-	maxPathLen := max(20, m.width-25)
-	for _, f := range d.Files {
-		path := f.Path
-		if len(path) > maxPathLen {
-			path = "..." + path[len(path)-maxPathLen+3:]
+	visibleHeight := max(1, height-len(lines))
+	start := 0
+	if m.scrollY >= visibleHeight {
+		start = m.scrollY - visibleHeight + 1
+	}
+	end := min(len(files), start+visibleHeight)
+
+	maxPathLen := max(20, m.width-32)
+	for idx := start; idx < end; idx++ {
+		f := files[idx]
+		cursor := "  "
+		if idx == m.scrollY {
+			cursor = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("▸ ")
 		}
-		line := fmt.Sprintf("  %s  %s %s",
-			path,
-			addStyle.Render(fmt.Sprintf("+%d", f.Additions)),
-			delStyle.Render(fmt.Sprintf("-%d", f.Deletions)),
-		)
-		lines = append(lines, line)
+		statusMarker := reviewFileMarker(f)
+		path := truncatePath(f.Path, maxPathLen)
+		right := fmt.Sprintf("%s %s", addStyle.Render(fmt.Sprintf("+%d", f.Additions)), delStyle.Render(fmt.Sprintf("-%d", f.Deletions)))
+		meta := reviewFileMeta(f, t)
+		line := fmt.Sprintf("%s%s %s", cursor, statusMarker, path)
+		gap := max(1, m.width-lipgloss.Width(line)-lipgloss.Width(right)-lipgloss.Width(meta)-2)
+		lines = append(lines, line+strings.Repeat(" ", gap)+right+"  "+meta)
 	}
 
-	return strings.Join(lines, "\n")
+	return ensureExactHeight(strings.Join(lines, "\n"), height, m.width)
 }
 
 // renderCommentsTab renders the Comments tab content.
@@ -1065,4 +1202,74 @@ func detailCIIcon(status domain.CIStatus) string {
 	default:
 		return "?"
 	}
+}
+
+func (m *PRDetailModel) filteredFiles() []reviewprogress.File {
+	if m.detail == nil {
+		return nil
+	}
+
+	if m.reviewContext == nil {
+		files := make([]reviewprogress.File, 0, len(m.detail.Files))
+		for _, file := range m.detail.Files {
+			files = append(files, reviewprogress.File{
+				Path:       file.Path,
+				Additions:  file.Additions,
+				Deletions:  file.Deletions,
+				Status:     file.Status,
+				Actionable: true,
+			})
+		}
+		return files
+	}
+
+	if m.reviewContext.Scope == reviewprogress.ScopeAll {
+		return m.reviewContext.Files
+	}
+
+	filtered := make([]reviewprogress.File, 0, len(m.reviewContext.Files))
+	for _, file := range m.reviewContext.Files {
+		if file.Actionable {
+			filtered = append(filtered, file)
+		}
+	}
+	return filtered
+}
+
+func (m *PRDetailModel) clampFilesCursor() {
+	files := m.filteredFiles()
+	if len(files) == 0 {
+		m.scrollY = 0
+		return
+	}
+	if m.scrollY < 0 {
+		m.scrollY = 0
+	}
+	if m.scrollY >= len(files) {
+		m.scrollY = len(files) - 1
+	}
+}
+
+func truncatePath(path string, maxLen int) string {
+	if maxLen <= 0 || len(path) <= maxLen {
+		return path
+	}
+	if maxLen <= 3 {
+		return path[:maxLen]
+	}
+	return "..." + path[len(path)-maxLen+3:]
+}
+
+func truncateLine(line string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if lipgloss.Width(line) <= maxWidth {
+		return line
+	}
+	runes := []rune(line)
+	if maxWidth <= 3 {
+		return string(runes[:maxWidth])
+	}
+	return string(runes[:maxWidth-3]) + "..."
 }

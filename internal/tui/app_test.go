@@ -3,12 +3,16 @@ package tui
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/indrasvat/vivecaka/internal/cache"
 	"github.com/indrasvat/vivecaka/internal/config"
 	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/indrasvat/vivecaka/internal/reviewprogress"
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 	"github.com/indrasvat/vivecaka/internal/tui/views"
 )
@@ -358,4 +362,107 @@ func TestAppThemeCycle(t *testing.T) {
 	a := updated.(*App)
 
 	assert.NotEqual(t, origTheme, a.theme.Name, "theme should have changed after T key")
+}
+
+func TestAppCycleReviewScope(t *testing.T) {
+	app := newTestApp()
+	app.currentReviewPR = 42
+	app.currentReviewContext = &reviewprogress.Context{
+		Scope: reviewprogress.ScopeSinceReview,
+		CurrentDigests: map[string]string{
+			"plugin.go": "digest-1",
+		},
+	}
+	app.prDetail.SetDetail(&domain.PRDetail{
+		PR:    domain.PR{Number: 42},
+		Files: []domain.FileChange{{Path: "plugin.go", Additions: 1, Status: "modified"}},
+	})
+	app.repoState.SetReviewState(42, cache.PRReviewState{ActiveScope: string(reviewprogress.ScopeSinceReview)})
+
+	updated, _ := app.Update(views.CycleReviewScopeMsg{})
+	a := updated.(*App)
+
+	assert.Equal(t, "unviewed", a.repoState.ReviewState(42).ActiveScope)
+}
+
+func TestAppToggleViewedFile(t *testing.T) {
+	app := newTestApp()
+	app.currentReviewPR = 42
+	app.currentReviewContext = &reviewprogress.Context{
+		Scope:   reviewprogress.ScopeAll,
+		HeadSHA: "head-1",
+		CurrentDigests: map[string]string{
+			"plugin.go": "digest-1",
+		},
+		Files: []reviewprogress.File{{Path: "plugin.go", PatchDigest: "digest-1"}},
+	}
+	app.prDetail.SetDetail(&domain.PRDetail{
+		PR:    domain.PR{Number: 42},
+		Files: []domain.FileChange{{Path: "plugin.go", Additions: 1, Status: "modified"}},
+	})
+
+	updated, _ := app.Update(views.ToggleViewedFileMsg{Path: "plugin.go"})
+	a := updated.(*App)
+
+	state := a.repoState.ReviewState(42)
+	assert.Equal(t, "digest-1", state.ViewedFiles["plugin.go"].PatchDigest)
+	assert.WithinDuration(t, time.Now(), state.ViewedFiles["plugin.go"].ViewedAt, time.Second)
+}
+
+func TestAppIgnoresStaleDiffLoaded(t *testing.T) {
+	app := newTestApp()
+	app.currentReviewPR = 42
+	app.currentReviewDiff = &domain.Diff{
+		Files: []domain.FileDiff{{Path: "current.go"}},
+	}
+	app.diffView.SetPRNumber(42)
+
+	updated, _ := app.Update(views.DiffLoadedMsg{
+		Number: 7,
+		Diff: &domain.Diff{
+			Files: []domain.FileDiff{{Path: "stale.go"}},
+		},
+	})
+	a := updated.(*App)
+
+	require.NotNil(t, a.currentReviewDiff)
+	assert.Equal(t, "current.go", a.currentReviewDiff.Files[0].Path)
+}
+
+func TestAppReviewSubmittedMarksOnlyVisibleScopeFilesViewed(t *testing.T) {
+	app := newTestApp()
+	app.currentReviewPR = 42
+	app.currentReviewContext = &reviewprogress.Context{
+		Scope:   reviewprogress.ScopeSinceReview,
+		HeadSHA: "head-2",
+		CurrentDigests: map[string]string{
+			"plugin.go":   "digest-1",
+			"registry.go": "digest-2",
+		},
+		Files: []reviewprogress.File{
+			{Path: "plugin.go", PatchDigest: "digest-1", Actionable: true},
+			{Path: "registry.go", PatchDigest: "digest-2", Viewed: true, Actionable: false},
+		},
+	}
+	app.prDetail.SetDetail(&domain.PRDetail{
+		PR: domain.PR{
+			Number: 42,
+			Branch: domain.BranchInfo{
+				HeadSHA: "head-2",
+			},
+		},
+		Files: []domain.FileChange{
+			{Path: "plugin.go", Additions: 3, Status: "modified"},
+			{Path: "registry.go", Additions: 1, Status: "modified"},
+		},
+	})
+
+	updated, _ := app.Update(views.ReviewSubmittedMsg{})
+	a := updated.(*App)
+
+	state := a.repoState.ReviewState(42)
+	assert.Equal(t, "head-2", state.LastReviewHeadSHA)
+	assert.Equal(t, 2, len(state.LastReviewFiles))
+	assert.Contains(t, state.ViewedFiles, "plugin.go")
+	assert.NotContains(t, state.ViewedFiles, "registry.go")
 }

@@ -102,6 +102,18 @@ Dependency chains:
 
 ---
 
+## Phase 15: Review Flow Acceleration (Planned)
+
+| # | Task File | Description | Status | Depends On |
+|---|-----------|-------------|--------|------------|
+| 031 | `docs/tasks/031-incremental-review-mode.md` | Incremental review mode: resume reviews from last visit/review with file-level progress | DONE | 018, 019, 020, 025, 028, 030 |
+
+Notes:
+- Task 031 is implemented on `feat/incremental-review-mode` and tracked in PR `#7`.
+- Review progress is now persisted per PR with last-visit and last-review baselines plus per-file viewed digests.
+- Visual automation now covers baseline, persistence flow, non-regression, width, theme, and live dogfood scenarios for incremental review surfaces.
+- Post-review hardening added correct viewed-marker rendering for `V`, stale diff-response guards keyed by PR number, and nil-safe file-list access during detail loading/failure states.
+
 ## Phases 0-13: Original Scaffolding (Complete)
 
 > These phases built the project structure, domain layer, adapters, use cases, and TUI scaffolding. An audit found that while the architecture is sound, many features were only partially implemented (views built as rendering shells, messages emitted but not handled, config fields defined but not read).

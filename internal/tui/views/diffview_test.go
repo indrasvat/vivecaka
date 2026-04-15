@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/indrasvat/vivecaka/internal/reviewprogress"
 )
 
 func testDiff() *domain.Diff {
@@ -107,6 +108,44 @@ func TestDiffLoadedMsg(t *testing.T) {
 
 	assert.False(t, m.loading, "should not be loading after DiffLoadedMsg")
 	assert.Equal(t, d, m.diff, "diff should be set from message")
+}
+
+func TestDiffReviewContextRenders(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 24)
+	m.SetDiff(testDiff())
+	m.SetReviewContext(&reviewprogress.Context{
+		Scope:       reviewprogress.ScopeSinceReview,
+		ViewedFiles: 1,
+		TotalFiles:  2,
+		Files: []reviewprogress.File{
+			{Path: "internal/plugin/registry.go", Viewed: false, ChangedSinceReview: true, Actionable: true},
+			{Path: "internal/plugin/hooks.go", Viewed: true},
+		},
+	})
+
+	view := m.View()
+	assert.Contains(t, view, "Since Review")
+	assert.Contains(t, view, "changed since review")
+}
+
+func TestDiffReviewContextShowsViewedChangedFile(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 24)
+	m.SetDiff(testDiff())
+	m.SetReviewContext(&reviewprogress.Context{
+		Scope:       reviewprogress.ScopeSinceReview,
+		ViewedFiles: 2,
+		TotalFiles:  2,
+		Files: []reviewprogress.File{
+			{Path: "internal/plugin/registry.go", Viewed: true, ChangedSinceReview: true, Actionable: true},
+			{Path: "internal/plugin/hooks.go", Viewed: true},
+		},
+	})
+
+	view := m.View()
+	assert.Contains(t, view, "changed since review · viewed")
+	assert.Equal(t, "✓", m.reviewMarkerForPath("internal/plugin/registry.go"))
 }
 
 func TestDiffScrollDown(t *testing.T) {
@@ -256,6 +295,29 @@ func TestDiffTopBottomNavigation(t *testing.T) {
 	G := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}}
 	m.Update(G)
 	assert.Equal(t, 3, m.scrollY)
+}
+
+func TestDiffToggleViewedKey(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 24)
+	m.SetDiff(testDiff())
+
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'V'}})
+	require.NotNil(t, cmd)
+	msg, ok := cmd().(ToggleViewedFileMsg)
+	require.True(t, ok)
+	assert.Equal(t, "internal/plugin/registry.go", msg.Path)
+}
+
+func TestDiffJumpNextActionableKey(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 24)
+	m.SetDiff(testDiff())
+
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	require.NotNil(t, cmd)
+	_, ok := cmd().(JumpNextReviewTargetMsg)
+	assert.True(t, ok)
 }
 
 func TestDiffCollapseToggle(t *testing.T) {

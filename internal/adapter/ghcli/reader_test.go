@@ -35,6 +35,8 @@ func TestToDomainPR_FromFixture(t *testing.T) {
 	assert.False(t, pr.Draft)
 	assert.Equal(t, "feat/auth", pr.Branch.Head)
 	assert.Equal(t, "main", pr.Branch.Base)
+	assert.Equal(t, "1111111111111111111111111111111111111111", pr.Branch.HeadSHA)
+	assert.Equal(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", pr.Branch.BaseSHA)
 	assert.Equal(t, []string{"enhancement", "security"}, pr.Labels)
 	assert.Equal(t, domain.CIPass, pr.CI)
 	assert.Equal(t, domain.ReviewApproved, pr.Review.State)
@@ -84,6 +86,11 @@ func TestToDomainPRDetail_FromFixture(t *testing.T) {
 	assert.Equal(t, "internal/auth/middleware.go", detail.Files[0].Path)
 	assert.Equal(t, 120, detail.Files[0].Additions)
 	assert.Equal(t, 5, detail.Files[0].Deletions)
+	assert.Equal(t, "modified", detail.Files[0].Status)
+	assert.Equal(t, "added", detail.Files[1].Status)
+	assert.Equal(t, "renamed", detail.Files[2].Status)
+	assert.Equal(t, "1111111111111111111111111111111111111111", detail.Branch.HeadSHA)
+	assert.Equal(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", detail.Branch.BaseSHA)
 
 	// Checks.
 	require.Len(t, detail.Checks, 2)

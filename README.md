@@ -33,6 +33,7 @@ curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh 
 ## Features
 
 - **Full PR workflow** — Browse, review, comment, and checkout PRs without leaving the terminal
+- **Incremental review mode** — Resume from last visit or last submitted review with per-file viewed state, scoped follow-up review, and jump-to-next navigation
 - **Rich diff viewer** — Unified and side-by-side modes, syntax highlighting, inline comments, file tree navigation
 - **Smart checkout** — Context-aware checkout with worktree support and known-repo auto-learning
 - **Multi-repo inbox** — Pin favorite repos, unified PR inbox with priority sorting across all of them
@@ -104,6 +105,9 @@ vivecaka --help
 | Key | Action |
 |-----|--------|
 | `1`–`4` | Switch tabs (Description, Checks, Files, Comments) |
+| `i` | Cycle review scope (`All` → `Since Visit` → `Since Review` → `Unviewed`) |
+| `u` | Jump to the next actionable review target |
+| `V` | Toggle viewed state for the selected file |
 | `d` | View diff |
 | `c` | Checkout branch |
 | `r` | Submit review |
@@ -114,6 +118,9 @@ vivecaka --help
 | Key | Action |
 |-----|--------|
 | `Tab` | Toggle file tree / diff pane focus |
+| `i` | Cycle review scope (`All` → `Since Visit` → `Since Review` → `Unviewed`) |
+| `u` | Jump to the next actionable review target |
+| `V` | Toggle viewed state for the current file |
 | `t` | Toggle unified / side-by-side |
 | `[`/`]` | Previous / next hunk |
 | `{`/`}` | Previous / next file |
@@ -122,6 +129,14 @@ vivecaka --help
 | `/` | Search in diff |
 | `za` | Collapse/expand file |
 | `gg`/`G` | Top / bottom |
+
+### Incremental Review Semantics
+
+- `All` shows every changed file in the PR.
+- `Since Visit` shows files changed since the last local visit, plus anything still unviewed at the current head.
+- `Since Review` shows files changed since the last submitted review baseline, plus anything still unviewed at the current head.
+- `Unviewed` shows only files not yet marked viewed for the current head revision.
+- `V` only changes your local viewed state. The `Since Review` baseline advances when you submit a review with `r`.
 
 ## Configuration
 

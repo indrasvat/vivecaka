@@ -75,6 +75,28 @@ func loadPRDetailCmd(uc *usecase.GetPRDetail, repo domain.RepoRef, number int) t
 	}
 }
 
+// loadReviewContextCmd fetches the current diff and derives incremental review state.
+func loadReviewContextCmd(
+	uc *usecase.GetReviewContext,
+	repo domain.RepoRef,
+	number int,
+	detail *domain.PRDetail,
+	state cache.PRReviewState,
+) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), diffTimeout)
+		defer cancel()
+
+		reviewCtx, diff, err := uc.Execute(ctx, repo, number, detail, state)
+		return views.ReviewContextLoadedMsg{
+			Number:  number,
+			Context: reviewCtx,
+			Diff:    diff,
+			Err:     err,
+		}
+	}
+}
+
 // loadDiffCmd fetches the diff for a PR with a timeout.
 func loadDiffCmd(reader domain.PRReader, repo domain.RepoRef, number int) tea.Cmd {
 	return func() tea.Msg {
@@ -94,7 +116,7 @@ func loadDiffCmd(reader domain.PRReader, repo domain.RepoRef, number int) tea.Cm
 			}
 			logging.Log.Debug("diff loaded", "pr", number, "elapsed", elapsed, "files", files)
 		}
-		return views.DiffLoadedMsg{Diff: diff, Err: err}
+		return views.DiffLoadedMsg{Number: number, Diff: diff, Err: err}
 	}
 }
 

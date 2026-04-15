@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/indrasvat/vivecaka/internal/cache"
 	"github.com/indrasvat/vivecaka/internal/domain"
 )
 
@@ -22,6 +23,7 @@ type mockReader struct {
 	comments    []domain.CommentThread
 	discussion  []domain.DiscussionItem
 	err         error
+	diffErr     error
 	checksErr   error
 	commentsErr error
 	discussErr  error
@@ -34,7 +36,7 @@ func (m *mockReader) GetPR(_ context.Context, _ domain.RepoRef, _ int) (*domain.
 	return m.detail, m.err
 }
 func (m *mockReader) GetDiff(_ context.Context, _ domain.RepoRef, _ int) (*domain.Diff, error) {
-	return m.diff, m.err
+	return m.diff, m.diffErr
 }
 func (m *mockReader) GetChecks(_ context.Context, _ domain.RepoRef, _ int) ([]domain.Check, error) {
 	return m.checks, m.checksErr
@@ -155,6 +157,52 @@ func TestGetPRDetailMainFailure(t *testing.T) {
 
 	_, err := uc.Execute(context.Background(), testRepo, 42)
 	require.Error(t, err, "Execute() should return error when main PR fetch fails")
+}
+
+func TestGetReviewContextExecute(t *testing.T) {
+	reader := &mockReader{
+		diff: &domain.Diff{Files: []domain.FileDiff{{
+			Path: "README.md",
+			Hunks: []domain.Hunk{{
+				Header: "@@ -1 +1 @@",
+				Lines:  []domain.DiffLine{{Type: domain.DiffAdd, Content: "hello", NewNum: 1}},
+			}},
+		}}},
+	}
+	uc := NewGetReviewContext(reader)
+
+	detail := &domain.PRDetail{
+		PR: domain.PR{Branch: domain.BranchInfo{HeadSHA: "head-1"}},
+		Files: []domain.FileChange{
+			{Path: "README.md", Additions: 1, Deletions: 0, Status: "modified"},
+		},
+	}
+
+	ctx, diff, err := uc.Execute(context.Background(), testRepo, 42, detail, cache.PRReviewState{})
+	require.NoError(t, err)
+	require.NotNil(t, ctx)
+	require.NotNil(t, diff)
+	assert.Equal(t, 1, ctx.TotalFiles)
+	assert.False(t, ctx.DegradedDigestSource)
+}
+
+func TestGetReviewContextFallsBackWhenDiffFails(t *testing.T) {
+	reader := &mockReader{diffErr: errors.New("diff failed")}
+	uc := NewGetReviewContext(reader)
+
+	detail := &domain.PRDetail{
+		PR: domain.PR{Branch: domain.BranchInfo{HeadSHA: "head-1"}},
+		Files: []domain.FileChange{
+			{Path: "README.md", Additions: 1, Deletions: 0, Status: "modified"},
+		},
+	}
+
+	ctx, diff, err := uc.Execute(context.Background(), testRepo, 42, detail, cache.PRReviewState{})
+	require.NoError(t, err)
+	assert.Nil(t, diff)
+	require.NotNil(t, ctx)
+	assert.True(t, ctx.DegradedDigestSource)
+	assert.NotEmpty(t, ctx.CurrentDigests["README.md"])
 }
 
 // --- ReviewPR tests ---
