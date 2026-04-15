@@ -1,6 +1,9 @@
 package views
 
-import "github.com/indrasvat/vivecaka/internal/domain"
+import (
+	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/indrasvat/vivecaka/internal/reviewprogress"
+)
 
 // RepoDetectedMsg is sent when the current repo is identified from git remote.
 type RepoDetectedMsg struct {
@@ -87,4 +90,25 @@ type ValidateRepoRequestMsg struct {
 type RepoValidatedMsg struct {
 	Repo domain.RepoRef
 	Err  error
+}
+
+// ReviewContextLoadedMsg is sent when incremental review state is derived for a PR.
+type ReviewContextLoadedMsg struct {
+	Number  int
+	Context *reviewprogress.Context
+	Diff    *domain.Diff
+	Err     error
+}
+
+// CycleReviewScopeMsg asks the app to advance the active incremental review scope.
+type CycleReviewScopeMsg struct{}
+
+// JumpNextReviewTargetMsg asks the app to focus the next actionable file.
+type JumpNextReviewTargetMsg struct {
+	CurrentPath string
+}
+
+// ToggleViewedFileMsg asks the app to toggle viewed state for a file at the current revision.
+type ToggleViewedFileMsg struct {
+	Path string
 }

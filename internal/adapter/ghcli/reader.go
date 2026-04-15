@@ -12,11 +12,11 @@ import (
 // JSON field lists for gh pr list/view --json.
 const (
 	// prListFields is for the initial load (single page). Includes statusCheckRollup for CI status.
-	prListFields = "number,title,author,state,isDraft,headRefName,baseRefName,labels,statusCheckRollup,reviewDecision,updatedAt,createdAt,url"
+	prListFields = "number,title,author,state,isDraft,headRefName,baseRefName,headRefOid,baseRefOid,labels,statusCheckRollup,reviewDecision,updatedAt,createdAt,url"
 	// prListFieldsLight is for pagination (loading more PRs). Excludes statusCheckRollup to avoid API timeouts.
 	// CI status will show as "none" for paginated items until detail view is opened.
-	prListFieldsLight = "number,title,author,state,isDraft,headRefName,baseRefName,labels,reviewDecision,updatedAt,createdAt,url"
-	prViewFields      = "number,title,author,state,isDraft,headRefName,baseRefName,labels,statusCheckRollup,reviewDecision,updatedAt,createdAt,url,body,assignees,reviewRequests,latestReviews,files"
+	prListFieldsLight = "number,title,author,state,isDraft,headRefName,baseRefName,headRefOid,baseRefOid,labels,reviewDecision,updatedAt,createdAt,url"
+	prViewFields      = "number,title,author,state,isDraft,headRefName,baseRefName,headRefOid,baseRefOid,labels,statusCheckRollup,reviewDecision,updatedAt,createdAt,url,body,assignees,reviewRequests,latestReviews,files"
 	checkFields       = "name,status,conclusion,startedAt,completedAt,detailsUrl"
 )
 
@@ -29,6 +29,8 @@ type ghPR struct {
 	IsDraft           bool          `json:"isDraft"`
 	HeadRefName       string        `json:"headRefName"`
 	BaseRefName       string        `json:"baseRefName"`
+	HeadRefOID        string        `json:"headRefOid"`
+	BaseRefOID        string        `json:"baseRefOid"`
 	Labels            []ghLabel     `json:"labels"`
 	StatusCheckRollup []ghCheck     `json:"statusCheckRollup"`
 	ReviewDecision    string        `json:"reviewDecision"`
@@ -71,9 +73,10 @@ type ghReview struct {
 }
 
 type ghFile struct {
-	Path      string `json:"path"`
-	Additions int    `json:"additions"`
-	Deletions int    `json:"deletions"`
+	Path       string `json:"path"`
+	Additions  int    `json:"additions"`
+	Deletions  int    `json:"deletions"`
+	ChangeType string `json:"changeType"`
 }
 
 // GetPRCount fetches the total number of open PRs for a repo via GraphQL.
@@ -645,8 +648,10 @@ func toDomainPR(g ghPR) domain.PR {
 		State:  mapState(g.State),
 		Draft:  g.IsDraft,
 		Branch: domain.BranchInfo{
-			Head: g.HeadRefName,
-			Base: g.BaseRefName,
+			Head:    g.HeadRefName,
+			Base:    g.BaseRefName,
+			HeadSHA: g.HeadRefOID,
+			BaseSHA: g.BaseRefOID,
 		},
 		Labels:         labels,
 		CI:             aggregateCI(g.StatusCheckRollup),
@@ -691,7 +696,7 @@ func toDomainPRDetail(g ghPR) domain.PRDetail {
 			Path:      f.Path,
 			Additions: f.Additions,
 			Deletions: f.Deletions,
-			Status:    "modified",
+			Status:    mapFileStatus(f.ChangeType),
 		}
 	}
 
@@ -707,6 +712,19 @@ func toDomainPRDetail(g ghPR) domain.PRDetail {
 		Reviewers: reviewers,
 		Checks:    checks,
 		Files:     files,
+	}
+}
+
+func mapFileStatus(changeType string) string {
+	switch changeType {
+	case "ADDED":
+		return "added"
+	case "DELETED", "REMOVED":
+		return "removed"
+	case "RENAMED":
+		return "renamed"
+	default:
+		return "modified"
 	}
 }
 

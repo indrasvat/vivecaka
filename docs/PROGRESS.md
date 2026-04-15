@@ -102,6 +102,17 @@ Dependency chains:
 
 ---
 
+## Phase 15: Review Flow Acceleration (Planned)
+
+| # | Task File | Description | Status | Depends On |
+|---|-----------|-------------|--------|------------|
+| 031 | `docs/tasks/031-incremental-review-mode.md` | Incremental review mode: resume reviews from last visit/review with file-level progress | TODO | 018, 019, 020, 025, 028, 030 |
+
+Planning notes:
+- Task 031 is the next major feature proposal after Phase 14 completion.
+- The implementation PRD lives in `docs/tasks/031-incremental-review-mode.md`.
+- Baseline visual automation must exist before feature work begins so the current detail/files/diff layouts can be regression-tested during implementation.
+
 ## Phases 0-13: Original Scaffolding (Complete)
 
 > These phases built the project structure, domain layer, adapters, use cases, and TUI scaffolding. An audit found that while the architecture is sound, many features were only partially implemented (views built as rendering shells, messages emitted but not handled, config fields defined but not read).

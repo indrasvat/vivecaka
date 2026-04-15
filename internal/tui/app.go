@@ -16,6 +16,7 @@ import (
 	"github.com/indrasvat/vivecaka/internal/config"
 	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/indrasvat/vivecaka/internal/repolocator"
+	"github.com/indrasvat/vivecaka/internal/reviewprogress"
 	"github.com/indrasvat/vivecaka/internal/tui/components"
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 	"github.com/indrasvat/vivecaka/internal/tui/views"
@@ -98,13 +99,14 @@ type App struct {
 	smartCheckout *usecase.SmartCheckout
 
 	// Use cases
-	listPRs       *usecase.ListPRs
-	getPRDetail   *usecase.GetPRDetail
-	reviewPR      *usecase.ReviewPR
-	checkoutPR    *usecase.CheckoutPR
-	addComment    *usecase.AddComment
-	resolveThread *usecase.ResolveThread
-	getInboxPRs   *usecase.GetInboxPRs
+	listPRs          *usecase.ListPRs
+	getPRDetail      *usecase.GetPRDetail
+	getReviewContext *usecase.GetReviewContext
+	reviewPR         *usecase.ReviewPR
+	checkoutPR       *usecase.CheckoutPR
+	addComment       *usecase.AddComment
+	resolveThread    *usecase.ResolveThread
+	getInboxPRs      *usecase.GetInboxPRs
 
 	// View models
 	prList       views.PRListModel
@@ -125,7 +127,10 @@ type App struct {
 	filterOpts domain.ListOpts
 
 	// Per-repo state persistence
-	repoState cache.RepoState
+	repoState            cache.RepoState
+	currentReviewContext *reviewprogress.Context
+	currentReviewDiff    *domain.Diff
+	currentReviewPR      int
 
 	// Components
 	banner *components.Banner
@@ -191,6 +196,7 @@ func New(cfg *config.Config, opts ...Option) *App {
 	if a.reader != nil {
 		a.listPRs = usecase.NewListPRs(a.reader)
 		a.getPRDetail = usecase.NewGetPRDetail(a.reader)
+		a.getReviewContext = usecase.NewGetReviewContext(a.reader)
 		a.getInboxPRs = usecase.NewGetInboxPRs(a.reader)
 	}
 	if a.reviewer != nil {
@@ -321,305 +327,20 @@ func (a *App) handleRefreshTick() (tea.Model, tea.Cmd) {
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	switch msg := msg.(type) {
+	switch typedMsg := msg.(type) {
 	case tea.WindowSizeMsg:
-		return a.handleWindowSize(msg)
+		return a.handleWindowSize(typedMsg)
 
 	case tea.KeyMsg:
-		return a.handleKey(msg)
+		return a.handleKey(typedMsg)
 
 	case viewReadyMsg:
 		a.view = core.ViewPRList
 		return a, nil
+	}
 
-	case views.RepoDetectedMsg:
-		return a.handleRepoDetected(msg)
-
-	case views.UserDetectedMsg:
-		return a.handleUserDetected(msg)
-
-	case cachedPRsLoadedMsg:
-		if len(msg.PRs) > 0 && a.prList.IsLoading() {
-			// Show cached data immediately while fresh load is in progress.
-			a.prList.SetPRs(msg.PRs)
-			a.header.SetPRCount(a.prList.TotalPRs())
-		}
-		return a, nil
-
-	case views.BranchDetectedMsg:
-		if msg.Err == nil && msg.Branch != "" {
-			a.prList.SetCurrentBranch(msg.Branch)
-			a.header.SetBranch(msg.Branch)
-		}
-		return a, nil
-
-	case views.PRsLoadedMsg:
-		return a.handlePRsLoaded(msg)
-
-	case views.LoadMorePRsMsg:
-		return a.handleLoadMorePRs(msg)
-
-	case views.MorePRsLoadedMsg:
-		return a.handleMorePRsLoaded(msg)
-
-	case views.PRCountLoadedMsg:
-		return a.handlePRCountLoaded(msg)
-
-	case views.OpenPRMsg:
-		return a.handleOpenPR(msg)
-
-	case views.PRDetailLoadedMsg:
-		return a.handlePRDetailLoaded(msg)
-
-	case views.OpenDiffMsg:
-		return a.handleOpenDiff(msg)
-
-	case views.OpenExternalDiffMsg:
-		return a.handleOpenExternalDiff(msg)
-
-	case views.OpenFilterMsg:
-		a.prevView = a.view
-		a.view = core.ViewFilter
-		a.filterPanel.SetOpts(a.filterOpts)
-		return a, nil
-
-	case views.ApplyFilterMsg:
-		a.filterOpts = msg.Opts
-		a.prList.SetFilter(msg.Opts)
-		a.header.SetFilter(a.prList.FilterLabel())
-		a.repoState.LastFilter = msg.Opts
-		a.saveRepoState()
-		a.view = a.prevView
-		if a.listPRs != nil && a.repo.Owner != "" {
-			return a, loadPRsCmd(a.listPRs, a.repo, msg.Opts)
-		}
-		return a, nil
-
-	case views.CloseFilterMsg:
-		a.view = a.prevView
-		return a, nil
-
-	case views.DiffLoadedMsg:
-		// Always forward to diff view — it handles both error and success states.
-		cmd := a.diffView.Update(msg)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		return a, tea.Batch(cmds...)
-
-	case views.AddInlineCommentMsg:
-		return a.handleAddInlineComment(msg)
-
-	case views.InlineCommentAddedMsg:
-		return a.handleInlineCommentAdded(msg)
-
-	case views.StartReviewMsg:
-		a.prevView = a.view
-		a.view = core.ViewReview
-		a.reviewForm.SetPRNumber(msg.Number)
-		return a, a.reviewForm.Init()
-
-	case views.SubmitReviewMsg:
-		return a.handleSubmitReview(msg)
-
-	case views.ReviewSubmittedMsg:
-		return a.handleReviewSubmitted(msg)
-
-	case views.CloseReviewMsg:
-		a.view = core.ViewPRDetail
-		return a, nil
-
-	case views.CheckoutPRMsg:
-		return a.handleSmartCheckout(msg)
-
-	case views.ConfirmResultMsg:
-		return a.handleConfirmResult(msg)
-
-	case views.CloseConfirmMsg:
-		a.view = a.prevView
-		return a, nil
-
-	case views.CheckoutDoneMsg:
-		return a.handleCheckoutDone(msg)
-
-	case views.CheckoutStrategyChosenMsg:
-		return a.handleCheckoutStrategyChosen(msg)
-
-	case views.CloneDoneMsg:
-		return a.handleCloneDone(msg)
-
-	case views.SmartCheckoutDoneMsg:
-		return a.handleSmartCheckoutDone(msg)
-
-	case views.CheckoutDialogCloseMsg:
-		a.view = a.prevView
-		return a, nil
-
-	case views.CopyCdCommandMsg:
-		a.view = a.prevView
-		if err := copyToClipboard("cd " + msg.Path); err != nil {
-			cmd := a.toasts.Add(
-				fmt.Sprintf("Copy failed: %v", err),
-				domain.ToastError, 5*time.Second,
-			)
-			return a, cmd
-		}
-		cmd := a.toasts.Add("Copied cd command", domain.ToastSuccess, 3*time.Second)
+	if handled, cmd := a.handleAppMessage(msg); handled {
 		return a, cmd
-
-	case views.CopyURLMsg:
-		if err := copyToClipboard(msg.URL); err != nil {
-			cmd := a.toasts.Add(
-				fmt.Sprintf("Copy failed: %v", err),
-				domain.ToastError, 5*time.Second,
-			)
-			return a, cmd
-		}
-		cmd := a.toasts.Add("Copied PR URL", domain.ToastSuccess, 3*time.Second)
-		return a, cmd
-
-	case views.OpenBrowserMsg:
-		if err := openBrowser(msg.URL); err != nil {
-			cmd := a.toasts.Add(
-				fmt.Sprintf("Open browser failed: %v", err),
-				domain.ToastError, 5*time.Second,
-			)
-			return a, cmd
-		}
-		return a, nil
-
-	case views.BatchCopyURLsMsg:
-		combined := strings.Join(msg.URLs, "\n")
-		if err := copyToClipboard(combined); err != nil {
-			cmd := a.toasts.Add(
-				fmt.Sprintf("Copy failed: %v", err),
-				domain.ToastError, 5*time.Second,
-			)
-			return a, cmd
-		}
-		cmd := a.toasts.Add(
-			fmt.Sprintf("Copied %d PR URLs", len(msg.URLs)),
-			domain.ToastSuccess, 3*time.Second,
-		)
-		return a, cmd
-
-	case views.BatchOpenBrowserMsg:
-		for _, url := range msg.URLs {
-			if err := openBrowser(url); err != nil {
-				cmd := a.toasts.Add(
-					fmt.Sprintf("Open browser failed: %v", err),
-					domain.ToastError, 5*time.Second,
-				)
-				return a, cmd
-			}
-		}
-		cmd := a.toasts.Add(
-			fmt.Sprintf("Opened %d PRs in browser", len(msg.URLs)),
-			domain.ToastSuccess, 3*time.Second,
-		)
-		return a, cmd
-
-	case views.PRListFilterMsg:
-		a.header.SetFilter(msg.Label)
-		return a, nil
-
-	case views.SwitchRepoMsg:
-		return a.handleSwitchRepo(msg)
-
-	case views.CloseRepoSwitcherMsg:
-		a.view = a.prevView
-		return a, nil
-
-	case views.ReposDiscoveredMsg:
-		return a.handleReposDiscovered(msg)
-
-	case views.ToggleFavoriteMsg:
-		return a.handleToggleFavorite(msg)
-
-	case views.ValidateRepoRequestMsg:
-		return a, validateRepoCmd(msg.Repo)
-
-	case views.RepoValidatedMsg:
-		return a.handleRepoValidated(msg)
-
-	case views.CloseHelpMsg:
-		a.view = a.prevView
-		return a, nil
-
-	case views.OpenInboxPRMsg:
-		return a.handleOpenInboxPR(msg)
-
-	case views.CloseInboxMsg:
-		a.view = core.ViewPRList
-		return a, nil
-
-	case views.ResolveThreadMsg:
-		return a.handleResolveThread(msg)
-
-	case views.UnresolveThreadMsg:
-		// TODO: Implement unresolve (needs API support)
-		cmd := a.toasts.Add("Unresolve not implemented yet", domain.ToastInfo, 3*time.Second)
-		return a, cmd
-
-	case views.ReplyToThreadMsg:
-		// TODO: Implement reply (needs text input UI)
-		cmd := a.toasts.Add("Reply not implemented yet", domain.ToastInfo, 3*time.Second)
-		return a, cmd
-
-	case resolveThreadDoneMsg:
-		return a.handleResolveThreadDone(msg)
-
-	case views.TutorialDoneMsg:
-		if err := views.MarkTutorialDone(); err != nil {
-			cmd := a.toasts.Add(
-				fmt.Sprintf("Failed to persist tutorial state: %v", err),
-				domain.ToastError, 5*time.Second,
-			)
-			return a, cmd
-		}
-		return a, nil
-
-	case components.DismissToastMsg:
-		a.toasts.Update(msg)
-		return a, nil
-
-	case components.BannerGlyphTickMsg:
-		cmd := a.banner.Update(msg)
-		return a, cmd
-
-	case components.BannerDismissMsg:
-		a.banner.Update(msg)
-		if a.view == core.ViewBanner {
-			// If PRs already loaded, go directly to PR list; otherwise loading
-			if a.prList.HasPRs() {
-				a.view = core.ViewPRList
-			} else {
-				a.view = core.ViewLoading
-			}
-		}
-		// Force a full screen redraw to clear banner remnants
-		// The tea.ClearScreen command clears the alt screen buffer
-		return a, tea.Batch(tea.ClearScreen, a.loadingTick())
-
-	case loadingTickMsg:
-		if a.view == core.ViewLoading {
-			a.loadingFrame++
-			return a, a.loadingTick()
-		}
-		return a, nil
-
-	case refreshTickMsg:
-		return a.handleRefreshTick()
-
-	case externalDiffDoneMsg:
-		if msg.Err != nil {
-			cmd := a.toasts.Add(
-				fmt.Sprintf("External diff tool error: %v", msg.Err),
-				domain.ToastError, 5*time.Second,
-			)
-			return a, cmd
-		}
-		return a, nil
 	}
 
 	// Dispatch to active view model for unhandled messages.
@@ -628,6 +349,213 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 	return a, tea.Batch(cmds...)
+}
+
+func (a *App) handleAppMessage(msg tea.Msg) (bool, tea.Cmd) {
+	switch typedMsg := msg.(type) {
+	case views.RepoDetectedMsg:
+		_, cmd := a.handleRepoDetected(typedMsg)
+		return true, cmd
+	case views.UserDetectedMsg:
+		_, cmd := a.handleUserDetected(typedMsg)
+		return true, cmd
+	case cachedPRsLoadedMsg:
+		if len(typedMsg.PRs) > 0 && a.prList.IsLoading() {
+			a.prList.SetPRs(typedMsg.PRs)
+			a.header.SetPRCount(a.prList.TotalPRs())
+		}
+		return true, nil
+	case views.BranchDetectedMsg:
+		if typedMsg.Err == nil && typedMsg.Branch != "" {
+			a.prList.SetCurrentBranch(typedMsg.Branch)
+			a.header.SetBranch(typedMsg.Branch)
+		}
+		return true, nil
+	case views.PRsLoadedMsg:
+		_, cmd := a.handlePRsLoaded(typedMsg)
+		return true, cmd
+	case views.LoadMorePRsMsg:
+		_, cmd := a.handleLoadMorePRs(typedMsg)
+		return true, cmd
+	case views.MorePRsLoadedMsg:
+		_, cmd := a.handleMorePRsLoaded(typedMsg)
+		return true, cmd
+	case views.PRCountLoadedMsg:
+		a.handlePRCountLoaded(typedMsg)
+		return true, nil
+	case views.OpenPRMsg:
+		_, cmd := a.handleOpenPR(typedMsg)
+		return true, cmd
+	case views.PRDetailLoadedMsg:
+		_, cmd := a.handlePRDetailLoaded(typedMsg)
+		return true, cmd
+	case views.ReviewContextLoadedMsg:
+		a.handleReviewContextLoaded(typedMsg)
+		return true, nil
+	case views.OpenDiffMsg:
+		_, cmd := a.handleOpenDiff(typedMsg)
+		return true, cmd
+	case views.OpenExternalDiffMsg:
+		_, cmd := a.handleOpenExternalDiff(typedMsg)
+		return true, cmd
+	case views.OpenFilterMsg:
+		a.prevView = a.view
+		a.view = core.ViewFilter
+		a.filterPanel.SetOpts(a.filterOpts)
+		return true, nil
+	case views.ApplyFilterMsg:
+		a.filterOpts = typedMsg.Opts
+		a.prList.SetFilter(typedMsg.Opts)
+		a.header.SetFilter(a.prList.FilterLabel())
+		a.repoState.LastFilter = typedMsg.Opts
+		a.saveRepoState()
+		a.view = a.prevView
+		if a.listPRs != nil && a.repo.Owner != "" {
+			return true, loadPRsCmd(a.listPRs, a.repo, typedMsg.Opts)
+		}
+		return true, nil
+	case views.CloseFilterMsg:
+		a.view = a.prevView
+		return true, nil
+	case views.DiffLoadedMsg:
+		return true, a.handleDiffLoaded(typedMsg)
+	case views.AddInlineCommentMsg:
+		_, cmd := a.handleAddInlineComment(typedMsg)
+		return true, cmd
+	case views.InlineCommentAddedMsg:
+		_, cmd := a.handleInlineCommentAdded(typedMsg)
+		return true, cmd
+	case views.StartReviewMsg:
+		a.prevView = a.view
+		a.view = core.ViewReview
+		a.reviewForm.SetPRNumber(typedMsg.Number)
+		return true, a.reviewForm.Init()
+	case views.SubmitReviewMsg:
+		_, cmd := a.handleSubmitReview(typedMsg)
+		return true, cmd
+	case views.ReviewSubmittedMsg:
+		_, cmd := a.handleReviewSubmitted(typedMsg)
+		return true, cmd
+	case views.CycleReviewScopeMsg:
+		a.handleCycleReviewScope()
+		return true, nil
+	case views.JumpNextReviewTargetMsg:
+		a.handleJumpNextReviewTarget(typedMsg)
+		return true, nil
+	case views.ToggleViewedFileMsg:
+		a.handleToggleViewedFile(typedMsg)
+		return true, nil
+	case views.CloseReviewMsg:
+		a.view = core.ViewPRDetail
+		return true, nil
+	case views.CheckoutPRMsg:
+		_, cmd := a.handleSmartCheckout(typedMsg)
+		return true, cmd
+	case views.ConfirmResultMsg:
+		_, cmd := a.handleConfirmResult(typedMsg)
+		return true, cmd
+	case views.CloseConfirmMsg:
+		a.view = a.prevView
+		return true, nil
+	case views.CheckoutDoneMsg:
+		_, cmd := a.handleCheckoutDone(typedMsg)
+		return true, cmd
+	case views.CheckoutStrategyChosenMsg:
+		_, cmd := a.handleCheckoutStrategyChosen(typedMsg)
+		return true, cmd
+	case views.CloneDoneMsg:
+		_, cmd := a.handleCloneDone(typedMsg)
+		return true, cmd
+	case views.SmartCheckoutDoneMsg:
+		a.handleSmartCheckoutDone(typedMsg)
+		return true, nil
+	case views.CheckoutDialogCloseMsg:
+		a.view = a.prevView
+		return true, nil
+	case views.CopyCdCommandMsg:
+		return true, a.handleCopyCdCommand(typedMsg)
+	case views.CopyURLMsg:
+		return true, a.handleCopyURL(typedMsg)
+	case views.OpenBrowserMsg:
+		return true, a.handleOpenBrowser(typedMsg)
+	case views.BatchCopyURLsMsg:
+		return true, a.handleBatchCopyURLs(typedMsg)
+	case views.BatchOpenBrowserMsg:
+		return true, a.handleBatchOpenBrowser(typedMsg)
+	case views.PRListFilterMsg:
+		a.header.SetFilter(typedMsg.Label)
+		return true, nil
+	case views.SwitchRepoMsg:
+		_, cmd := a.handleSwitchRepo(typedMsg)
+		return true, cmd
+	case views.CloseRepoSwitcherMsg:
+		a.view = a.prevView
+		return true, nil
+	case views.ReposDiscoveredMsg:
+		_, cmd := a.handleReposDiscovered(typedMsg)
+		return true, cmd
+	case views.ToggleFavoriteMsg:
+		_, cmd := a.handleToggleFavorite(typedMsg)
+		return true, cmd
+	case views.ValidateRepoRequestMsg:
+		return true, validateRepoCmd(typedMsg.Repo)
+	case views.RepoValidatedMsg:
+		_, cmd := a.handleRepoValidated(typedMsg)
+		return true, cmd
+	case views.CloseHelpMsg:
+		a.view = a.prevView
+		return true, nil
+	case views.OpenInboxPRMsg:
+		_, cmd := a.handleOpenInboxPR(typedMsg)
+		return true, cmd
+	case views.CloseInboxMsg:
+		a.view = core.ViewPRList
+		return true, nil
+	case views.ResolveThreadMsg:
+		_, cmd := a.handleResolveThread(typedMsg)
+		return true, cmd
+	case views.UnresolveThreadMsg:
+		return true, a.toasts.Add("Unresolve not implemented yet", domain.ToastInfo, 3*time.Second)
+	case views.ReplyToThreadMsg:
+		return true, a.toasts.Add("Reply not implemented yet", domain.ToastInfo, 3*time.Second)
+	case resolveThreadDoneMsg:
+		_, cmd := a.handleResolveThreadDone(typedMsg)
+		return true, cmd
+	case views.TutorialDoneMsg:
+		if err := views.MarkTutorialDone(); err != nil {
+			return true, a.toasts.Add(
+				fmt.Sprintf("Failed to persist tutorial state: %v", err),
+				domain.ToastError, 5*time.Second,
+			)
+		}
+		return true, nil
+	case components.DismissToastMsg:
+		a.toasts.Update(typedMsg)
+		return true, nil
+	case components.BannerGlyphTickMsg:
+		return true, a.banner.Update(typedMsg)
+	case components.BannerDismissMsg:
+		return true, a.handleBannerDismiss(typedMsg)
+	case loadingTickMsg:
+		if a.view == core.ViewLoading {
+			a.loadingFrame++
+			return true, a.loadingTick()
+		}
+		return true, nil
+	case refreshTickMsg:
+		_, cmd := a.handleRefreshTick()
+		return true, cmd
+	case externalDiffDoneMsg:
+		if typedMsg.Err != nil {
+			return true, a.toasts.Add(
+				fmt.Sprintf("External diff tool error: %v", typedMsg.Err),
+				domain.ToastError, 5*time.Second,
+			)
+		}
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 func (a *App) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
@@ -722,6 +650,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Global keys always active.
 	switch {
 	case key.Matches(msg, a.keys.Quit):
+		a.finalizeCurrentPRVisit()
 		return a, tea.Quit
 
 	case key.Matches(msg, a.keys.Help):
@@ -793,6 +722,7 @@ func (a *App) handleBack() (tea.Model, tea.Cmd) {
 	case core.ViewRepoSwitch:
 		a.view = a.prevView
 	case core.ViewPRDetail:
+		a.finalizeCurrentPRVisit()
 		a.view = core.ViewPRList
 	case core.ViewDiff:
 		a.view = core.ViewPRDetail
@@ -924,20 +854,115 @@ func (a *App) handleMorePRsLoaded(msg views.MorePRsLoadedMsg) (tea.Model, tea.Cm
 	return a, nil
 }
 
-func (a *App) handlePRCountLoaded(msg views.PRCountLoadedMsg) (tea.Model, tea.Cmd) {
+func (a *App) handlePRCountLoaded(msg views.PRCountLoadedMsg) tea.Model {
 	if msg.Err != nil {
 		// Silently ignore count errors - not critical
-		return a, nil
+		return a
 	}
 	a.header.SetTotalCount(msg.Total)
-	return a, nil
+	return a
+}
+
+func (a *App) handleDiffLoaded(msg views.DiffLoadedMsg) tea.Cmd {
+	var cmds []tea.Cmd
+	if msg.Err == nil && msg.Diff != nil {
+		a.currentReviewDiff = msg.Diff
+	}
+	cmd := a.diffView.Update(msg)
+	if msg.Err == nil && msg.Diff != nil && a.currentReviewContext != nil {
+		if next := a.nextReviewTargetPath(""); next != "" {
+			a.diffView.JumpToFile(next)
+		}
+	}
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	return tea.Batch(cmds...)
+}
+
+func (a *App) handleCopyCdCommand(msg views.CopyCdCommandMsg) tea.Cmd {
+	a.view = a.prevView
+	if err := copyToClipboard("cd " + msg.Path); err != nil {
+		return a.toasts.Add(
+			fmt.Sprintf("Copy failed: %v", err),
+			domain.ToastError, 5*time.Second,
+		)
+	}
+	return a.toasts.Add("Copied cd command", domain.ToastSuccess, 3*time.Second)
+}
+
+func (a *App) handleCopyURL(msg views.CopyURLMsg) tea.Cmd {
+	if err := copyToClipboard(msg.URL); err != nil {
+		return a.toasts.Add(
+			fmt.Sprintf("Copy failed: %v", err),
+			domain.ToastError, 5*time.Second,
+		)
+	}
+	return a.toasts.Add("Copied PR URL", domain.ToastSuccess, 3*time.Second)
+}
+
+func (a *App) handleOpenBrowser(msg views.OpenBrowserMsg) tea.Cmd {
+	if err := openBrowser(msg.URL); err != nil {
+		return a.toasts.Add(
+			fmt.Sprintf("Open browser failed: %v", err),
+			domain.ToastError, 5*time.Second,
+		)
+	}
+	return nil
+}
+
+func (a *App) handleBatchCopyURLs(msg views.BatchCopyURLsMsg) tea.Cmd {
+	combined := strings.Join(msg.URLs, "\n")
+	if err := copyToClipboard(combined); err != nil {
+		return a.toasts.Add(
+			fmt.Sprintf("Copy failed: %v", err),
+			domain.ToastError, 5*time.Second,
+		)
+	}
+	return a.toasts.Add(
+		fmt.Sprintf("Copied %d PR URLs", len(msg.URLs)),
+		domain.ToastSuccess, 3*time.Second,
+	)
+}
+
+func (a *App) handleBatchOpenBrowser(msg views.BatchOpenBrowserMsg) tea.Cmd {
+	for _, url := range msg.URLs {
+		if err := openBrowser(url); err != nil {
+			return a.toasts.Add(
+				fmt.Sprintf("Open browser failed: %v", err),
+				domain.ToastError, 5*time.Second,
+			)
+		}
+	}
+	return a.toasts.Add(
+		fmt.Sprintf("Opened %d PRs in browser", len(msg.URLs)),
+		domain.ToastSuccess, 3*time.Second,
+	)
+}
+
+func (a *App) handleBannerDismiss(msg components.BannerDismissMsg) tea.Cmd {
+	a.banner.Update(msg)
+	if a.view == core.ViewBanner {
+		if a.prList.HasPRs() {
+			a.view = core.ViewPRList
+		} else {
+			a.view = core.ViewLoading
+		}
+	}
+	return tea.Batch(tea.ClearScreen, a.loadingTick())
 }
 
 func (a *App) handleOpenPR(msg views.OpenPRMsg) (tea.Model, tea.Cmd) {
+	a.finalizeCurrentPRVisit()
 	a.view = core.ViewPRDetail
 	// Mark PR as viewed for unread tracking.
 	a.repoState.MarkPRViewed(msg.Number)
 	a.saveRepoState()
+	a.currentReviewContext = nil
+	a.currentReviewDiff = nil
+	a.currentReviewPR = msg.Number
+	a.prDetail.SetReviewContext(nil)
+	a.diffView.SetReviewContext(nil)
 	spinCmd := a.prDetail.StartLoading(msg.Number)
 
 	if a.getPRDetail != nil && a.repo.Owner != "" {
@@ -956,7 +981,28 @@ func (a *App) handlePRDetailLoaded(msg views.PRDetailLoadedMsg) (tea.Model, tea.
 		return a, cmd
 	}
 	a.prDetail.SetDetail(msg.Detail)
+	if a.getReviewContext != nil && a.repo.Owner != "" {
+		state := a.repoState.ReviewState(msg.Detail.Number)
+		return a, loadReviewContextCmd(a.getReviewContext, a.repo, msg.Detail.Number, msg.Detail, state)
+	}
 	return a, nil
+}
+
+func (a *App) handleReviewContextLoaded(msg views.ReviewContextLoadedMsg) tea.Model {
+	if msg.Err != nil || msg.Number != a.currentReviewPR {
+		return a
+	}
+	a.currentReviewContext = msg.Context
+	a.currentReviewDiff = msg.Diff
+	a.prDetail.SetReviewContext(msg.Context)
+	a.diffView.SetReviewContext(msg.Context)
+	if a.view == core.ViewDiff && msg.Diff != nil {
+		a.diffView.SetDiff(msg.Diff)
+		if next := a.nextReviewTargetPath(a.diffView.CurrentFilePath()); next != "" && a.diffView.CurrentFilePath() == "" {
+			a.diffView.JumpToFile(next)
+		}
+	}
+	return a
 }
 
 // detectDiffTool probes git config and PATH for a diff tool.
@@ -1042,6 +1088,14 @@ func (a *App) handleOpenDiff(msg views.OpenDiffMsg) (tea.Model, tea.Cmd) {
 	a.diffView.SetHeadBranch(a.prDetail.GetBranch().Head)
 	// Pass inline comments from the loaded PR detail to the diff view.
 	a.diffView.SetComments(a.prDetail.GetInlineComments())
+	a.diffView.SetReviewContext(a.currentReviewContext)
+	if a.currentReviewPR == msg.Number && a.currentReviewDiff != nil {
+		a.diffView.SetDiff(a.currentReviewDiff)
+		if next := a.nextReviewTargetPath(""); next != "" {
+			a.diffView.JumpToFile(next)
+		}
+		return a, nil
+	}
 	spinnerCmd := a.diffView.StartLoading()
 	if a.reader != nil && a.repo.Owner != "" {
 		return a, tea.Batch(spinnerCmd, loadDiffCmd(a.reader, a.repo, msg.Number))
@@ -1087,6 +1141,7 @@ func (a *App) handleReviewSubmitted(msg views.ReviewSubmittedMsg) (tea.Model, te
 		)
 		return a, cmd
 	}
+	a.markCurrentPRReviewed()
 	cmd := a.toasts.Add("Review submitted", domain.ToastSuccess, 3*time.Second)
 	a.view = core.ViewPRDetail
 	if a.getPRDetail != nil && a.prDetail.GetPRNumber() > 0 {
@@ -1195,15 +1250,15 @@ func (a *App) handleCloneDone(msg views.CloneDoneMsg) (tea.Model, tea.Cmd) {
 		smartCheckoutCmd(a.smartCheckout, a.repo, a.checkoutDialog.GetPRNumber(), msg.Path, false))
 }
 
-func (a *App) handleSmartCheckoutDone(msg views.SmartCheckoutDoneMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleSmartCheckoutDone(msg views.SmartCheckoutDoneMsg) tea.Model {
 	if msg.Err != nil {
 		a.checkoutDialog.ShowError(msg.Err)
-		return a, nil
+		return a
 	}
 	a.prList.SetCurrentBranch(msg.Branch)
 	cwdCheckout := msg.Path == a.cwdPath
 	a.checkoutDialog.ShowSuccess(msg.Branch, msg.Path, cwdCheckout)
-	return a, nil
+	return a
 }
 
 func reposMatchRef(a, b domain.RepoRef) bool {
@@ -1288,9 +1343,11 @@ func (a *App) handleCheckoutDone(msg views.CheckoutDoneMsg) (tea.Model, tea.Cmd)
 }
 
 func (a *App) handleSwitchRepo(msg views.SwitchRepoMsg) (tea.Model, tea.Cmd) {
+	a.finalizeCurrentPRVisit()
 	a.repo = msg.Repo
 	a.header.SetRepo(a.repo)
 	a.header.SetTotalCount(0) // Reset total count for new repo
+	a.loadRepoState()
 	a.repoSwitcher.SetCurrentRepo(a.repo)
 	a.view = core.ViewPRList
 
@@ -1362,9 +1419,14 @@ func (a *App) openInbox() (tea.Model, tea.Cmd) {
 
 func (a *App) handleOpenInboxPR(msg views.OpenInboxPRMsg) (tea.Model, tea.Cmd) {
 	// Switch repo context to the inbox PR's repo and open detail.
+	a.finalizeCurrentPRVisit()
 	a.repo = msg.Repo
 	a.header.SetRepo(a.repo)
+	a.loadRepoState()
 	a.view = core.ViewPRDetail
+	a.currentReviewContext = nil
+	a.currentReviewDiff = nil
+	a.currentReviewPR = msg.Number
 	spinCmd := a.prDetail.StartLoading(msg.Number)
 
 	if a.getPRDetail != nil {
@@ -1447,6 +1509,137 @@ func (a *App) handleResolveThreadDone(msg resolveThreadDoneMsg) (tea.Model, tea.
 		return a, tea.Batch(cmd, loadPRDetailCmd(a.getPRDetail, a.repo, a.prDetail.GetPRNumber()))
 	}
 	return a, cmd
+}
+
+func (a *App) handleCycleReviewScope() tea.Model {
+	state := a.repoState.ReviewState(a.currentReviewPR)
+	scope := reviewprogress.Scope(state.ActiveScope)
+	if scope == "" && a.currentReviewContext != nil {
+		scope = a.currentReviewContext.Scope
+	}
+	scope = scope.Cycle()
+	state.ActiveScope = string(scope)
+	a.repoState.SetReviewState(a.currentReviewPR, state)
+	a.saveRepoState()
+	a.rebuildReviewContext()
+	return a
+}
+
+func (a *App) handleJumpNextReviewTarget(msg views.JumpNextReviewTargetMsg) tea.Model {
+	path := a.nextReviewTargetPath(msg.CurrentPath)
+	if path == "" {
+		return a
+	}
+	switch a.view {
+	case core.ViewDiff:
+		a.diffView.JumpToFile(path)
+	default:
+		a.prDetail.JumpToFile(path)
+	}
+	return a
+}
+
+func (a *App) handleToggleViewedFile(msg views.ToggleViewedFileMsg) tea.Model {
+	if msg.Path == "" || a.currentReviewContext == nil {
+		return a
+	}
+	file, ok := a.currentReviewContext.FindFile(msg.Path)
+	if !ok {
+		return a
+	}
+
+	state := a.repoState.ReviewState(a.currentReviewPR)
+	if state.ViewedFiles == nil {
+		state.ViewedFiles = make(map[string]cache.FileReviewState)
+	}
+	if snap, ok := state.ViewedFiles[msg.Path]; ok && snap.PatchDigest == file.PatchDigest {
+		delete(state.ViewedFiles, msg.Path)
+	} else {
+		state.ViewedFiles[msg.Path] = cache.FileReviewState{
+			ViewedAt:      time.Now(),
+			ViewedHeadSHA: a.currentReviewContext.HeadSHA,
+			PatchDigest:   file.PatchDigest,
+		}
+	}
+	a.repoState.SetReviewState(a.currentReviewPR, state)
+	a.saveRepoState()
+	a.rebuildReviewContext()
+	return a
+}
+
+func (a *App) rebuildReviewContext() {
+	if a.currentReviewContext == nil || a.prDetail.GetPRNumber() == 0 {
+		return
+	}
+	detail := a.prDetail.GetDetail()
+	if detail == nil {
+		return
+	}
+	state := a.repoState.ReviewState(detail.Number)
+	digests := a.currentReviewContext.CurrentDigests
+	a.currentReviewContext = reviewprogress.Build(detail, digests, state, a.currentReviewContext.DegradedDigestSource)
+	a.prDetail.SetReviewContext(a.currentReviewContext)
+	a.diffView.SetReviewContext(a.currentReviewContext)
+}
+
+func (a *App) nextReviewTargetPath(current string) string {
+	if a.currentReviewContext == nil {
+		return ""
+	}
+	return a.currentReviewContext.NextActionableAfter(current)
+}
+
+func (a *App) finalizeCurrentPRVisit() {
+	if a.currentReviewPR == 0 || a.currentReviewContext == nil {
+		return
+	}
+	state := a.repoState.ReviewState(a.currentReviewPR)
+	headSHA, files := reviewprogress.SnapshotFromContext(a.currentReviewContext, time.Now())
+	state.LastVisitAt = time.Now()
+	state.LastVisitHeadSHA = headSHA
+	state.LastVisitFiles = files
+	if state.ActiveScope == "" {
+		state.ActiveScope = string(a.currentReviewContext.Scope)
+	}
+	a.repoState.SetReviewState(a.currentReviewPR, state)
+	a.saveRepoState()
+}
+
+func (a *App) markCurrentPRReviewed() {
+	if a.currentReviewPR == 0 || a.currentReviewContext == nil {
+		return
+	}
+	state := a.repoState.ReviewState(a.currentReviewPR)
+	now := time.Now()
+	headSHA, files := reviewprogress.SnapshotFromContext(a.currentReviewContext, now)
+	state.LastReviewAt = now
+	state.LastReviewHeadSHA = headSHA
+	state.LastReviewFiles = files
+	state.LastVisitAt = now
+	state.LastVisitHeadSHA = headSHA
+	state.LastVisitFiles = files
+	if state.ViewedFiles == nil {
+		state.ViewedFiles = make(map[string]cache.FileReviewState)
+	}
+	markVisibleOnly := a.currentReviewContext.Scope != reviewprogress.ScopeAll
+	for path, digest := range files {
+		if markVisibleOnly {
+			file, ok := a.currentReviewContext.FindFile(path)
+			if !ok || !file.Actionable {
+				continue
+			}
+		}
+		state.ViewedFiles[path] = cache.FileReviewState{
+			ViewedAt:      now,
+			ViewedHeadSHA: headSHA,
+			PatchDigest:   digest,
+		}
+	}
+	if state.ActiveScope == "" {
+		state.ActiveScope = string(a.currentReviewContext.Scope)
+	}
+	a.repoState.SetReviewState(a.currentReviewPR, state)
+	a.saveRepoState()
 }
 
 func (a *App) dispatchKeyToView(msg tea.KeyMsg) tea.Cmd {

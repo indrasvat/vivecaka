@@ -202,6 +202,9 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 			{
 				title: "Actions",
 				bindings: []helpBinding{
+					{"i", "Cycle review scope"},
+					{"u", "Jump next review target"},
+					{"V", "Toggle viewed file"},
 					{"d", "Open diff"},
 					{"Enter", "Open diff (Files)"},
 					{"c", "Checkout branch"},
@@ -231,6 +234,9 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 			{
 				title: "Actions",
 				bindings: []helpBinding{
+					{"i", "Cycle review scope"},
+					{"u", "Jump next review target"},
+					{"V", "Toggle viewed file"},
 					{"Enter", "Select file (in tree)"},
 					{"t", "Toggle unified/split"},
 					{"/", "Search in diff"},
@@ -330,9 +336,9 @@ func StatusHints(view core.ViewState, width int) string {
 	case core.ViewPRList:
 		hints = "j/k navigate  Enter open  c checkout  / search  f filter  v select  I inbox  ? help  q quit"
 	case core.ViewPRDetail:
-		hints = "j/k scroll  Tab pane  d diff  c checkout  r review  o open  Esc back  ? help"
+		hints = "j/k scroll  i scope  u next  V viewed  d diff  c checkout  r review  Esc back"
 	case core.ViewDiff:
-		hints = "j/k scroll  Tab pane  {/} file  t split  c comment  / search  e ext diff  Esc back  ? help"
+		hints = "j/k scroll  Tab pane  i scope  u next  V viewed  {/} file  t split  c comment"
 	case core.ViewReview:
 		hints = "j/k field  Enter action  Esc back  ? help"
 	case core.ViewInbox:

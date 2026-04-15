@@ -6,6 +6,8 @@
   "isDraft": false,
   "headRefName": "feat/auth",
   "baseRefName": "main",
+  "headRefOid": "1111111111111111111111111111111111111111",
+  "baseRefOid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "labels": [{"name": "enhancement"}, {"name": "security"}],
   "statusCheckRollup": [
     {"name": "CI", "status": "COMPLETED", "conclusion": "SUCCESS", "startedAt": "2025-01-15T10:00:00Z", "completedAt": "2025-01-15T10:05:00Z", "detailsUrl": "https://github.com/checks/1"},
@@ -23,8 +25,8 @@
     {"author": {"login": "grace"}, "state": "CHANGES_REQUESTED"}
   ],
   "files": [
-    {"path": "internal/auth/middleware.go", "additions": 120, "deletions": 5},
-    {"path": "internal/auth/token.go", "additions": 85, "deletions": 0},
-    {"path": "cmd/server/main.go", "additions": 3, "deletions": 1}
+    {"path": "internal/auth/middleware.go", "additions": 120, "deletions": 5, "changeType": "MODIFIED"},
+    {"path": "internal/auth/token.go", "additions": 85, "deletions": 0, "changeType": "ADDED"},
+    {"path": "cmd/server/main.go", "additions": 3, "deletions": 1, "changeType": "RENAMED"}
   ]
 }

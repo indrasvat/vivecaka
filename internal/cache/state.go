@@ -18,7 +18,29 @@ type RepoState struct {
 	LastFilter  domain.ListOpts `json:"last_filter"`
 
 	// LastViewedPRs maps PR number → last viewed timestamp.
-	LastViewedPRs map[int]time.Time `json:"last_viewed_prs"`
+	LastViewedPRs map[int]time.Time     `json:"last_viewed_prs"`
+	PRReviews     map[int]PRReviewState `json:"pr_reviews,omitempty"`
+}
+
+// PRReviewState stores persisted incremental review state for a single PR.
+type PRReviewState struct {
+	LastVisitAt      time.Time         `json:"last_visit_at,omitempty"`
+	LastVisitHeadSHA string            `json:"last_visit_head_sha,omitempty"`
+	LastVisitFiles   map[string]string `json:"last_visit_files,omitempty"`
+
+	LastReviewAt      time.Time         `json:"last_review_at,omitempty"`
+	LastReviewHeadSHA string            `json:"last_review_head_sha,omitempty"`
+	LastReviewFiles   map[string]string `json:"last_review_files,omitempty"`
+
+	ActiveScope string                     `json:"active_scope,omitempty"`
+	ViewedFiles map[string]FileReviewState `json:"viewed_files,omitempty"`
+}
+
+// FileReviewState records when and at what digest a file was reviewed.
+type FileReviewState struct {
+	ViewedAt      time.Time `json:"viewed_at,omitempty"`
+	ViewedHeadSHA string    `json:"viewed_head_sha,omitempty"`
+	PatchDigest   string    `json:"patch_digest,omitempty"`
 }
 
 // StatePath returns the state file path for a given repo.
@@ -71,6 +93,22 @@ func (s *RepoState) MarkPRViewed(number int) {
 		s.LastViewedPRs = make(map[int]time.Time)
 	}
 	s.LastViewedPRs[number] = time.Now()
+}
+
+// ReviewState returns the review state for a PR, creating the map lazily if needed.
+func (s *RepoState) ReviewState(number int) PRReviewState {
+	if s.PRReviews == nil {
+		return PRReviewState{}
+	}
+	return s.PRReviews[number]
+}
+
+// SetReviewState stores a review state for a PR.
+func (s *RepoState) SetReviewState(number int, state PRReviewState) {
+	if s.PRReviews == nil {
+		s.PRReviews = make(map[int]PRReviewState)
+	}
+	s.PRReviews[number] = state
 }
 
 // IsUnread returns true if the PR has been updated since last viewed.

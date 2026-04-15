@@ -85,8 +85,10 @@ type PRDetail struct {
 
 // BranchInfo represents head and base branches.
 type BranchInfo struct {
-	Head string `json:"head"`
-	Base string `json:"base"`
+	Head    string `json:"head"`
+	Base    string `json:"base"`
+	HeadSHA string `json:"head_sha,omitempty"`
+	BaseSHA string `json:"base_sha,omitempty"`
 }
 
 // ReviewerInfo represents a reviewer and their verdict.

@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/indrasvat/vivecaka/internal/domain"
+	"github.com/indrasvat/vivecaka/internal/reviewprogress"
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 )
 
@@ -149,14 +150,15 @@ type DiffViewModel struct {
 	splitMode bool // true for side-by-side, false for unified
 
 	// Inline comments.
-	comments    []domain.CommentThread            // all comments for this PR
-	commentMap  map[string][]domain.CommentThread // path:line → threads
-	editing     bool                              // true when comment editor is open
-	editBuffer  string                            // current editor text
-	editLine    int                               // line number being commented
-	editPath    string                            // file path being commented
-	editSide    string                            // "LEFT" or "RIGHT"
-	editReplyTo string                            // thread ID if replying
+	comments      []domain.CommentThread            // all comments for this PR
+	commentMap    map[string][]domain.CommentThread // path:line → threads
+	editing       bool                              // true when comment editor is open
+	editBuffer    string                            // current editor text
+	editLine      int                               // line number being commented
+	editPath      string                            // file path being commented
+	editSide      string                            // "LEFT" or "RIGHT"
+	editReplyTo   string                            // thread ID if replying
+	reviewContext *reviewprogress.Context
 }
 
 // SetStyles updates the styles without losing state.
@@ -213,6 +215,33 @@ func (m *DiffViewModel) SetComments(threads []domain.CommentThread) {
 	for _, t := range threads {
 		key := fmt.Sprintf("%s:%d", t.Path, t.Line)
 		m.commentMap[key] = append(m.commentMap[key], t)
+	}
+}
+
+// SetReviewContext updates the incremental review context shown in diff view.
+func (m *DiffViewModel) SetReviewContext(ctx *reviewprogress.Context) {
+	m.reviewContext = ctx
+}
+
+// CurrentFilePath returns the currently selected diff file path.
+func (m *DiffViewModel) CurrentFilePath() string {
+	if m.diff == nil || m.fileIdx < 0 || m.fileIdx >= len(m.diff.Files) {
+		return ""
+	}
+	return m.diff.Files[m.fileIdx].Path
+}
+
+// JumpToFile selects a file by path and resets scroll position.
+func (m *DiffViewModel) JumpToFile(path string) {
+	if m.diff == nil || path == "" {
+		return
+	}
+	for i, file := range m.diff.Files {
+		if file.Path == path {
+			m.fileIdx = i
+			m.scrollY = 0
+			return
+		}
 	}
 }
 
@@ -514,6 +543,14 @@ func (m *DiffViewModel) handleContentKey(msg tea.KeyMsg) tea.Cmd {
 		case 'e':
 			n, e := m.prNumber, m.loadErr
 			return func() tea.Msg { return OpenExternalDiffMsg{Number: n, LoadErr: e} }
+		case 'i':
+			return func() tea.Msg { return CycleReviewScopeMsg{} }
+		case 'u':
+			return func() tea.Msg { return JumpNextReviewTargetMsg{CurrentPath: m.CurrentFilePath()} }
+		case 'V':
+			if path := m.CurrentFilePath(); path != "" {
+				return func() tea.Msg { return ToggleViewedFileMsg{Path: path} }
+			}
 		}
 	}
 
@@ -705,7 +742,8 @@ func (m *DiffViewModel) renderFileTree() string {
 		if padding < 1 {
 			padding = 1
 		}
-		line := fmt.Sprintf(" %s %s%s%s", icon, name, strings.Repeat(" ", padding), stat)
+		reviewMarker := m.reviewMarkerForPath(f.Path)
+		line := fmt.Sprintf(" %s %s %s%s%s", reviewMarker, icon, name, strings.Repeat(" ", padding), stat)
 		if len(line) > tw {
 			line = line[:tw]
 		}
@@ -756,11 +794,12 @@ func (m *DiffViewModel) renderUnifiedContent() string {
 	lineMatches := m.matchesByLine(m.fileIdx)
 
 	contentWidth := m.width - m.treeWidth - 1
-	contentHeight := max(1, m.height-1)
+	contentHeight := max(1, m.height-2)
 
 	file := m.diff.Files[m.fileIdx]
 	modeLabel := lipgloss.NewStyle().Foreground(t.Muted).Render(" Unified")
 	fileHeader := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(file.Path) + modeLabel
+	reviewHeader := m.renderReviewHeader(contentWidth)
 
 	if m.isCollapsed(m.fileIdx) {
 		content := m.renderCollapsedFile(file, m.fileIdx)
@@ -768,7 +807,7 @@ func (m *DiffViewModel) renderUnifiedContent() string {
 			content += "\n" + lipgloss.NewStyle().Foreground(t.Info).Render(m.searchBarText())
 		}
 		return lipgloss.NewStyle().Width(contentWidth).
-			Render(lipgloss.JoinVertical(lipgloss.Left, fileHeader, content))
+			Render(lipgloss.JoinVertical(lipgloss.Left, fileHeader, reviewHeader, content))
 	}
 
 	// Clamp scrollY using diff line count.
@@ -866,7 +905,7 @@ func (m *DiffViewModel) renderUnifiedContent() string {
 	}
 
 	return lipgloss.NewStyle().Width(contentWidth).
-		Render(lipgloss.JoinVertical(lipgloss.Left, fileHeader, content))
+		Render(lipgloss.JoinVertical(lipgloss.Left, fileHeader, reviewHeader, content))
 }
 
 // renderCommentThread renders an inline comment thread as indented lines.
@@ -937,12 +976,13 @@ type splitRow struct {
 func (m *DiffViewModel) renderSplitContent() string {
 	t := m.styles.Theme
 	contentWidth := m.width - m.treeWidth - 1
-	contentHeight := max(1, m.height-1)
+	contentHeight := max(1, m.height-2)
 	colWidth := (contentWidth - 3) / 2 // 3 for divider " │ "
 
 	file := m.diff.Files[m.fileIdx]
 	modeLabel := lipgloss.NewStyle().Foreground(t.Muted).Render(" Split")
 	fileHeader := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(file.Path) + modeLabel
+	reviewHeader := m.renderReviewHeader(contentWidth)
 
 	rows := m.buildSplitRows(file)
 
@@ -972,7 +1012,54 @@ func (m *DiffViewModel) renderSplitContent() string {
 	}
 
 	return lipgloss.NewStyle().Width(contentWidth).
-		Render(lipgloss.JoinVertical(lipgloss.Left, fileHeader, content))
+		Render(lipgloss.JoinVertical(lipgloss.Left, fileHeader, reviewHeader, content))
+}
+
+func (m *DiffViewModel) renderReviewHeader(width int) string {
+	t := m.styles.Theme
+	if m.reviewContext == nil {
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("Review context loading...")
+	}
+
+	currentPath := m.CurrentFilePath()
+	file, ok := m.reviewContext.FindFile(currentPath)
+	fileState := "unviewed"
+	if ok {
+		switch {
+		case file.ChangedSinceReview:
+			fileState = "changed since review"
+		case file.ChangedSinceVisit:
+			fileState = "changed since visit"
+		case file.Viewed:
+			fileState = "viewed"
+		}
+	}
+
+	line := fmt.Sprintf("scope: %s   progress: %d/%d viewed   file: %s   V viewed   u next",
+		m.reviewContext.Scope.Label(),
+		m.reviewContext.ViewedFiles,
+		m.reviewContext.TotalFiles,
+		fileState,
+	)
+	return truncateANSIWidth(lipgloss.NewStyle().Foreground(t.Muted).Render(line), width)
+}
+
+func (m *DiffViewModel) reviewMarkerForPath(path string) string {
+	if m.reviewContext == nil {
+		return " "
+	}
+	file, ok := m.reviewContext.FindFile(path)
+	if !ok {
+		return " "
+	}
+	switch {
+	case file.Actionable:
+		return "●"
+	case file.Viewed:
+		return "✓"
+	default:
+		return "◌"
+	}
 }
 
 func (m *DiffViewModel) splitLineStyle(lineType domain.DiffLineType) lipgloss.Style {
@@ -1338,6 +1425,17 @@ func countFileChanges(file domain.FileDiff) (int, int) {
 		}
 	}
 	return adds, dels
+}
+
+func truncateANSIWidth(s string, width int) string {
+	if width <= 0 || lipgloss.Width(s) <= width {
+		return s
+	}
+	runes := []rune(s)
+	if width <= 3 {
+		return string(runes[:width])
+	}
+	return string(runes[:width-3]) + "..."
 }
 
 func findMatchSpans(text, lowerQuery string) []matchSpan {
