@@ -617,3 +617,5 @@ uv run .claude/automations/visual_test_incremental_review_theme_matrix.py
 uv run .claude/automations/visual_test_incremental_review_widths.py
 uv run .claude/automations/visual_test_incremental_review_nonregression.py
 ```
+
+<!-- dogfood-followup 2026-04-14T21:55:33.622529 -->
