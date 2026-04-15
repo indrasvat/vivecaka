@@ -177,7 +177,6 @@ func (r cliHelpRenderer) Render(cmd *cobra.Command) string {
 	frameStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.Border).
-		Background(t.Bg).
 		Padding(1, 2).
 		Width(78)
 
@@ -198,11 +197,14 @@ func (r cliHelpRenderer) Render(cmd *cobra.Command) string {
 		Foreground(t.Muted)
 	valueStyle := lipgloss.NewStyle().
 		Foreground(t.Warning)
+	dividerStyle := lipgloss.NewStyle().
+		Foreground(t.Border)
 
 	flagLabelWidth := 20
 	renderRow := func(label, desc string) string {
 		return keyStyle.Render(fmt.Sprintf("%-*s", flagLabelWidth, label)) + textStyle.Render(desc)
 	}
+	divider := dividerStyle.Render(strings.Repeat("─", 70))
 
 	usage := []string{
 		sectionStyle.Render("Usage"),
@@ -245,6 +247,7 @@ func (r cliHelpRenderer) Render(cmd *cobra.Command) string {
 	body := lipgloss.JoinVertical(lipgloss.Left,
 		titleStyle.Render(cmd.Name()+"  "+mutedStyle.Render(version)),
 		subtitleStyle.Render("Keyboard-first GitHub PR triage with themed terminal workflows."),
+		divider,
 		"",
 		lipgloss.JoinVertical(lipgloss.Left, usage...),
 	)
