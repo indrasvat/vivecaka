@@ -53,6 +53,19 @@ func TestFilterApplyMessage(t *testing.T) {
 	assert.True(t, ok, "expected ApplyFilterMsg")
 }
 
+func TestFilterEnterAcceptsWithoutTogglingFocusedField(t *testing.T) {
+	m := NewFilterModel(testStyles(), testKeys())
+	m.focus = filterFieldStatus
+	m.statusIdx = 0
+
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, cmd, "expected accept command")
+
+	_, ok := cmd().(ApplyFilterMsg)
+	assert.True(t, ok, "expected ApplyFilterMsg")
+	assert.Equal(t, 0, m.statusIdx, "enter should not toggle the status field")
+}
+
 func TestFilterCancelMessage(t *testing.T) {
 	m := NewFilterModel(testStyles(), testKeys())
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEscape})
@@ -90,4 +103,42 @@ func TestFilterLabelToggle(t *testing.T) {
 	m.Update(tea.KeyMsg{Type: tea.KeySpace})
 	opts = m.Opts()
 	assert.True(t, reflect.DeepEqual(opts.Labels, []string{"enhancement", "bug"}), "labels after second toggle")
+}
+
+func TestFilterMnemonics(t *testing.T) {
+	m := NewFilterModel(testStyles(), testKeys())
+	m.statusIdx = 2
+
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	require.NotNil(t, cmd, "accept mnemonic should return command")
+	_, ok := cmd().(ApplyFilterMsg)
+	assert.True(t, ok, "expected ApplyFilterMsg")
+
+	cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	require.NotNil(t, cmd, "cancel mnemonic should return command")
+	_, ok = cmd().(CloseFilterMsg)
+	assert.True(t, ok, "expected CloseFilterMsg")
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	assert.Equal(t, 0, m.statusIdx, "reset mnemonic should restore default status")
+}
+
+func TestFilterMnemonicsDoNotHijackAuthorInput(t *testing.T) {
+	m := NewFilterModel(testStyles(), testKeys())
+	m.focus = filterFieldAuthor
+
+	assert.Nil(t, m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}))
+	assert.Nil(t, m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}))
+	assert.Nil(t, m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}))
+	assert.Equal(t, "arc", m.author)
+}
+
+func TestFilterViewShowsAcceptAction(t *testing.T) {
+	m := NewFilterModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+
+	view := m.View()
+	assert.Contains(t, view, "[ Accept ]")
+	assert.Contains(t, view, "[ Reset ]")
+	assert.Contains(t, view, "[ Cancel ]")
 }

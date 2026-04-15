@@ -52,7 +52,10 @@ func WithRepoManager(rm domain.RepoManager) Option {
 
 // WithRepo sets the initial repo (skips auto-detection).
 func WithRepo(r domain.RepoRef) Option {
-	return func(a *App) { a.repo = r }
+	return func(a *App) {
+		a.repo = r
+		a.repoExplicit = true
+	}
 }
 
 // App is the root BubbleTea model.
@@ -67,6 +70,7 @@ type App struct {
 	height       int
 	ready        bool
 	repo         domain.RepoRef
+	repoExplicit bool
 	username     string
 	loadingFrame int // animation frame for loading spinner
 
@@ -213,8 +217,10 @@ func New(cfg *config.Config, opts ...Option) *App {
 func (a *App) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		detectUserCmd(),
-		detectBranchCmd(),
 		a.banner.StartAutoDismiss(2 * time.Second), // Show banner for 2 seconds
+	}
+	if !a.repoExplicit {
+		cmds = append(cmds, detectBranchCmd())
 	}
 	// Show tutorial on first launch.
 	if views.IsFirstLaunch() {
@@ -222,22 +228,39 @@ func (a *App) Init() tea.Cmd {
 	}
 	// If repo was provided via WithRepo, skip detection and load PRs directly.
 	if a.repo.Owner != "" {
-		a.header.SetRepo(a.repo)
-		if a.listPRs != nil {
-			state := a.filterOpts.State
-			if state == "" {
-				state = domain.PRStateOpen
-			}
-			cmds = append(cmds, loadPRsCmd(a.listPRs, a.repo, a.filterOpts))
-			cmds = append(cmds, loadPRCountCmd(a.reader, a.repo, state))
-			return tea.Batch(cmds...)
-		}
-		cmds = append(cmds, func() tea.Msg { return viewReadyMsg{} })
+		cmds = append(cmds, a.startRepoLoad(a.repo, false)...)
 		return tea.Batch(cmds...)
 	}
 	// Otherwise, detect repo from git remote.
 	cmds = append(cmds, detectRepoCmd())
 	return tea.Batch(cmds...)
+}
+
+func (a *App) startRepoLoad(repo domain.RepoRef, includeCache bool) []tea.Cmd {
+	a.repo = repo
+	a.header.SetRepo(a.repo)
+	a.header.SetTotalCount(0)
+	a.loadRepoState()
+	a.repoSwitcher.SetCurrentRepo(a.repo)
+
+	if a.listPRs == nil {
+		return []tea.Cmd{func() tea.Msg { return viewReadyMsg{} }}
+	}
+
+	state := a.filterOpts.State
+	if state == "" {
+		state = domain.PRStateOpen
+	}
+
+	cmds := make([]tea.Cmd, 0, 3)
+	if includeCache {
+		cmds = append(cmds, loadCachedPRsCmd(a.repo))
+	}
+	cmds = append(cmds,
+		loadPRsCmd(a.listPRs, a.repo, a.filterOpts),
+		loadPRCountCmd(a.reader, a.repo, state),
+	)
+	return cmds
 }
 
 type viewReadyMsg struct{}
@@ -796,32 +819,17 @@ func (a *App) handleRepoDetected(msg views.RepoDetectedMsg) (tea.Model, tea.Cmd)
 	}
 	a.repo = msg.Repo
 	a.cwdRepo = msg.Repo // Record CWD repo identity for smart checkout.
-	a.header.SetRepo(a.repo)
-	a.header.SetTotalCount(0) // Reset total count for new repo
 
 	// Auto-learn: register CWD repo in known-repos (smart checkout mechanism 1).
 	if a.repoLocator != nil && a.cwdPath != "" {
 		_ = a.repoLocator.Register(msg.Repo, a.cwdPath, "detected")
 	}
 
-	// Load per-repo state (sort/filter memory).
-	a.loadRepoState()
 	// Prepend CWD repo to favorites if not already there.
 	a.ensureCWDRepoInFavorites()
-	a.repoSwitcher.SetCurrentRepo(a.repo)
 
 	if a.listPRs != nil {
-		// Load PRs and fetch total count in parallel.
-		// Also try loading cached PRs for instant display.
-		state := a.filterOpts.State
-		if state == "" {
-			state = domain.PRStateOpen
-		}
-		return a, tea.Batch(
-			loadCachedPRsCmd(a.repo),
-			loadPRsCmd(a.listPRs, a.repo, a.filterOpts),
-			loadPRCountCmd(a.reader, a.repo, state),
-		)
+		return a, tea.Batch(a.startRepoLoad(a.repo, true)...)
 	}
 	a.view = core.ViewPRList
 	return a, nil

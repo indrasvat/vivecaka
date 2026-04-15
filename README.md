@@ -67,8 +67,14 @@ vivecaka
 # Or specify a repo:
 vivecaka --repo owner/name
 
+# Or via environment:
+VIVECAKA_REPO=owner/name vivecaka
+
 # Debug mode:
 vivecaka --debug
+
+# Show CLI help:
+vivecaka --help
 ```
 
 ## Keybindings

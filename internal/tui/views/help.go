@@ -296,8 +296,10 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 				title: "Actions",
 				bindings: []helpBinding{
 					{"Space", "Toggle option"},
-					{"Enter", "Apply"},
+					{"Enter", "Accept filters"},
+					{"a", "Accept filters"},
 					{"r", "Reset filters"},
+					{"c", "Cancel filters"},
 					{"Esc", "Cancel"},
 				},
 			},
@@ -340,7 +342,7 @@ func StatusHints(view core.ViewState, width int) string {
 	case core.ViewHelp:
 		hints = "? or Esc to close"
 	case core.ViewFilter:
-		hints = "Tab next  Space toggle  Enter apply  r reset  Esc cancel"
+		hints = "Tab next  Space toggle  Enter accept  a accept  r reset  c cancel  Esc cancel"
 	case core.ViewConfirm:
 		hints = "Enter/y confirm  Esc/n cancel"
 	default:

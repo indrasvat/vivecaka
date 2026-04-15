@@ -173,22 +173,17 @@ func (m *FilterModel) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 	case tea.KeyEnter:
-		switch m.focus {
-		case filterFieldApply:
-			return func() tea.Msg { return ApplyFilterMsg{Opts: m.Opts()} }
-		case filterFieldReset:
-			m.Reset()
-			return nil
-		case filterFieldCancel:
-			return func() tea.Msg { return CloseFilterMsg{} }
-		default:
-			m.toggleFocused()
-			return nil
+		if m.hasActionFocus() {
+			return m.triggerAction(m.focus)
 		}
+		return m.accept()
 	case tea.KeySpace:
 		if m.isTextField() {
 			m.author = appendRune(m.author, ' ', 20)
 			return nil
+		}
+		if m.hasActionFocus() {
+			return m.triggerAction(m.focus)
 		}
 		m.toggleFocused()
 		return nil
@@ -202,10 +197,6 @@ func (m *FilterModel) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		r := keyMsg.Runes[0]
-		if r == 'r' && !m.isTextField() {
-			m.Reset()
-			return nil
-		}
 		if m.focus == filterFieldLabel && (r == 'h' || r == 'l') {
 			if r == 'h' {
 				m.moveLabelCursor(-1)
@@ -217,6 +208,15 @@ func (m *FilterModel) Update(msg tea.Msg) tea.Cmd {
 		if m.isTextField() {
 			m.author = appendRune(m.author, r, 20)
 			return nil
+		}
+		switch r {
+		case 'a':
+			return m.accept()
+		case 'r':
+			m.Reset()
+			return nil
+		case 'c':
+			return m.close()
 		}
 		if r == 'j' {
 			m.nextField()
@@ -258,6 +258,30 @@ func (m *FilterModel) moveLabelCursor(delta int) {
 		return
 	}
 	m.labelCursor = (m.labelCursor + delta + len(m.labelOptions)) % len(m.labelOptions)
+}
+
+func (m *FilterModel) accept() tea.Cmd {
+	return func() tea.Msg { return ApplyFilterMsg{Opts: m.Opts()} }
+}
+
+func (m *FilterModel) close() tea.Cmd {
+	return func() tea.Msg { return CloseFilterMsg{} }
+}
+
+func (m *FilterModel) hasActionFocus() bool {
+	return m.focus == filterFieldApply || m.focus == filterFieldReset || m.focus == filterFieldCancel
+}
+
+func (m *FilterModel) triggerAction(focus int) tea.Cmd {
+	switch focus {
+	case filterFieldReset:
+		m.Reset()
+		return nil
+	case filterFieldCancel:
+		return m.close()
+	default:
+		return m.accept()
+	}
 }
 
 func (m *FilterModel) toggleFocused() {
@@ -369,11 +393,11 @@ func (m *FilterModel) View() string {
 
 	quickLine := label("Quick:", false) + " " + keyStyle.Render("[m]") + " " + textStyle.Render("My PRs") + "  " + keyStyle.Render("[n]") + " " + textStyle.Render("Needs My Review")
 
-	apply := applyStyle.Render("[ Apply ]")
+	apply := applyStyle.Render("[ Accept ]")
 	reset := resetStyle.Render("[ Reset ]")
 	cancel := cancelStyle.Render("[ Cancel ]")
 	if m.focus == filterFieldApply {
-		apply = applyStyle.Underline(true).Render("[ Apply ]")
+		apply = applyStyle.Underline(true).Render("[ Accept ]")
 	}
 	if m.focus == filterFieldReset {
 		reset = resetStyle.Underline(true).Render("[ Reset ]")

@@ -157,3 +157,10 @@ func TestStatusHintsWideTerminal(t *testing.T) {
 	hints := StatusHints(core.ViewPRList, 200)
 	assert.NotEmpty(t, hints, "wide terminal hints should not be empty")
 }
+
+func TestStatusHintsFilterActions(t *testing.T) {
+	hints := StatusHints(core.ViewFilter, 200)
+	assert.Contains(t, hints, "Enter accept")
+	assert.Contains(t, hints, "a accept")
+	assert.Contains(t, hints, "c cancel")
+}
