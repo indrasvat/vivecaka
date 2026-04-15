@@ -1,6 +1,6 @@
 # Task 031: Incremental Review Mode
 
-## Status: TODO
+## Status: DONE
 
 ## Summary
 
@@ -576,6 +576,15 @@ The feature is done only when all of the following are true:
    - smart checkout dialogs
 7. Performance on large PRs remains acceptable.
 8. The live dogfood PR scenario passes end to end on GitHub.
+
+## Completion Notes
+
+- Implemented persisted incremental review state with per-file digests, viewed-state tracking, and explicit last-visit/last-review baselines.
+- Added compact review-context chrome and keyboard workflow to PR detail and diff views: `i`, `u`, and `V`.
+- Verified visual behavior with iTerm2 automation across baseline, flow, non-regression, width, and theme matrices.
+- Live dogfood verification was completed on PR `#7` in `indrasvat/vivecaka`.
+- GitHub review state was validated against the real PR via `gh` and the GitHub web UI.
+- The Huh-based review form did not prove reliably automatable through iTerm2 in this session, so the final `Since Review` proof used the real GitHub review comment plus the matching persisted local baseline snapshot recorded for that reviewed head SHA.
 
 ## Execution Plan
 

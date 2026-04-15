@@ -106,12 +106,12 @@ Dependency chains:
 
 | # | Task File | Description | Status | Depends On |
 |---|-----------|-------------|--------|------------|
-| 031 | `docs/tasks/031-incremental-review-mode.md` | Incremental review mode: resume reviews from last visit/review with file-level progress | TODO | 018, 019, 020, 025, 028, 030 |
+| 031 | `docs/tasks/031-incremental-review-mode.md` | Incremental review mode: resume reviews from last visit/review with file-level progress | DONE | 018, 019, 020, 025, 028, 030 |
 
-Planning notes:
-- Task 031 is the next major feature proposal after Phase 14 completion.
-- The implementation PRD lives in `docs/tasks/031-incremental-review-mode.md`.
-- Baseline visual automation must exist before feature work begins so the current detail/files/diff layouts can be regression-tested during implementation.
+Notes:
+- Task 031 is implemented on `feat/incremental-review-mode` and tracked in PR `#7`.
+- Review progress is now persisted per PR with last-visit and last-review baselines plus per-file viewed digests.
+- Visual automation now covers baseline, persistence flow, non-regression, width, theme, and live dogfood scenarios for incremental review surfaces.
 
 ## Phases 0-13: Original Scaffolding (Complete)
 
