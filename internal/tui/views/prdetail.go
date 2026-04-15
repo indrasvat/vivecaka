@@ -1205,6 +1205,10 @@ func detailCIIcon(status domain.CIStatus) string {
 }
 
 func (m *PRDetailModel) filteredFiles() []reviewprogress.File {
+	if m.detail == nil {
+		return nil
+	}
+
 	if m.reviewContext == nil {
 		files := make([]reviewprogress.File, 0, len(m.detail.Files))
 		for _, file := range m.detail.Files {
@@ -1243,30 +1247,6 @@ func (m *PRDetailModel) clampFilesCursor() {
 	}
 	if m.scrollY >= len(files) {
 		m.scrollY = len(files) - 1
-	}
-}
-
-func reviewFileMarker(file reviewprogress.File) string {
-	switch {
-	case file.Actionable:
-		return "●"
-	case file.Viewed:
-		return "✓"
-	default:
-		return "◌"
-	}
-}
-
-func reviewFileMeta(file reviewprogress.File, theme core.Theme) string {
-	switch {
-	case file.ChangedSinceReview:
-		return lipgloss.NewStyle().Foreground(theme.Warning).Render("changed since review")
-	case file.ChangedSinceVisit:
-		return lipgloss.NewStyle().Foreground(theme.Info).Render("changed since visit")
-	case file.Viewed:
-		return lipgloss.NewStyle().Foreground(theme.Success).Render("viewed")
-	default:
-		return lipgloss.NewStyle().Foreground(theme.Muted).Render("unviewed")
 	}
 }
 

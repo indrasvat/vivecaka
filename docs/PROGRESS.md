@@ -112,6 +112,7 @@ Notes:
 - Task 031 is implemented on `feat/incremental-review-mode` and tracked in PR `#7`.
 - Review progress is now persisted per PR with last-visit and last-review baselines plus per-file viewed digests.
 - Visual automation now covers baseline, persistence flow, non-regression, width, theme, and live dogfood scenarios for incremental review surfaces.
+- Post-review hardening added correct viewed-marker rendering for `V`, stale diff-response guards keyed by PR number, and nil-safe file-list access during detail loading/failure states.
 
 ## Phases 0-13: Original Scaffolding (Complete)
 

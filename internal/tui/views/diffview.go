@@ -272,8 +272,9 @@ func (m *DiffViewModel) commentsForLine(path string, line int) []domain.CommentT
 
 // Message types.
 type DiffLoadedMsg struct {
-	Diff *domain.Diff
-	Err  error
+	Number int
+	Diff   *domain.Diff
+	Err    error
 }
 
 // diffSpinnerTickMsg drives the diff loading spinner animation.
@@ -1025,14 +1026,7 @@ func (m *DiffViewModel) renderReviewHeader(width int) string {
 	file, ok := m.reviewContext.FindFile(currentPath)
 	fileState := "unviewed"
 	if ok {
-		switch {
-		case file.ChangedSinceReview:
-			fileState = "changed since review"
-		case file.ChangedSinceVisit:
-			fileState = "changed since visit"
-		case file.Viewed:
-			fileState = "viewed"
-		}
+		fileState = reviewFileStateText(file)
 	}
 
 	line := fmt.Sprintf("scope: %s   progress: %d/%d viewed   file: %s   V viewed   u next",
@@ -1052,14 +1046,7 @@ func (m *DiffViewModel) reviewMarkerForPath(path string) string {
 	if !ok {
 		return " "
 	}
-	switch {
-	case file.Actionable:
-		return "●"
-	case file.Viewed:
-		return "✓"
-	default:
-		return "◌"
-	}
+	return reviewFileMarker(file)
 }
 
 func (m *DiffViewModel) splitLineStyle(lineType domain.DiffLineType) lipgloss.Style {

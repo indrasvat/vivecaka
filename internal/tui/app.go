@@ -864,6 +864,10 @@ func (a *App) handlePRCountLoaded(msg views.PRCountLoadedMsg) tea.Model {
 }
 
 func (a *App) handleDiffLoaded(msg views.DiffLoadedMsg) tea.Cmd {
+	if msg.Number != 0 && msg.Number != a.currentReviewPR {
+		return nil
+	}
+
 	var cmds []tea.Cmd
 	if msg.Err == nil && msg.Diff != nil {
 		a.currentReviewDiff = msg.Diff

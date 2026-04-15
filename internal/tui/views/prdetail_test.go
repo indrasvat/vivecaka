@@ -121,6 +121,12 @@ func TestSetDetail(t *testing.T) {
 	assert.Equal(t, 0, m.pendingNum)
 }
 
+func TestSelectedFilePathWithNilDetail(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+
+	assert.Equal(t, "", m.SelectedFilePath())
+}
+
 func TestDetailReviewContextRenders(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 	m.SetSize(120, 24)
@@ -137,6 +143,19 @@ func TestDetailReviewContextRenders(t *testing.T) {
 	assert.Contains(t, view, "Review")
 	assert.Contains(t, view, "Since Review")
 	assert.Contains(t, view, "plugin.go")
+}
+
+func TestReviewFileMarkerPrefersViewedState(t *testing.T) {
+	file := reviewprogress.File{
+		Path:               "plugin.go",
+		Viewed:             true,
+		ChangedSinceReview: true,
+		Actionable:         true,
+	}
+
+	assert.Equal(t, "✓", reviewFileMarker(file))
+	assert.Contains(t, reviewFileMeta(file, testStyles().Theme), "viewed")
+	assert.Contains(t, reviewFileMeta(file, testStyles().Theme), "changed since review")
 }
 
 func TestDetailViewFitsAssignedHeight(t *testing.T) {

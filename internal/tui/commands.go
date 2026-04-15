@@ -116,7 +116,7 @@ func loadDiffCmd(reader domain.PRReader, repo domain.RepoRef, number int) tea.Cm
 			}
 			logging.Log.Debug("diff loaded", "pr", number, "elapsed", elapsed, "files", files)
 		}
-		return views.DiffLoadedMsg{Diff: diff, Err: err}
+		return views.DiffLoadedMsg{Number: number, Diff: diff, Err: err}
 	}
 }
 

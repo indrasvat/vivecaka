@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/indrasvat/vivecaka/internal/cache"
 	"github.com/indrasvat/vivecaka/internal/config"
@@ -406,6 +407,26 @@ func TestAppToggleViewedFile(t *testing.T) {
 	state := a.repoState.ReviewState(42)
 	assert.Equal(t, "digest-1", state.ViewedFiles["plugin.go"].PatchDigest)
 	assert.WithinDuration(t, time.Now(), state.ViewedFiles["plugin.go"].ViewedAt, time.Second)
+}
+
+func TestAppIgnoresStaleDiffLoaded(t *testing.T) {
+	app := newTestApp()
+	app.currentReviewPR = 42
+	app.currentReviewDiff = &domain.Diff{
+		Files: []domain.FileDiff{{Path: "current.go"}},
+	}
+	app.diffView.SetPRNumber(42)
+
+	updated, _ := app.Update(views.DiffLoadedMsg{
+		Number: 7,
+		Diff: &domain.Diff{
+			Files: []domain.FileDiff{{Path: "stale.go"}},
+		},
+	})
+	a := updated.(*App)
+
+	require.NotNil(t, a.currentReviewDiff)
+	assert.Equal(t, "current.go", a.currentReviewDiff.Files[0].Path)
 }
 
 func TestAppReviewSubmittedMarksOnlyVisibleScopeFilesViewed(t *testing.T) {

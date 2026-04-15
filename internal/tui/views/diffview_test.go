@@ -129,6 +129,25 @@ func TestDiffReviewContextRenders(t *testing.T) {
 	assert.Contains(t, view, "changed since review")
 }
 
+func TestDiffReviewContextShowsViewedChangedFile(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(120, 24)
+	m.SetDiff(testDiff())
+	m.SetReviewContext(&reviewprogress.Context{
+		Scope:       reviewprogress.ScopeSinceReview,
+		ViewedFiles: 2,
+		TotalFiles:  2,
+		Files: []reviewprogress.File{
+			{Path: "internal/plugin/registry.go", Viewed: true, ChangedSinceReview: true, Actionable: true},
+			{Path: "internal/plugin/hooks.go", Viewed: true},
+		},
+	})
+
+	view := m.View()
+	assert.Contains(t, view, "changed since review · viewed")
+	assert.Equal(t, "✓", m.reviewMarkerForPath("internal/plugin/registry.go"))
+}
+
 func TestDiffScrollDown(t *testing.T) {
 	m := NewDiffViewModel(testStyles(), testKeys())
 	m.SetSize(120, 40)

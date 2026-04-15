@@ -2,6 +2,13 @@
 
 ## Status: DONE
 
+## Completion Notes
+
+- Post-review hardening fixed viewed-marker rendering so `V` visibly toggles between actionable and viewed states without hiding changed-since-review context.
+- Async diff loading now carries the PR number so stale responses from previously opened PRs cannot overwrite the active PR diff cache.
+- Files-tab selection now guards `nil` detail state so `u` and related file-list access remain safe while detail is still loading or after a failed detail fetch.
+- README was updated to document incremental review mode, its scopes, and the new `i` / `u` / `V` keybindings.
+
 ## Summary
 
 Add a first-class incremental review workflow so vivecaka can reopen a PR and immediately answer:
