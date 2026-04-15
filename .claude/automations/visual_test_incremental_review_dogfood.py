@@ -73,6 +73,8 @@ FOLLOWUP_COMMIT = os.environ.get(
     "VIVECAKA_DOGFOOD_FOLLOWUP_COMMIT",
     "test(dogfood): add follow-up marker for incremental review",
 )
+SKIP_REVIEW = os.environ.get("VIVECAKA_DOGFOOD_SKIP_REVIEW", "") == "1"
+SKIP_COMMIT = os.environ.get("VIVECAKA_DOGFOOD_SKIP_COMMIT", "") == "1"
 
 
 def run_git(*args: str) -> None:
@@ -91,13 +93,15 @@ def create_followup_commit() -> None:
 async def submit_review_baseline(session) -> None:
     await send_text(session, "r", 1.0)
     await wait_for_text(session, ["Review Action", "Submit Review?"], 20.0, require_all=True)
-    await send_text(session, "\t\t", 0.8)
+    await send_text(session, "\r", 0.8)
+    await send_text(session, "\t", 0.8)
+    await send_text(session, "y", 0.4)
     await send_text(session, "\r", 1.8)
     await wait_for_text(session, ["Review submitted", "Description"], 25.0)
 
 
 async def open_files_tab(session) -> None:
-    await send_text(session, "3", 1.0)
+    await send_text(session, "\t\t", 1.0)
     await wait_for_text(session, ["Review", "scope:"], 20.0, require_all=True)
 
 
@@ -116,23 +120,26 @@ async def main(connection):
         await wait_for_text(session, ["scope:", "no prior review baseline", "Δ "], 20.0)
 
         print_header("SUBMIT REVIEW BASELINE")
-        await submit_review_baseline(session)
+        if not SKIP_REVIEW:
+            await submit_review_baseline(session)
         after_review = await capture_screenshot(window, SCREENSHOT_DIR, "dogfood_after_review")
 
         print_header("CREATE FOLLOW-UP COMMIT")
-        await send_text(session, "q", 0.8)
-        create_followup_commit()
-        await send_text(session, f"{BINARY}\n", 1.5)
-        await wait_for_text(session, [f"#{PR_NUMBER}", PR_TITLE, "Loading pull requests"], 25.0)
-        await send_text(session, "\r", 1.4)
-        await wait_for_text(session, ["Description", "Checks", "Files", "Comments"], 20.0, require_all=True)
-        await wait_for_text(session, ["Δ ", "scope: Since Review"], 25.0)
+        if not SKIP_COMMIT:
+            await send_text(session, "q", 0.8)
+            create_followup_commit()
+            await send_text(session, f"{BINARY}\n", 1.5)
+            await wait_for_text(session, [f"#{PR_NUMBER}", PR_TITLE, "Loading pull requests"], 25.0)
+            await send_text(session, "\r", 1.4)
+            await wait_for_text(session, ["Description", "Checks", "Files", "Comments"], 20.0, require_all=True)
+        await wait_for_text(session, ["Δ 1 since review", "scope: Since Review"], 25.0, require_all=True)
         await open_files_tab(session)
         since_review_files = await capture_screenshot(window, SCREENSHOT_DIR, "dogfood_since_review_files")
 
         print_header("VERIFY DIFF")
         await send_text(session, "d", 1.2)
-        await wait_for_text(session, ["scope:", "progress:"], 20.0, require_all=True)
+        await wait_for_text(session, ["Tab pane", "c comment"], 20.0, require_all=True)
+        await asyncio.sleep(1.0)
         since_review_diff = await capture_screenshot(window, SCREENSHOT_DIR, "dogfood_since_review_diff")
 
         print_header("SUMMARY")
