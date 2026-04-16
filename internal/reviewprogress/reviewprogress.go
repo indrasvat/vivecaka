@@ -245,6 +245,37 @@ func (ctx *Context) FindFile(path string) (File, bool) {
 	return File{}, false
 }
 
+// ProgressSummary is a compact snapshot of incremental review progress.
+type ProgressSummary struct {
+	ViewedFiles    int
+	TotalFiles     int
+	Percent        int
+	Remaining      int
+	ActionableLeft int
+	ScopeLabel     string
+	Complete       bool
+}
+
+// Summary computes a compact progress summary for the current review context.
+func (ctx *Context) Summary() ProgressSummary {
+	if ctx == nil {
+		return ProgressSummary{}
+	}
+	pct := 0
+	if ctx.TotalFiles > 0 {
+		pct = (ctx.ViewedFiles * 100) / ctx.TotalFiles
+	}
+	return ProgressSummary{
+		ViewedFiles:    ctx.ViewedFiles,
+		TotalFiles:     ctx.TotalFiles,
+		Percent:        pct,
+		Remaining:      ctx.TotalFiles - ctx.ViewedFiles,
+		ActionableLeft: ctx.ActionableFiles,
+		ScopeLabel:     ctx.Scope.Label(),
+		Complete:        ctx.TotalFiles > 0 && ctx.ViewedFiles == ctx.TotalFiles,
+	}
+}
+
 // NextActionableAfter returns the next actionable file path after the provided path.
 func (ctx *Context) NextActionableAfter(path string) string {
 	if ctx == nil || ctx.ActionableFiles == 0 {

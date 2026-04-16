@@ -110,6 +110,45 @@ func TestNextActionableAfter(t *testing.T) {
 	assert.Equal(t, "b.go", ctx.NextActionableAfter("c.go"))
 }
 
+func TestSummary(t *testing.T) {
+	t.Run("nil context returns zero summary", func(t *testing.T) {
+		var ctx *Context
+		s := ctx.Summary()
+		assert.Equal(t, 0, s.Percent)
+		assert.False(t, s.Complete)
+	})
+
+	t.Run("partial progress", func(t *testing.T) {
+		ctx := &Context{
+			Scope:           ScopeSinceReview,
+			ViewedFiles:     1,
+			TotalFiles:      3,
+			ActionableFiles: 2,
+		}
+		s := ctx.Summary()
+		assert.Equal(t, 1, s.ViewedFiles)
+		assert.Equal(t, 3, s.TotalFiles)
+		assert.Equal(t, 33, s.Percent)
+		assert.Equal(t, 2, s.Remaining)
+		assert.Equal(t, 2, s.ActionableLeft)
+		assert.Equal(t, "Since Review", s.ScopeLabel)
+		assert.False(t, s.Complete)
+	})
+
+	t.Run("complete review", func(t *testing.T) {
+		ctx := &Context{
+			Scope:           ScopeAll,
+			ViewedFiles:     4,
+			TotalFiles:      4,
+			ActionableFiles: 0,
+		}
+		s := ctx.Summary()
+		assert.Equal(t, 100, s.Percent)
+		assert.Equal(t, 0, s.Remaining)
+		assert.True(t, s.Complete)
+	})
+}
+
 func TestSnapshotFromContext(t *testing.T) {
 	now := time.Now()
 	ctx := &Context{
