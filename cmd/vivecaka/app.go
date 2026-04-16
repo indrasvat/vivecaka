@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,6 +12,11 @@ import (
 	"github.com/indrasvat/vivecaka/internal/config"
 	"github.com/indrasvat/vivecaka/internal/logging"
 	"github.com/indrasvat/vivecaka/internal/tui"
+)
+
+const (
+	terminalBackgroundHex = "#1E1E2E"
+	resetBackgroundOSC    = "\x1b]111\x07"
 )
 
 func runApp(opts cliOptions) error {
@@ -55,16 +61,14 @@ func runApp(opts cliOptions) error {
 
 	app := tui.New(cfg, appOptions...)
 
-	// Set terminal background color to match theme (Catppuccin Mocha base)
-	// This fills ALL cells including empty ones, preventing background bleeding.
-	output := termenv.NewOutput(os.Stdout)
-	output.SetBackgroundColor(output.Color("#1E1E2E"))
+	// Set the terminal background for the TUI's lifetime so empty cells render
+	// correctly, then explicitly reset it with OSC 111 on exit. output.Reset()
+	// only sends SGR reset (\x1b[0m), which does not undo OSC 11.
+	setTerminalBackground(os.Stdout)
+	defer resetTerminalBackground(os.Stdout)
 
 	p := tea.NewProgram(app, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, runErr := p.Run()
-
-	// Reset terminal colors BEFORE returning (defer won't help with os.Exit in main).
-	output.Reset()
 
 	logging.Log.Info("shutting down", "error", runErr)
 	logging.Close()
@@ -73,4 +77,13 @@ func runApp(opts cliOptions) error {
 		return runErr
 	}
 	return nil
+}
+
+func setTerminalBackground(w io.Writer) {
+	output := termenv.NewOutput(w)
+	output.SetBackgroundColor(termenv.RGBColor(terminalBackgroundHex))
+}
+
+func resetTerminalBackground(w io.Writer) {
+	_, _ = io.WriteString(w, resetBackgroundOSC)
 }

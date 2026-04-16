@@ -122,6 +122,7 @@ output.Reset()  // Reset BEFORE os.Exit
 - `lipgloss.Background()` only works on styled characters
 - Empty cells use terminal's default background
 - `termenv.SetBackgroundColor()` via OSC 11 sets ALL cells
+- BubbleTea v1 does **not** reset OSC 11 on shutdown; `output.Reset()` only sends SGR reset (`\033[0m`). If vivecaka sets terminal background imperatively, it must also emit OSC 111 (`\x1b]111\x07`) on exit to restore the shell background.
 
 ### Screen Clearing on View Transitions
 - When transitioning from full-screen views (like banner), use `tea.ClearScreen`
