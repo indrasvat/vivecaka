@@ -276,6 +276,17 @@ func (ctx *Context) Summary() ProgressSummary {
 	}
 }
 
+// String returns a human-readable one-line summary suitable for status bars.
+func (s ProgressSummary) String() string {
+	if s.TotalFiles == 0 {
+		return "no files"
+	}
+	if s.Complete {
+		return fmt.Sprintf("%d/%d reviewed (%s)", s.ViewedFiles, s.TotalFiles, s.ScopeLabel)
+	}
+	return fmt.Sprintf("%d/%d reviewed · %d actionable (%s)", s.ViewedFiles, s.TotalFiles, s.ActionableLeft, s.ScopeLabel)
+}
+
 // NextActionableAfter returns the next actionable file path after the provided path.
 func (ctx *Context) NextActionableAfter(path string) string {
 	if ctx == nil || ctx.ActionableFiles == 0 {

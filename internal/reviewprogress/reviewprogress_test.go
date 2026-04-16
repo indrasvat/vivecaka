@@ -149,6 +149,33 @@ func TestSummary(t *testing.T) {
 	})
 }
 
+func TestProgressSummaryString(t *testing.T) {
+	t.Run("no files", func(t *testing.T) {
+		s := ProgressSummary{}
+		assert.Equal(t, "no files", s.String())
+	})
+
+	t.Run("partial progress", func(t *testing.T) {
+		s := ProgressSummary{
+			ViewedFiles:    1,
+			TotalFiles:     3,
+			ActionableLeft: 2,
+			ScopeLabel:     "Since Review",
+		}
+		assert.Equal(t, "1/3 reviewed · 2 actionable (Since Review)", s.String())
+	})
+
+	t.Run("complete", func(t *testing.T) {
+		s := ProgressSummary{
+			ViewedFiles: 4,
+			TotalFiles:  4,
+			ScopeLabel:  "All",
+			Complete:    true,
+		}
+		assert.Equal(t, "4/4 reviewed (All)", s.String())
+	})
+}
+
 func TestSnapshotFromContext(t *testing.T) {
 	now := time.Now()
 	ctx := &Context{
