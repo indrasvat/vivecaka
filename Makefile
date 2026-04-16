@@ -34,6 +34,12 @@ install-local: build ## Install to ~/.local/bin
 run: ## Run with go run
 	go run -ldflags "$(LDFLAGS)" ./cmd/vivecaka
 
+.PHONY: demo
+demo: build ## Record README demo GIF with VHS
+	@command -v vhs >/dev/null 2>&1 || (echo "Install: brew install vhs" && exit 1)
+	@command -v tmux >/dev/null 2>&1 || (echo "Install: brew install tmux" && exit 1)
+	vhs assets/demo.tape
+
 .PHONY: dev
 dev: ## Run with auto-reload (requires air: go install github.com/air-verse/air@latest)
 	@command -v air >/dev/null 2>&1 && air || (echo "Install air: go install github.com/air-verse/air@latest" && go run ./cmd/vivecaka)
