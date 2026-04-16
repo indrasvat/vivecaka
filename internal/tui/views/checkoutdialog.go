@@ -736,9 +736,9 @@ func expandPath(raw string) string {
 	}
 	abs, err := filepath.Abs(trimmed)
 	if err != nil {
-		return trimmed
+		return filepath.Clean(trimmed)
 	}
-	return abs
+	return filepath.Clean(abs)
 }
 
 func shortenPath(path string) string {
