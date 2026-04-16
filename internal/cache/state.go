@@ -44,9 +44,9 @@ type FileReviewState struct {
 }
 
 // StatePath returns the state file path for a given repo.
+// Uses SafeFilename to prevent directory traversal via crafted repo names.
 func StatePath(repo domain.RepoRef) string {
-	name := fmt.Sprintf("%s_%s.json", repo.Owner, repo.Name)
-	return filepath.Join(config.DataDir(), "state", name)
+	return filepath.Join(config.DataDir(), "state", repo.SafeFilename()+".json")
 }
 
 // SaveRepoState writes repo state to disk.

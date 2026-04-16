@@ -13,9 +13,9 @@ import (
 )
 
 // CachePath returns the cache file path for a given repo.
+// Uses SafeFilename to prevent directory traversal via crafted repo names.
 func CachePath(repo domain.RepoRef) string {
-	name := fmt.Sprintf("%s_%s.json", repo.Owner, repo.Name)
-	return filepath.Join(config.CacheDir(), "repos", name)
+	return filepath.Join(config.CacheDir(), "repos", repo.SafeFilename()+".json")
 }
 
 // cacheFile is the JSON structure stored on disk.

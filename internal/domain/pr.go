@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // RepoRef identifies a GitHub repository.
 type RepoRef struct {
@@ -9,6 +12,26 @@ type RepoRef struct {
 }
 
 func (r RepoRef) String() string { return r.Owner + "/" + r.Name }
+
+// SafeFilename returns a filesystem-safe string for use in file path
+// construction. It strips path separators and null bytes from Owner and
+// Name to prevent directory traversal attacks when building cache or
+// state file paths.
+func (r RepoRef) SafeFilename() string {
+	return sanitizePathComponent(r.Owner) + "_" + sanitizePathComponent(r.Name)
+}
+
+// sanitizePathComponent removes characters that could cause path traversal.
+func sanitizePathComponent(s string) string {
+	s = strings.ReplaceAll(s, "/", "_")
+	s = strings.ReplaceAll(s, "\\", "_")
+	s = strings.ReplaceAll(s, "\x00", "")
+	s = strings.ReplaceAll(s, "..", "_")
+	if s == "" {
+		s = "_"
+	}
+	return s
+}
 
 // PR is the list-level representation of a pull request.
 type PR struct {
