@@ -29,7 +29,7 @@ type cacheFile struct {
 // Save writes PR data to the cache file atomically.
 func Save(repo domain.RepoRef, prs []domain.PR) error {
 	path := CachePath(repo)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create cache dir: %w", err)
 	}
 
@@ -47,7 +47,7 @@ func Save(repo domain.RepoRef, prs []domain.PR) error {
 
 	// Write to temp file then rename for atomicity.
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, out, 0o644); err != nil {
+	if err := os.WriteFile(tmp, out, 0o600); err != nil {
 		return fmt.Errorf("write cache: %w", err)
 	}
 	return os.Rename(tmp, path)

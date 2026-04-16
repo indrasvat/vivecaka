@@ -137,7 +137,7 @@ func (c *Config) UpdateFavorites(favorites []string) error {
 		path = filepath.Join(ConfigDir(), "config.toml")
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}
 
@@ -146,7 +146,7 @@ func (c *Config) UpdateFavorites(favorites []string) error {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 
-	return os.WriteFile(path, out, 0o644)
+	return os.WriteFile(path, out, 0o600)
 }
 
 // Load reads configuration from the XDG config path, creating defaults if needed.
@@ -161,12 +161,12 @@ func LoadFrom(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr != nil {
+			if mkErr := os.MkdirAll(filepath.Dir(path), 0o700); mkErr != nil {
 				return cfg, nil //nolint:nilerr // return defaults if dir creation fails
 			}
 			out, merr := toml.Marshal(cfg)
 			if merr == nil {
-				_ = os.WriteFile(path, out, 0o644)
+				_ = os.WriteFile(path, out, 0o600)
 			}
 			return cfg, nil //nolint:nilerr // file doesn't exist yet — return defaults
 		}

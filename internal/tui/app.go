@@ -1047,6 +1047,15 @@ func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, 
 		return a, cmd
 	}
 
+	// Validate the tool exists as an executable before use.
+	if _, err := exec.LookPath(tool); err != nil {
+		cmd := a.toasts.Add(
+			fmt.Sprintf("Diff tool %q not found in PATH.", tool),
+			domain.ToastWarning, 5*time.Second,
+		)
+		return a, cmd
+	}
+
 	// If the API diff failed (e.g. too large), fall back to local git diff.
 	if msg.LoadErr != nil {
 		branch := a.prDetail.GetBranch()

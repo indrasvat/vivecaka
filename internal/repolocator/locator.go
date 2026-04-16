@@ -123,12 +123,12 @@ func (l *Locator) CacheClonePath(repo domain.RepoRef) string {
 // This prevents concurrent vivecaka instances from losing each other's writes.
 // The actual locking mechanism is platform-specific (see locator_lock_*.go).
 func (l *Locator) withLock(fn func() error) error {
-	if err := os.MkdirAll(filepath.Dir(l.dataPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(l.dataPath), 0o700); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
 	}
 
 	lockPath := l.dataPath + ".lock"
-	f, err := os.Create(lockPath)
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return fmt.Errorf("create lock file: %w", err)
 	}
@@ -158,7 +158,7 @@ func (l *Locator) load() ([]domain.RepoLocation, error) {
 }
 
 func (l *Locator) save(entries []domain.RepoLocation) error {
-	if err := os.MkdirAll(filepath.Dir(l.dataPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(l.dataPath), 0o700); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
 	}
 	data, err := json.MarshalIndent(entries, "", "  ")
@@ -167,7 +167,7 @@ func (l *Locator) save(entries []domain.RepoLocation) error {
 	}
 	// Atomic write: temp file + rename.
 	tmp := l.dataPath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return fmt.Errorf("write known-repos: %w", err)
 	}
 	return os.Rename(tmp, l.dataPath)
