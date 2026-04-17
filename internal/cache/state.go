@@ -52,7 +52,7 @@ func StatePath(repo domain.RepoRef) string {
 // SaveRepoState writes repo state to disk.
 func SaveRepoState(repo domain.RepoRef, state RepoState) error {
 	path := StatePath(repo)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create state dir: %w", err)
 	}
 
@@ -62,7 +62,7 @@ func SaveRepoState(repo domain.RepoRef, state RepoState) error {
 	}
 
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, out, 0o644); err != nil {
+	if err := os.WriteFile(tmp, out, 0o600); err != nil {
 		return fmt.Errorf("write state: %w", err)
 	}
 	return os.Rename(tmp, path)
