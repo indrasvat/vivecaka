@@ -1046,6 +1046,14 @@ func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, 
 		)
 		return a, cmd
 	}
+	// Reject diff tool names containing shell metacharacters to prevent injection.
+	if strings.ContainsAny(tool, config.ShellMetaChars) {
+		cmd := a.toasts.Add(
+			"External diff tool contains unsafe characters — check config.",
+			domain.ToastError, 5*time.Second,
+		)
+		return a, cmd
+	}
 
 	// Validate the tool exists as an executable before use.
 	if _, err := exec.LookPath(tool); err != nil {
