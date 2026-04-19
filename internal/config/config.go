@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -89,6 +90,10 @@ var (
 	validStyles  = []string{"dark", "light", "notty"}
 )
 
+// ShellMetaChars contains characters that have special meaning in POSIX shells.
+// These must not appear in values that are interpolated into shell commands.
+const ShellMetaChars = "|;&$`\"'(){}[]<>!~*?#\\\n"
+
 // Validate checks config values and returns the first error found.
 func (c *Config) Validate() error {
 	if c.General.RefreshInterval < 0 {
@@ -117,6 +122,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Diff.MarkdownStyle != "" && !slices.Contains(validStyles, c.Diff.MarkdownStyle) {
 		return fmt.Errorf("diff.markdown_style must be one of %v, got %q", validStyles, c.Diff.MarkdownStyle)
+	}
+	if c.Diff.ExternalTool != "" && strings.ContainsAny(c.Diff.ExternalTool, ShellMetaChars) {
+		return fmt.Errorf("diff.external_tool contains shell metacharacters: %q", c.Diff.ExternalTool)
 	}
 	return nil
 }
