@@ -100,7 +100,7 @@ Installs the latest release to `~/.local/bin`.
 ```bash
 # Install a specific version
 curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | \
-  bash -s -- --version v0.1.6
+  bash -s -- --version v0.1.8
 
 # Install to a custom directory
 curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | \

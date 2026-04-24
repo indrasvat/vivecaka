@@ -3,7 +3,7 @@ set -euo pipefail
 
 # vivecaka installer
 # Usage: curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | bash
-#        curl ... | bash -s -- --version v0.1.1 --dir ~/.local/bin
+#        curl ... | bash -s -- --version v0.1.8 --dir ~/.local/bin
 
 REPO="indrasvat/vivecaka"
 BINARY="vivecaka"
@@ -69,7 +69,7 @@ usage() {
     printf '  curl -sSfL https://raw.githubusercontent.com/%s/main/install.sh | bash\n' "${REPO}"
     printf '  curl ... | bash -s -- [OPTIONS]\n\n'
     printf '%sOptions:%s\n' "${SUBTEXT}" "${RESET}"
-    printf '  %s--version VERSION%s  Install specific version (e.g. v0.1.1)\n' "${TEXT}" "${RESET}"
+    printf '  %s--version VERSION%s  Install specific version (e.g. v0.1.8)\n' "${TEXT}" "${RESET}"
     printf '  %s--dir DIRECTORY%s    Install directory (default: %s)\n' "${TEXT}" "${RESET}" "${DEFAULT_DIR}"
     printf '  %s--help%s             Show this help\n' "${TEXT}" "${RESET}"
     exit 0
