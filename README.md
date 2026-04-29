@@ -100,7 +100,7 @@ Installs the latest release to `~/.local/bin`.
 ```bash
 # Install a specific version
 curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | \
-  bash -s -- --version v0.1.6
+  bash -s -- --version v0.1.8
 
 # Install to a custom directory
 curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | \
@@ -124,7 +124,7 @@ make build
 
 ### Requirements
 
-- Go `1.26+` if building from source
+- Go `1.26.2+` if building from source
 - [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated
 
 ### Launch modes
@@ -141,6 +141,10 @@ VIVECAKA_REPO=indrasvat/dootsabha vivecaka
 
 # Inspect flags and env vars
 vivecaka --help
+
+# Enable debug logging
+vivecaka --debug
+VIVECAKA_DEBUG=1 vivecaka
 ```
 
 ### What to try first
@@ -154,33 +158,55 @@ vivecaka --help
 
 ## Controls
 
-### PR list
+### Global and PR list
 
 | Key | Action |
 |-----|--------|
 | `j` / `k` | Move cursor |
+| `g` / `G` | Jump to top / bottom |
+| `Ctrl-d` / `Ctrl-u` | Half-page down / up |
 | `Enter` | Open PR detail |
 | `/` | Search |
 | `f` | Open filter panel |
+| `m` | Toggle My PRs quick filter |
+| `n` | Toggle Needs Review quick filter |
+| `s` | Cycle sort field / direction |
+| `c` | Checkout selected PR |
+| `y` | Copy selected PR URL |
+| `o` | Open selected PR in browser |
+| `v` | Toggle visual selection mode |
 | `I` | Open unified inbox |
-| `R` | Switch repo |
+| `Ctrl-r` | Switch repo |
+| `R` | Refresh now |
+| `p` | Pause / resume auto-refresh |
 | `T` | Cycle theme |
+| `?` | Help |
 | `q` | Quit |
+
+In selection mode, `Space` toggles a PR, `a` selects all visible PRs, `y` copies selected URLs, and `o` opens selected PRs in the browser.
 
 ### PR detail and diff
 
 | Key | Action |
 |-----|--------|
 | `1`-`4` | Switch detail tabs |
+| `Tab` / `Shift-Tab` | Switch tabs or diff panes |
 | `d` | Open diff view |
 | `c` | Checkout branch |
+| `o` | Open PR, check, or comment URL in browser |
 | `r` | Submit review |
 | `i` | Cycle `All` -> `Since Visit` -> `Since Review` -> `Unviewed` |
 | `u` | Jump to next actionable review target |
 | `V` | Toggle viewed state for the current file |
 | `t` | Toggle unified / split diff |
+| `e` | Open configured external diff tool |
+| `/`, `n`, `N` | Search diff and move between matches |
 | `[` / `]` | Previous / next hunk |
 | `{` / `}` | Previous / next file |
+| `c` in diff | Add inline comment at the current line |
+| `r` in diff or comments | Reply to the current thread |
+| `x` / `X` in comments | Resolve / unresolve the current thread |
+| `Space` or `za` in comments | Collapse / expand the current discussion item |
 | `Esc` | Back |
 
 ## Configuration
@@ -191,15 +217,43 @@ Config lives at `~/.config/vivecaka/config.toml` and is auto-created on first ru
 [general]
 theme = "default-dark"
 refresh_interval = 30
+default_sort = "updated"
+default_filter = "open"
 page_size = 50
+show_banner = true
+cache_ttl = 5
+stale_days = 7
+debug = false
 
 [diff]
 mode = "unified"
 external_tool = ""
+line_numbers = true
+context_lines = 3
+markdown_style = "dark"
 
 [repos]
 favorites = ["indrasvat/dootsabha", "anomalyco/opencode"]
+
+[keybindings]
+# Example:
+# quit = "ctrl+q"
+
+[notifications]
+new_prs = true
+review_requests = true
+ci_changes = true
 ```
+
+Useful paths:
+
+- PR list cache: `~/.cache/vivecaka/repos/`
+- Managed smart-checkout clones: `~/.cache/vivecaka/clones/`
+- Per-repo state and review progress: `~/.local/share/vivecaka/state/`
+- Known local repo registry: `~/.local/share/vivecaka/known-repos.json`
+- Debug log: `~/.local/state/vivecaka/debug.log`
+
+Set `diff.external_tool` to a pager or diff viewer such as `delta` or `difftastic`, then press `e` in the diff view. Debug logging can be enabled with `--debug`, `VIVECAKA_DEBUG=1`, or `debug = true`.
 
 ## Development
 
