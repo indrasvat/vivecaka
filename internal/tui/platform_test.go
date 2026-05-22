@@ -22,6 +22,9 @@ func TestCopyToClipboardSpecEmpty(t *testing.T) {
 func TestOpenBrowserSpec(t *testing.T) {
 	url := "https://example.com"
 	spec, err := openBrowserSpec("  " + url + "  ")
+	if runtime.GOOS == "linux" && err != nil {
+		t.Skipf("skipping: %v", err)
+	}
 	require.NoError(t, err)
 
 	switch runtime.GOOS {

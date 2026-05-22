@@ -272,7 +272,7 @@ func (ctx *Context) Summary() ProgressSummary {
 		Remaining:      ctx.TotalFiles - ctx.ViewedFiles,
 		ActionableLeft: ctx.ActionableFiles,
 		ScopeLabel:     ctx.Scope.Label(),
-		Complete:        ctx.TotalFiles > 0 && ctx.ViewedFiles == ctx.TotalFiles,
+		Complete:       ctx.TotalFiles > 0 && ctx.ViewedFiles == ctx.TotalFiles,
 	}
 }
 

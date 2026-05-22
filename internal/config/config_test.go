@@ -138,6 +138,23 @@ func TestLoadFromCreatesDefaultOnMissing(t *testing.T) {
 	assert.NoError(t, err, "config file should be created")
 }
 
+func TestLoadUsesXDGConfigPathAndRecordsPath(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+
+	_, err := Load()
+	require.NoError(t, err)
+	wantPath := filepath.Join(dir, "vivecaka", "config.toml")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, wantPath, cfg.ConfigPath())
+
+	cfg2, err := LoadFrom(wantPath)
+	require.NoError(t, err)
+	assert.Equal(t, wantPath, cfg2.ConfigPath())
+}
+
 func TestLoadFromCustomConfig(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")

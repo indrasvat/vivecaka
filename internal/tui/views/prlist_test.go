@@ -101,6 +101,36 @@ func TestSetPRs(t *testing.T) {
 	assert.Len(t, m.filtered, 5)
 }
 
+func TestPRListPaginationAccessorsAndAppend(t *testing.T) {
+	m := NewPRListModel(testStyles(), testKeys())
+	m.SetSize(80, 8)
+	m.SetPerPage(2)
+	m.SetPRs(testPRs()[:2])
+
+	assert.False(t, m.IsLoading())
+	assert.True(t, m.HasPRs())
+	assert.Equal(t, 1, m.CurrentPage())
+	assert.Equal(t, 2, m.PerPage())
+	assert.True(t, m.HasMore())
+	assert.False(t, m.IsLoadingMore())
+	assert.Len(t, m.FilteredPRs(), 2)
+	assert.Equal(t, 2, m.TotalPRs())
+
+	cmd := m.SetLoadingMore(2)
+	assert.NotNil(t, cmd)
+	assert.True(t, m.IsLoadingMore())
+	assert.Equal(t, 2, m.CurrentPage())
+
+	m.AppendPRs(testPRs()[2:4], false)
+	assert.False(t, m.IsLoadingMore())
+	assert.False(t, m.HasMore())
+	assert.Equal(t, 4, m.TotalPRs())
+	assert.Len(t, m.FilteredPRs(), 4)
+
+	m.SetPerPage(0)
+	assert.Equal(t, 2, m.PerPage(), "invalid page size should be ignored")
+}
+
 func TestSelectedPR(t *testing.T) {
 	m := NewPRListModel(testStyles(), testKeys())
 	m.SetPRs(testPRs())
@@ -205,6 +235,33 @@ func TestSearchFilterCaseInsensitive(t *testing.T) {
 	m.applyFilter()
 
 	assert.Len(t, m.filtered, 1)
+}
+
+func TestPRListSearchModeEditsQueryAndCanCancel(t *testing.T) {
+	m := NewPRListModel(testStyles(), testKeys())
+	m.SetPRs(testPRs())
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	assert.True(t, m.searching)
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("plugin")})
+	require.Len(t, m.filtered, 1)
+	assert.Equal(t, "plugin", m.searchQuery)
+
+	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	assert.Equal(t, "plugi", m.searchQuery)
+
+	m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	assert.False(t, m.searching)
+	assert.Empty(t, m.searchQuery)
+	assert.Len(t, m.filtered, len(testPRs()))
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("alice")})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	assert.False(t, m.searching)
+	require.Len(t, m.filtered, 1)
+	assert.Equal(t, "alice", m.filtered[0].Author)
 }
 
 func TestCycleSort(t *testing.T) {
@@ -324,6 +381,74 @@ func TestPRListQuickFilterNeedsReview(t *testing.T) {
 	filterMsg, ok := msg.(PRListFilterMsg)
 	require.True(t, ok, "expected PRListFilterMsg, got %T", msg)
 	assert.Equal(t, "Needs Review", filterMsg.Label)
+}
+
+func TestPRListSelectionModeBatchActions(t *testing.T) {
+	prs := testPRs()
+	for i := range prs {
+		prs[i].URL = "https://example.test/pr/" + string(rune('a'+i))
+	}
+
+	m := NewPRListModel(testStyles(), testKeys())
+	m.SetPRs(prs)
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	assert.True(t, m.IsSelectionMode())
+	assert.Equal(t, 0, m.SelectionCount())
+
+	m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	assert.Equal(t, 1, m.SelectionCount())
+	assert.Equal(t, []string{prs[0].URL}, m.selectedURLs())
+
+	msg := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})()
+	copyMsg := msg.(BatchCopyURLsMsg)
+	assert.Equal(t, []string{prs[0].URL}, copyMsg.URLs)
+
+	msg = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})()
+	openMsg := msg.(BatchOpenBrowserMsg)
+	assert.Equal(t, []string{prs[0].URL}, openMsg.URLs)
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	assert.Equal(t, len(prs), m.SelectionCount())
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	assert.False(t, m.IsSelectionMode())
+	assert.Equal(t, 0, m.SelectionCount())
+}
+
+func TestPRListPanelFilterRequiresAllCriteria(t *testing.T) {
+	m := NewPRListModel(testStyles(), testKeys())
+	prs := testPRs()
+	prs[0].Labels = []string{"Backend", "Security"}
+	prs[1].Labels = []string{"backend"}
+	prs[1].Draft = true
+	m.SetPRs(prs)
+
+	m.SetFilter(domain.ListOpts{
+		State:  domain.PRStateOpen,
+		Author: "INDRA",
+		Labels: []string{"security"},
+		CI:     domain.CIPass,
+		Review: domain.ReviewApproved,
+		Draft:  domain.DraftExclude,
+	})
+	require.Len(t, m.FilteredPRs(), 1)
+	assert.Equal(t, 142, m.FilteredPRs()[0].Number)
+	assert.Equal(t, "Filtered", m.FilterLabel())
+
+	m.SetFilter(domain.ListOpts{Draft: domain.DraftOnly})
+	require.Len(t, m.FilteredPRs(), 2)
+	for _, pr := range m.FilteredPRs() {
+		assert.True(t, pr.Draft)
+	}
+
+	m.SetFilter(domain.ListOpts{State: domain.PRStateClosed})
+	assert.Empty(t, m.FilteredPRs())
+
+	assert.True(t, hasLabel([]string{"Backend"}, "backend"))
+	assert.False(t, hasLabel([]string{"Backend"}, "frontend"))
+	assert.Equal(t, "", filterLabelFromOpts(domain.ListOpts{State: domain.PRStateOpen}))
+	assert.Equal(t, "Filtered", filterLabelFromOpts(domain.ListOpts{State: domain.PRStateMerged}))
 }
 
 func TestPRListOpenFilterKey(t *testing.T) {

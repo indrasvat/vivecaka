@@ -18,6 +18,14 @@ func testLocator(t *testing.T) *Locator {
 	return NewWithPath(filepath.Join(dir, "known-repos.json"))
 }
 
+func TestNewUsesXDGDataHome(t *testing.T) {
+	dataHome := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dataHome)
+
+	loc := New()
+	assert.Equal(t, filepath.Join(dataHome, "vivecaka", "known-repos.json"), loc.dataPath)
+}
+
 func TestLookupMiss(t *testing.T) {
 	loc := testLocator(t)
 	path, found := loc.Lookup(domain.RepoRef{Owner: "foo", Name: "bar"})
@@ -124,6 +132,24 @@ func TestValidateWithNonexistentPath(t *testing.T) {
 	// Stale entry should be removed.
 	_, found := loc.Lookup(repo)
 	assert.False(t, found)
+}
+
+func TestValidateWithMatchingGitRemote(t *testing.T) {
+	bin := t.TempDir()
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "git"), []byte("#!/bin/sh\nprintf 'https://github.com/foo/bar.git\\n'\n"), 0o755))
+
+	loc := testLocator(t)
+	repo := domain.RepoRef{Owner: "foo", Name: "bar"}
+	repoPath := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(repoPath, ".git"), 0o755))
+	require.NoError(t, loc.Register(repo, repoPath, "manual"))
+
+	path, valid := loc.Validate(repo)
+	assert.True(t, valid)
+	assert.Equal(t, repoPath, path)
+	assert.True(t, isValidRepoDir(repoPath, repo))
+	assert.False(t, isValidRepoDir(t.TempDir(), repo))
 }
 
 func TestCorruptedJSON(t *testing.T) {

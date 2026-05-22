@@ -2,6 +2,7 @@ package cache
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -51,6 +52,20 @@ func TestLoadMissing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, prs, "expected nil PRs")
 	assert.True(t, updated.IsZero(), "expected zero time")
+}
+
+func TestLoadCorruptedCacheReturnsError(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", tmp)
+
+	repo := domain.RepoRef{Owner: "bad", Name: "cache"}
+	require.NoError(t, os.MkdirAll(filepath.Dir(CachePath(repo)), 0o755))
+	require.NoError(t, os.WriteFile(CachePath(repo), []byte("{not json"), 0o644))
+
+	prs, updated, err := Load(repo)
+	require.Error(t, err)
+	assert.Nil(t, prs)
+	assert.True(t, updated.IsZero())
 }
 
 func TestIsStale(t *testing.T) {

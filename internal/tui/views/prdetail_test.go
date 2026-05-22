@@ -121,6 +121,137 @@ func TestSetDetail(t *testing.T) {
 	assert.Equal(t, 0, m.pendingNum)
 }
 
+func TestPRDetailAccessorsLoadingAndFileSelection(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	m.SetSize(100, 30)
+
+	assert.Nil(t, m.GetDetail())
+	assert.Nil(t, m.GetInlineComments())
+	assert.Equal(t, domain.BranchInfo{}, m.GetBranch())
+	assert.Empty(t, m.SelectedFilePath())
+
+	cmd := m.StartLoading(77)
+	assert.NotNil(t, cmd)
+	assert.Equal(t, 77, m.GetPRNumber())
+	m.StopLoading()
+	assert.False(t, m.loading)
+	assert.Equal(t, 0, m.GetPRNumber())
+
+	detail := testDetail()
+	detail.InlineComments = []domain.CommentThread{{ID: "thread-1", Path: "cmd/main.go", Line: 12}}
+	m.SetDetail(detail)
+	assert.Same(t, detail, m.GetDetail())
+	assert.Equal(t, detail.Branch, m.GetBranch())
+	assert.Equal(t, detail.InlineComments, m.GetInlineComments())
+	assert.Equal(t, detail.Files[0].Path, m.SelectedFilePath())
+
+	m.JumpToFile(detail.Files[1].Path)
+	assert.Equal(t, TabFiles, m.tab)
+	assert.Equal(t, detail.Files[1].Path, m.SelectedFilePath())
+
+	m.JumpToFile("")
+	assert.Equal(t, detail.Files[1].Path, m.SelectedFilePath())
+	m.JumpToFile("missing.go")
+	assert.Equal(t, detail.Files[1].Path, m.SelectedFilePath())
+}
+
+func TestPRDetailSelectedURLsAndDiscussionCursorClamp(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	detail := testDetail()
+	detail.URL = "https://example.test/pr/42"
+	detail.Checks = []domain.Check{
+		{Name: "no-url"},
+		{Name: "ci", URL: "https://ci.test/build"},
+	}
+	detail.Discussion = []domain.DiscussionItem{
+		{ID: "c1", URL: "https://example.test/comment/1"},
+		{ID: "c2"},
+	}
+	m.SetDetail(detail)
+
+	assert.Equal(t, detail.URL, m.openURL())
+
+	m.tab = TabChecks
+	m.scrollY = -10
+	assert.Equal(t, "https://ci.test/build", m.selectedCheckURL())
+	assert.Equal(t, "https://ci.test/build", m.openURL())
+	m.scrollY = 99
+	assert.Equal(t, "https://ci.test/build", m.selectedCheckURL())
+
+	m.tab = TabComments
+	m.commentCursor = -1
+	item, ok := m.currentDiscussionItem()
+	require.True(t, ok)
+	assert.Equal(t, "c1", item.ID)
+	assert.Equal(t, "https://example.test/comment/1", m.openURL())
+
+	m.commentCursor = 99
+	item, ok = m.currentDiscussionItem()
+	require.True(t, ok)
+	assert.Equal(t, "c2", item.ID)
+	assert.Equal(t, detail.URL, m.openURL(), "comment without URL falls back to PR URL")
+
+	empty := NewPRDetailModel(testStyles(), testKeys())
+	assert.Empty(t, empty.openURL())
+	_, ok = empty.currentDiscussionItem()
+	assert.False(t, ok)
+	assert.Empty(t, empty.selectedCheckURL())
+}
+
+func TestPRDetailFilteredFilesRespectReviewScope(t *testing.T) {
+	m := NewPRDetailModel(testStyles(), testKeys())
+	detail := testDetail()
+	m.SetDetail(detail)
+
+	require.Len(t, m.filteredFiles(), len(detail.Files))
+	assert.True(t, m.filteredFiles()[0].Actionable)
+
+	ctx := &reviewprogress.Context{
+		Scope: reviewprogress.ScopeSinceReview,
+		Files: []reviewprogress.File{
+			{Path: detail.Files[0].Path, Actionable: false},
+			{Path: detail.Files[1].Path, Actionable: true},
+		},
+	}
+	m.SetReviewContext(ctx)
+	files := m.filteredFiles()
+	require.Len(t, files, 1)
+	assert.Equal(t, detail.Files[1].Path, files[0].Path)
+
+	m.scrollY = 99
+	m.clampFilesCursor()
+	assert.Equal(t, 0, m.scrollY)
+
+	ctx.Scope = reviewprogress.ScopeAll
+	m.SetReviewContext(ctx)
+	require.Len(t, m.filteredFiles(), 2)
+
+	m.detail = nil
+	assert.Nil(t, m.filteredFiles())
+	m.scrollY = 5
+	m.clampFilesCursor()
+	assert.Equal(t, 0, m.scrollY)
+}
+
+func TestPRDetailFormattingHelpers(t *testing.T) {
+	assert.Equal(t, "Title\n• item\n• other\nplain", simpleMarkdown("# Title\n- item\n* other\nplain"))
+	assert.Equal(t, "", renderMarkdown("  \n", 80))
+
+	assert.Equal(t, "", formatRelativeTime(time.Time{}))
+	assert.Equal(t, "just now", formatRelativeTime(time.Now()))
+	assert.Contains(t, formatRelativeTime(time.Now().Add(-30*time.Minute)), "30m")
+	assert.Contains(t, formatRelativeTime(time.Now().Add(-3*time.Hour)), "3h")
+	assert.Contains(t, formatRelativeTime(time.Now().Add(-2*24*time.Hour)), "2d")
+	assert.Contains(t, formatRelativeTime(time.Now().Add(-10*24*time.Hour)), time.Now().Add(-10*24*time.Hour).Format("Jan"))
+
+	assert.Equal(t, "abc", truncatePath("abcdef", 3))
+	assert.Equal(t, "abcdef", truncatePath("abcdef", 6))
+	assert.Equal(t, "", truncateLine("abcdef", 0))
+	assert.Equal(t, "abc", truncateLine("abcdef", 3))
+	assert.Equal(t, "ab...", truncateLine("abcdef", 5))
+	assert.Equal(t, "abc", truncateLine("abc", 5))
+}
+
 func TestSelectedFilePathWithNilDetail(t *testing.T) {
 	m := NewPRDetailModel(testStyles(), testKeys())
 

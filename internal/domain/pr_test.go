@@ -21,6 +21,36 @@ func TestRepoRefString(t *testing.T) {
 	}
 }
 
+func TestRepoRefSafeFilenameSanitizesPathComponents(t *testing.T) {
+	tests := []struct {
+		name string
+		ref  RepoRef
+		want string
+	}{
+		{
+			name: "normal owner repo",
+			ref:  RepoRef{Owner: "octocat", Name: "hello-world"},
+			want: "octocat_hello-world",
+		},
+		{
+			name: "slashes and traversal",
+			ref:  RepoRef{Owner: "../org/name", Name: `..\repo/sub`},
+			want: "__org_name___repo_sub",
+		},
+		{
+			name: "empty and null bytes",
+			ref:  RepoRef{Owner: "", Name: "repo\x00name"},
+			want: "__reponame",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.ref.SafeFilename())
+		})
+	}
+}
+
 func TestPRStateString(t *testing.T) {
 	tests := []struct {
 		s    PRState

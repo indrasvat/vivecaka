@@ -69,6 +69,45 @@ func TestApplyOverridesUnknown(t *testing.T) {
 	km.ApplyOverrides(map[string]string{"nonexistent": "x"})
 }
 
+func TestApplyOverridesCoversEveryNamedBinding(t *testing.T) {
+	km := DefaultKeyMap()
+	overrides := map[string]string{
+		"quit":           "ctrl+q",
+		"help":           "f1",
+		"repo_switch":    "ctrl+r",
+		"refresh":        "R",
+		"theme_cycle":    "T",
+		"up":             "up",
+		"down":           "down",
+		"page_up":        "pgup",
+		"page_down":      "pgdown",
+		"half_page_up":   "u",
+		"half_page_down": "d",
+		"top":            "home",
+		"bottom":         "end",
+		"enter":          "enter",
+		"back":           "esc",
+		"tab":            "tab",
+		"shift_tab":      "shift+tab",
+		"search":         "/",
+		"filter":         "F",
+		"sort":           "S",
+		"yank":           "Y",
+		"open":           "O",
+		"checkout":       "C",
+	}
+
+	km.ApplyOverrides(overrides)
+
+	for name, want := range overrides {
+		binding := km.bindingByName(name)
+		if assert.NotNil(t, binding, name) {
+			assert.Contains(t, binding.Keys(), want, name)
+		}
+	}
+	assert.Nil(t, km.bindingByName("missing"))
+}
+
 func TestFullHelpNotEmpty(t *testing.T) {
 	km := DefaultKeyMap()
 	full := km.FullHelp()
