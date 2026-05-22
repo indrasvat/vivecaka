@@ -23,6 +23,101 @@ func TestFilterDefaults(t *testing.T) {
 	assert.Equal(t, domain.DraftInclude, opts.Draft)
 }
 
+func TestFilterKeyboardFlowCoversFieldsAndActions(t *testing.T) {
+	m := NewFilterModel(testStyles(), testKeys())
+	m.SetSize(90, 30)
+	m.SetOpts(domain.ListOpts{
+		State:   domain.PRStateClosed,
+		Author:  "alice",
+		Labels:  []string{"bug", "docs"},
+		CI:      domain.CIFail,
+		Review:  domain.ReviewPending,
+		Draft:   domain.DraftOnly,
+		PerPage: 25,
+	})
+
+	opts := m.Opts()
+	assert.Equal(t, domain.PRStateClosed, opts.State)
+	assert.Equal(t, "alice", opts.Author)
+	assert.ElementsMatch(t, []string{"bug", "docs"}, opts.Labels)
+	assert.Equal(t, domain.CIFail, opts.CI)
+	assert.Equal(t, domain.ReviewPending, opts.Review)
+	assert.Equal(t, domain.DraftOnly, opts.Draft)
+	assert.Equal(t, 25, opts.PerPage)
+
+	m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	assert.Equal(t, filterFieldAuthor, m.focus)
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'!'}})
+	assert.Equal(t, "alice!", m.author)
+	m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	assert.Equal(t, "alice! ", m.author)
+	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	assert.Equal(t, "alice!", m.author)
+
+	m.focus = filterFieldLabel
+	m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	assert.Equal(t, 1, m.labelCursor)
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	assert.Equal(t, 0, m.labelCursor)
+	m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	assert.True(t, m.labelSelected[m.labelOptions[0]])
+
+	m.focus = filterFieldStatus
+	m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	assert.Equal(t, 2, m.statusIdx)
+	m.focus = filterFieldCI
+	m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	assert.NotEqual(t, domain.CIFail, m.Opts().CI)
+	m.focus = filterFieldReview
+	m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	assert.NotEqual(t, domain.ReviewPending, m.Opts().Review)
+	m.focus = filterFieldDraft
+	m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	assert.NotEqual(t, domain.DraftOnly, m.Opts().Draft)
+
+	m.focus = filterFieldApply
+	msg := m.Update(tea.KeyMsg{Type: tea.KeyEnter})()
+	_, ok := msg.(ApplyFilterMsg)
+	assert.True(t, ok)
+
+	m.focus = filterFieldCancel
+	msg = m.Update(tea.KeyMsg{Type: tea.KeySpace})()
+	_, ok = msg.(CloseFilterMsg)
+	assert.True(t, ok)
+
+	m.focus = filterFieldReset
+	assert.Nil(t, m.Update(tea.KeyMsg{Type: tea.KeyEnter}))
+	assert.Empty(t, m.author)
+	assert.Empty(t, m.Opts().Labels)
+}
+
+func TestFilterNavigationHelpersAndBounds(t *testing.T) {
+	m := NewFilterModel(testStyles(), testKeys())
+	m.labelOptions = nil
+	m.labelCursor = 10
+	m.moveLabelCursor(1)
+	assert.Equal(t, 0, m.labelCursor)
+
+	m.focus = 0
+	m.prevField()
+	assert.Equal(t, filterFieldCount-1, m.focus)
+	m.nextField()
+	assert.Equal(t, 0, m.focus)
+
+	assert.Equal(t, 0, indexOfCI(domain.CIStatus("unknown")))
+	assert.Equal(t, 0, indexOfReview(domain.ReviewState("unknown")))
+	assert.Equal(t, 0, indexOfDraft(domain.DraftFilter("unknown")))
+	assert.Equal(t, "abc", appendRune("abc", 'd', 3))
+	assert.Equal(t, "abcd", appendRune("abc", 'd', 0))
+	assert.Equal(t, "", backspace(""))
+	assert.Equal(t, "ab", backspace("abc"))
+
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	_, ok := cmd().(CloseFilterMsg)
+	assert.True(t, ok)
+	assert.Nil(t, m.Update("not a key"))
+}
+
 func TestFilterSetOpts(t *testing.T) {
 	m := NewFilterModel(testStyles(), testKeys())
 	m.SetOpts(domain.ListOpts{

@@ -110,6 +110,110 @@ func TestNextActionableAfter(t *testing.T) {
 	assert.Equal(t, "b.go", ctx.NextActionableAfter("c.go"))
 }
 
+func TestDigestsFromDiffAreStableAndContentSensitive(t *testing.T) {
+	diff := &domain.Diff{Files: []domain.FileDiff{
+		{
+			Path:    "renamed.go",
+			OldPath: "old.go",
+			Hunks: []domain.Hunk{{
+				Header: "@@ -1 +1,2 @@",
+				Lines: []domain.DiffLine{
+					{Type: domain.DiffContext, Content: "package old", OldNum: 1, NewNum: 1},
+					{Type: domain.DiffAdd, Content: "func added() {}", NewNum: 2},
+				},
+			}},
+		},
+	}}
+
+	first := DigestsFromDiff(diff)
+	second := DigestsFromDiff(diff)
+	require.Equal(t, first, second, "same parsed diff must produce a stable patch digest")
+	require.Len(t, first["renamed.go"], 40)
+
+	diff.Files[0].Hunks[0].Lines[1].Content = "func changed() {}"
+	changed := DigestsFromDiff(diff)
+	assert.NotEqual(t, first["renamed.go"], changed["renamed.go"], "digest should change when patch content changes")
+	assert.Nil(t, DigestsFromDiff(nil))
+}
+
+func TestFallbackDigestAndBuildCoverBaselineTransitions(t *testing.T) {
+	detail := &domain.PRDetail{
+		PR: domain.PR{Branch: domain.BranchInfo{HeadSHA: "head-2", BaseSHA: "base-1"}},
+		Files: []domain.FileChange{
+			{Path: "changed.go", Status: "modified", Additions: 3, Deletions: 1},
+			{Path: "viewed.go", Status: "modified", Additions: 1, Deletions: 0},
+			{Path: "new.go", Status: "added", Additions: 9, Deletions: 0},
+		},
+	}
+	changedDigest := "changed-now"
+	viewedDigest := FallbackDigest(detail.Files[1])
+	state := cache.PRReviewState{
+		ActiveScope:       string(ScopeSinceVisit),
+		LastVisitAt:       time.Now().Add(-time.Hour),
+		LastReviewAt:      time.Now().Add(-2 * time.Hour),
+		LastVisitHeadSHA:  "head-1",
+		LastReviewHeadSHA: "head-0",
+		LastVisitFiles:    map[string]string{"changed.go": "old", "viewed.go": viewedDigest},
+		LastReviewFiles:   map[string]string{"changed.go": "old", "viewed.go": viewedDigest},
+		ViewedFiles:       map[string]cache.FileReviewState{"viewed.go": {PatchDigest: viewedDigest}},
+	}
+
+	ctx := Build(detail, map[string]string{"changed.go": changedDigest}, state, true)
+	require.NotNil(t, ctx)
+	assert.True(t, ctx.DegradedDigestSource)
+	assert.True(t, ctx.HasVisitBaseline)
+	assert.True(t, ctx.HasReviewBaseline)
+	assert.Equal(t, 1, ctx.ViewedFiles)
+	assert.Equal(t, 2, ctx.SinceVisitFiles)
+	assert.Equal(t, 2, ctx.ActionableFiles, "changed and new are actionable under since-visit")
+	assert.Equal(t, "changed.go", ctx.NextActionablePath)
+	assert.Equal(t, changedDigest, ctx.CurrentDigests["changed.go"])
+	assert.NotEmpty(t, ctx.CurrentDigests["new.go"], "missing diff digest falls back to metadata digest")
+
+	viewed, ok := ctx.FindFile("viewed.go")
+	require.True(t, ok)
+	assert.True(t, viewed.Viewed)
+	assert.False(t, viewed.Actionable)
+
+	assert.NotEqual(t, FallbackDigest(detail.Files[0]), FallbackDigest(domain.FileChange{
+		Path: "changed.go", Status: "modified", Additions: 4, Deletions: 1,
+	}))
+	assert.Nil(t, Build(nil, nil, cache.PRReviewState{}, false))
+}
+
+func TestBuildActionableFallbacksWhenBaselinesAreMissing(t *testing.T) {
+	detail := &domain.PRDetail{
+		PR: domain.PR{Branch: domain.BranchInfo{HeadSHA: "head"}},
+		Files: []domain.FileChange{
+			{Path: "seen.go", Additions: 1},
+			{Path: "unseen.go", Additions: 1},
+		},
+	}
+	seenDigest := FallbackDigest(detail.Files[0])
+	state := cache.PRReviewState{
+		ActiveScope: string(ScopeSinceReview),
+		ViewedFiles: map[string]cache.FileReviewState{
+			"seen.go": {PatchDigest: seenDigest},
+		},
+	}
+
+	ctx := Build(detail, nil, state, false)
+	require.NotNil(t, ctx)
+	assert.False(t, ctx.HasReviewBaseline)
+	assert.Equal(t, 1, ctx.ActionableFiles, "without a review baseline, unviewed files are actionable")
+	assert.Equal(t, "unseen.go", ctx.NextActionableAfter("seen.go"))
+
+	unviewedState := state
+	unviewedState.ActiveScope = string(ScopeUnviewed)
+	ctx = Build(detail, nil, unviewedState, false)
+	assert.Equal(t, 1, ctx.ActionableFiles)
+
+	allState := state
+	allState.ActiveScope = string(ScopeAll)
+	ctx = Build(detail, nil, allState, false)
+	assert.Equal(t, 2, ctx.ActionableFiles)
+}
+
 func TestSummary(t *testing.T) {
 	t.Run("nil context returns zero summary", func(t *testing.T) {
 		var ctx *Context

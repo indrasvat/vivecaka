@@ -396,8 +396,7 @@ func (a *App) handleAppMessage(msg tea.Msg) (bool, tea.Cmd) {
 		_, cmd := a.handleOpenDiff(typedMsg)
 		return true, cmd
 	case views.OpenExternalDiffMsg:
-		_, cmd := a.handleOpenExternalDiff(typedMsg)
-		return true, cmd
+		return true, a.handleOpenExternalDiff(typedMsg)
 	case views.OpenFilterMsg:
 		a.prevView = a.view
 		a.view = core.ViewFilter
@@ -420,22 +419,18 @@ func (a *App) handleAppMessage(msg tea.Msg) (bool, tea.Cmd) {
 	case views.DiffLoadedMsg:
 		return true, a.handleDiffLoaded(typedMsg)
 	case views.AddInlineCommentMsg:
-		_, cmd := a.handleAddInlineComment(typedMsg)
-		return true, cmd
+		return true, a.handleAddInlineComment(typedMsg)
 	case views.InlineCommentAddedMsg:
-		_, cmd := a.handleInlineCommentAdded(typedMsg)
-		return true, cmd
+		return true, a.handleInlineCommentAdded(typedMsg)
 	case views.StartReviewMsg:
 		a.prevView = a.view
 		a.view = core.ViewReview
 		a.reviewForm.SetPRNumber(typedMsg.Number)
 		return true, a.reviewForm.Init()
 	case views.SubmitReviewMsg:
-		_, cmd := a.handleSubmitReview(typedMsg)
-		return true, cmd
+		return true, a.handleSubmitReview(typedMsg)
 	case views.ReviewSubmittedMsg:
-		_, cmd := a.handleReviewSubmitted(typedMsg)
-		return true, cmd
+		return true, a.handleReviewSubmitted(typedMsg)
 	case views.CycleReviewScopeMsg:
 		a.handleCycleReviewScope()
 		return true, nil
@@ -512,15 +507,13 @@ func (a *App) handleAppMessage(msg tea.Msg) (bool, tea.Cmd) {
 		a.view = core.ViewPRList
 		return true, nil
 	case views.ResolveThreadMsg:
-		_, cmd := a.handleResolveThread(typedMsg)
-		return true, cmd
+		return true, a.handleResolveThread(typedMsg)
 	case views.UnresolveThreadMsg:
 		return true, a.toasts.Add("Unresolve not implemented yet", domain.ToastInfo, 3*time.Second)
 	case views.ReplyToThreadMsg:
 		return true, a.toasts.Add("Reply not implemented yet", domain.ToastInfo, 3*time.Second)
 	case resolveThreadDoneMsg:
-		_, cmd := a.handleResolveThreadDone(typedMsg)
-		return true, cmd
+		return true, a.handleResolveThreadDone(typedMsg)
 	case views.TutorialDoneMsg:
 		if err := views.MarkTutorialDone(); err != nil {
 			return true, a.toasts.Add(
@@ -1034,7 +1027,7 @@ func detectDiffTool() string {
 	return ""
 }
 
-func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) tea.Cmd {
 	tool := a.cfg.Diff.ExternalTool
 	if tool == "" {
 		tool = detectDiffTool()
@@ -1044,7 +1037,7 @@ func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, 
 			"No external diff tool found. Set [diff] external_tool in config.",
 			domain.ToastWarning, 5*time.Second,
 		)
-		return a, cmd
+		return cmd
 	}
 	// Reject diff tool names containing shell metacharacters to prevent injection.
 	if strings.ContainsAny(tool, config.ShellMetaChars) {
@@ -1052,7 +1045,7 @@ func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, 
 			"External diff tool contains unsafe characters — check config.",
 			domain.ToastError, 5*time.Second,
 		)
-		return a, cmd
+		return cmd
 	}
 
 	// Validate the tool exists as an executable before use.
@@ -1061,7 +1054,7 @@ func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, 
 			fmt.Sprintf("Diff tool %q not found in PATH.", tool),
 			domain.ToastWarning, 5*time.Second,
 		)
-		return a, cmd
+		return cmd
 	}
 
 	// If the API diff failed (e.g. too large), fall back to local git diff.
@@ -1074,14 +1067,14 @@ func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, 
 					"No local repo found. Press Esc → c to checkout the branch first.",
 					domain.ToastWarning, 5*time.Second,
 				)
-				return a, cmd
+				return cmd
 			}
 			c := exec.Command("sh", "-c", //nolint:noctx
 				`git fetch origin "$1" "$2" && GIT_EXTERNAL_DIFF="$3" git diff "origin/$1"..."origin/$2"`,
 				"_", branch.Base, branch.Head, tool,
 			)
 			c.Dir = repoDir
-			return a, tea.ExecProcess(c, func(err error) tea.Msg {
+			return tea.ExecProcess(c, func(err error) tea.Msg {
 				return externalDiffDoneMsg{Err: err}
 			})
 		}
@@ -1091,7 +1084,7 @@ func (a *App) handleOpenExternalDiff(msg views.OpenExternalDiffMsg) (tea.Model, 
 	args := []string{"pr", "diff", fmt.Sprintf("%d", msg.Number)}
 	c := exec.Command("gh", args...) //nolint:noctx // tea.ExecProcess requires raw *exec.Cmd, no context available
 	c.Env = append(c.Environ(), fmt.Sprintf("GH_PAGER=%s", tool))
-	return a, tea.ExecProcess(c, func(err error) tea.Msg {
+	return tea.ExecProcess(c, func(err error) tea.Msg {
 		if err != nil {
 			return externalDiffDoneMsg{Err: err}
 		}
@@ -1124,51 +1117,51 @@ func (a *App) handleOpenDiff(msg views.OpenDiffMsg) (tea.Model, tea.Cmd) {
 	return a, spinnerCmd
 }
 
-func (a *App) handleAddInlineComment(msg views.AddInlineCommentMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleAddInlineComment(msg views.AddInlineCommentMsg) tea.Cmd {
 	if a.addComment != nil && a.repo.Owner != "" {
-		return a, addInlineCommentCmd(a.addComment, a.repo, msg.Number, msg.Input)
+		return addInlineCommentCmd(a.addComment, a.repo, msg.Number, msg.Input)
 	}
-	return a, nil
+	return nil
 }
 
-func (a *App) handleInlineCommentAdded(msg views.InlineCommentAddedMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleInlineCommentAdded(msg views.InlineCommentAddedMsg) tea.Cmd {
 	if msg.Err != nil {
 		cmd := a.toasts.Add(
 			fmt.Sprintf("Comment failed: %v", msg.Err),
 			domain.ToastError, 5*time.Second,
 		)
-		return a, cmd
+		return cmd
 	}
 	cmd := a.toasts.Add("Comment added", domain.ToastSuccess, 3*time.Second)
 	// Refresh PR detail to show the new comment.
 	if a.getPRDetail != nil && a.prDetail.GetPRNumber() > 0 {
-		return a, tea.Batch(cmd, loadPRDetailCmd(a.getPRDetail, a.repo, a.prDetail.GetPRNumber()))
+		return tea.Batch(cmd, loadPRDetailCmd(a.getPRDetail, a.repo, a.prDetail.GetPRNumber()))
 	}
-	return a, cmd
+	return cmd
 }
 
-func (a *App) handleSubmitReview(msg views.SubmitReviewMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleSubmitReview(msg views.SubmitReviewMsg) tea.Cmd {
 	if a.reviewPR != nil && a.repo.Owner != "" {
-		return a, submitReviewCmd(a.reviewPR, a.repo, msg.Number, msg.Review)
+		return submitReviewCmd(a.reviewPR, a.repo, msg.Number, msg.Review)
 	}
-	return a, nil
+	return nil
 }
 
-func (a *App) handleReviewSubmitted(msg views.ReviewSubmittedMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleReviewSubmitted(msg views.ReviewSubmittedMsg) tea.Cmd {
 	if msg.Err != nil {
 		cmd := a.toasts.Add(
 			fmt.Sprintf("Review failed: %v", msg.Err),
 			domain.ToastError, 5*time.Second,
 		)
-		return a, cmd
+		return cmd
 	}
 	a.markCurrentPRReviewed()
 	cmd := a.toasts.Add("Review submitted", domain.ToastSuccess, 3*time.Second)
 	a.view = core.ViewPRDetail
 	if a.getPRDetail != nil && a.prDetail.GetPRNumber() > 0 {
-		return a, tea.Batch(cmd, loadPRDetailCmd(a.getPRDetail, a.repo, a.prDetail.GetPRNumber()))
+		return tea.Batch(cmd, loadPRDetailCmd(a.getPRDetail, a.repo, a.prDetail.GetPRNumber()))
 	}
-	return a, cmd
+	return cmd
 }
 
 func (a *App) handleSmartCheckout(msg views.CheckoutPRMsg) (tea.Model, tea.Cmd) {
@@ -1509,27 +1502,27 @@ type resolveThreadDoneMsg struct {
 	Err      error
 }
 
-func (a *App) handleResolveThread(msg views.ResolveThreadMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleResolveThread(msg views.ResolveThreadMsg) tea.Cmd {
 	if a.resolveThread != nil && a.repo.Owner != "" {
-		return a, resolveThreadCmd(a.resolveThread, a.repo, msg.ThreadID)
+		return resolveThreadCmd(a.resolveThread, a.repo, msg.ThreadID)
 	}
-	return a, nil
+	return nil
 }
 
-func (a *App) handleResolveThreadDone(msg resolveThreadDoneMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleResolveThreadDone(msg resolveThreadDoneMsg) tea.Cmd {
 	if msg.Err != nil {
 		cmd := a.toasts.Add(
 			fmt.Sprintf("Resolve failed: %v", msg.Err),
 			domain.ToastError, 5*time.Second,
 		)
-		return a, cmd
+		return cmd
 	}
 	cmd := a.toasts.Add("Thread resolved", domain.ToastSuccess, 3*time.Second)
 	// Refresh PR detail to show updated resolved status
 	if a.getPRDetail != nil && a.prDetail.GetPRNumber() > 0 {
-		return a, tea.Batch(cmd, loadPRDetailCmd(a.getPRDetail, a.repo, a.prDetail.GetPRNumber()))
+		return tea.Batch(cmd, loadPRDetailCmd(a.getPRDetail, a.repo, a.prDetail.GetPRNumber()))
 	}
-	return a, cmd
+	return cmd
 }
 
 func (a *App) handleCycleReviewScope() tea.Model {

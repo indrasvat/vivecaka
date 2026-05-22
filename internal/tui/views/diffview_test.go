@@ -81,6 +81,104 @@ func TestNewDiffViewModel(t *testing.T) {
 	assert.Nil(t, m.diff, "diff should be nil initially")
 }
 
+func TestDiffViewAccessorsFocusAndJumpToFile(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(100, 30)
+	m.SetPRNumber(42)
+	m.SetHeadBranch("feat/diff")
+	m.SetDiff(testDiff())
+
+	assert.False(t, m.IsTreeFocus())
+	assert.False(t, m.IsSplitMode())
+	assert.Equal(t, "internal/plugin/registry.go", m.CurrentFilePath())
+
+	m.JumpToFile("internal/plugin/hooks.go")
+	assert.Equal(t, "internal/plugin/hooks.go", m.CurrentFilePath())
+	assert.Equal(t, 0, m.scrollY)
+
+	m.scrollY = 5
+	m.JumpToFile("")
+	assert.Equal(t, 5, m.scrollY)
+	m.JumpToFile("missing.go")
+	assert.Equal(t, "internal/plugin/hooks.go", m.CurrentFilePath())
+
+	m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	assert.True(t, m.IsTreeFocus())
+	m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	assert.False(t, m.IsTreeFocus())
+
+	empty := NewDiffViewModel(testStyles(), testKeys())
+	assert.Empty(t, empty.CurrentFilePath())
+	empty.JumpToFile("anything.go")
+}
+
+func TestDiffViewTreeFocusKeysAndErrorActions(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetDiff(testDiff())
+	m.treeFocus = true
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	assert.Equal(t, 1, m.fileIdx)
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	assert.Equal(t, 0, m.fileIdx)
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	assert.True(t, m.searching)
+	m.searching = false
+
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	assert.False(t, m.treeFocus)
+
+	m = NewDiffViewModel(testStyles(), testKeys())
+	m.SetPRNumber(99)
+	m.SetHeadBranch("feat/recover")
+	m.Update(DiffLoadedMsg{Number: 99, Err: assert.AnError})
+
+	msg := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})()
+	external, ok := msg.(OpenExternalDiffMsg)
+	require.True(t, ok)
+	assert.Equal(t, 99, external.Number)
+	assert.Error(t, external.LoadErr)
+
+	msg = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})()
+	checkout, ok := msg.(CheckoutPRMsg)
+	require.True(t, ok)
+	assert.Equal(t, 99, checkout.Number)
+	assert.Equal(t, "feat/recover", checkout.Branch)
+}
+
+func TestDiffViewCollapsedRenderingAndHighlightBounds(t *testing.T) {
+	m := NewDiffViewModel(testStyles(), testKeys())
+	m.SetSize(80, 20)
+	m.SetDiff(testDiff())
+
+	assert.False(t, m.isCollapsed(0))
+	m.toggleCollapse()
+	assert.True(t, m.isCollapsed(0))
+	assert.Equal(t, 0, m.scrollY)
+
+	line := m.renderCollapsedFile(m.diff.Files[0], 0)
+	assert.Contains(t, line, "internal/plugin/registry.go")
+	assert.Contains(t, line, "+2")
+	assert.Contains(t, line, "-1")
+
+	fallback := m.renderCollapsedFile(m.diff.Files[0], 99)
+	assert.Contains(t, fallback, "+2")
+	assert.Equal(t, "abcdef", truncateANSIWidth("abcdef", 0))
+	assert.Equal(t, "abc", truncateANSIWidth("abcdef", 3))
+	assert.Equal(t, "ab...", truncateANSIWidth("abcdef", 5))
+
+	base := lipgloss.NewStyle()
+	mark := lipgloss.NewStyle().Bold(true)
+	assert.Equal(t, base.Render("abcdef"), applyHighlights("abcdef", nil, base, mark))
+	rendered := applyHighlights("abcdef", []searchMatch{
+		{colStart: 1, colEnd: 3},
+		{colStart: 99, colEnd: 100},
+	}, base, mark)
+	assert.Contains(t, rendered, "a")
+	assert.Contains(t, rendered, "def")
+}
+
 func TestDiffSetSize(t *testing.T) {
 	m := NewDiffViewModel(testStyles(), testKeys())
 	m.SetSize(120, 40)

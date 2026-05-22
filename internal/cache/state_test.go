@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -58,6 +60,19 @@ func TestLoadRepoStateMissing(t *testing.T) {
 	repo := domain.RepoRef{Owner: "missing", Name: "repo"}
 	state, err := LoadRepoState(repo)
 	require.NoError(t, err)
+	assert.Empty(t, state.LastSort)
+}
+
+func TestLoadRepoStateCorruptedJSONReturnsError(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", tmp)
+
+	repo := domain.RepoRef{Owner: "bad", Name: "state"}
+	require.NoError(t, os.MkdirAll(filepath.Dir(StatePath(repo)), 0o755))
+	require.NoError(t, os.WriteFile(StatePath(repo), []byte("{not json"), 0o644))
+
+	state, err := LoadRepoState(repo)
+	require.Error(t, err)
 	assert.Empty(t, state.LastSort)
 }
 
