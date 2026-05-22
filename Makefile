@@ -1,6 +1,10 @@
 BINARY    := vivecaka
 BINDIR    := bin
 MODULE    := github.com/indrasvat/vivecaka
+GOBIN     := $(shell go env GOPATH)/bin
+GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null || echo "$(GOBIN)/golangci-lint")
+GOVULNCHECK := $(shell command -v govulncheck 2>/dev/null || echo "$(GOBIN)/govulncheck")
+LEFTHOOK  := $(shell command -v lefthook 2>/dev/null || echo "$(GOBIN)/lefthook")
 VERSION   := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT    := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE      := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
@@ -16,7 +20,7 @@ LDFLAGS   := -s -w \
 ## -- Build & Run --------------------------------------------------------------
 
 .PHONY: build
-build: ## Build binary to bin/vivecaka
+build: hooks-ensure ## Build binary to bin/vivecaka
 	@mkdir -p $(BINDIR)
 	go build -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(BINARY) ./cmd/vivecaka
 
@@ -56,8 +60,8 @@ vet: ## Run go vet
 
 .PHONY: lint
 lint: ## Run golangci-lint
-	@command -v golangci-lint >/dev/null 2>&1 || (echo "Install: make tools-ci" && exit 1)
-	golangci-lint run ./...
+	@[ -x "$(GOLANGCI_LINT)" ] || (echo "Install: make tools-ci" && exit 1)
+	"$(GOLANGCI_LINT)" run ./...
 
 .PHONY: test
 test: ## Run tests with race detector
@@ -79,8 +83,8 @@ verify: ## Verify module dependencies
 
 .PHONY: govulncheck
 govulncheck: ## Run govulncheck for known vulnerabilities
-	@command -v govulncheck >/dev/null 2>&1 || (echo "Install: make tools-ci" && exit 1)
-	govulncheck ./...
+	@[ -x "$(GOVULNCHECK)" ] || (echo "Install: make tools-ci" && exit 1)
+	"$(GOVULNCHECK)" ./...
 
 .PHONY: shellcheck
 shellcheck: ## Lint install.sh with shellcheck
@@ -98,22 +102,32 @@ deps: ## Download and tidy dependencies
 
 .PHONY: tools
 tools: ## Install development tools
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
-	go install golang.org/x/vuln/cmd/govulncheck@latest
-	go install github.com/evilmartians/lefthook@latest
-	go install github.com/goreleaser/goreleaser/v2@latest
+	GOTOOLCHAIN=$(GO_VERSION) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
+	GOTOOLCHAIN=$(GO_VERSION) go install golang.org/x/vuln/cmd/govulncheck@latest
+	GOTOOLCHAIN=$(GO_VERSION) go install github.com/evilmartians/lefthook@latest
+	GOTOOLCHAIN=$(GO_VERSION) go install github.com/goreleaser/goreleaser/v2@latest
 
 .PHONY: tools-ci
 tools-ci: ## Install CI tools (golangci-lint + govulncheck)
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
-	go install golang.org/x/vuln/cmd/govulncheck@latest
+	GOTOOLCHAIN=$(GO_VERSION) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
+	GOTOOLCHAIN=$(GO_VERSION) go install golang.org/x/vuln/cmd/govulncheck@latest
 
 ## -- Git Hooks ----------------------------------------------------------------
 
 .PHONY: hooks-install
-hooks-install: ## Install lefthook git hooks
-	@command -v lefthook >/dev/null 2>&1 || (echo "Install: go install github.com/evilmartians/lefthook@latest" && exit 1)
-	lefthook install
+hooks-install: hooks-ensure ## Install lefthook git hooks
+
+.PHONY: hooks-ensure
+hooks-ensure: ## Ensure lefthook git hooks are installed
+	@git rev-parse --git-dir >/dev/null 2>&1 || exit 0; \
+	hook_path="$$(git rev-parse --git-path hooks/pre-push)"; \
+	if [ ! -x "$(LEFTHOOK)" ]; then \
+		echo "Installing lefthook..."; \
+		GOTOOLCHAIN=$(GO_VERSION) go install github.com/evilmartians/lefthook@latest; \
+	fi; \
+	if [ ! -x "$$hook_path" ] || ! grep -q 'call_lefthook run "pre-push"' "$$hook_path" || ! grep -q 'go env GOPATH' "$$hook_path"; then \
+		"$(LEFTHOOK)" install; \
+	fi
 
 .PHONY: hooks-uninstall
 hooks-uninstall: ## Remove lefthook git hooks

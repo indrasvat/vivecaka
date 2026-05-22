@@ -1,3 +1,7 @@
+lefthook: |
+  PATH="$(go env GOPATH)/bin:$PATH"
+  lefthook
+
 pre-push:
   commands:
     ci:
