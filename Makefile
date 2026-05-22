@@ -20,7 +20,7 @@ LDFLAGS   := -s -w \
 ## -- Build & Run --------------------------------------------------------------
 
 .PHONY: build
-build: hooks-ensure ## Build binary to bin/vivecaka
+build: ## Build binary to bin/vivecaka
 	@mkdir -p $(BINDIR)
 	go build -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(BINARY) ./cmd/vivecaka
 
