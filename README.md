@@ -2,6 +2,8 @@
   <img src="assets/logo.png" alt="vivecaka logo" width="220"><br>
   <strong>Keyboard-First GitHub PR Review</strong><br>
   <em>The discerning reviewer for people who live in the terminal.</em><br>
+  <a href="https://github.com/indrasvat/vivecaka/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/indrasvat/vivecaka/ci.yml?branch=main&style=flat&labelColor=1a1a1a&label=CI" alt="CI"></a>
+  <a href="https://codecov.io/gh/indrasvat/vivecaka"><img src="https://codecov.io/gh/indrasvat/vivecaka/branch/main/graph/badge.svg" alt="coverage"></a><br>
   <code>vivecaka</code> (विवेचक) means “one who examines.”
 </p>
 
@@ -18,6 +20,8 @@
 </p>
 
 ---
+
+Latest coverage report: [Codecov dashboard](https://codecov.io/gh/indrasvat/vivecaka).
 
 ## Overview
 
