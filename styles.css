@@ -493,7 +493,8 @@ h1::after {
 
 .flow-grid h3,
 .feature-copy h3,
-.feature-pair h3 {
+.feature-pair h3,
+.repo-wall h3 {
   margin-bottom: 12px;
   color: var(--ink);
   font-size: 22px;
@@ -504,6 +505,7 @@ h1::after {
 .flow-grid p,
 .feature-copy p,
 .feature-pair p,
+.repo-wall p,
 .showcase-heading p,
 .site-footer p {
   color: var(--muted);
@@ -528,21 +530,33 @@ h1::after {
 
 .feature-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.58fr);
-  gap: clamp(28px, 5vw, 72px);
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
   margin-bottom: 76px;
 }
 
 .feature-row-large .terminal-frame img {
-  aspect-ratio: 1.58 / 1;
+  aspect-ratio: 1.72 / 1;
   object-fit: cover;
   object-position: left top;
 }
 
 .feature-copy {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 520px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
   border-top: 1px solid var(--line);
-  padding-top: 28px;
+  padding-top: 22px;
+}
+
+.feature-copy h3,
+.feature-copy p {
+  margin-bottom: 0;
+}
+
+.feature-copy p {
+  max-width: 520px;
 }
 
 .feature-pair {
@@ -554,7 +568,7 @@ h1::after {
 
 .feature-pair article {
   display: grid;
-  gap: 18px;
+  gap: 12px;
   align-content: start;
 }
 
@@ -575,6 +589,45 @@ h1::after {
   gap: 22px;
   padding-top: 22px;
   border-top: 1px solid var(--line);
+}
+
+.repo-wall article {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.repo-wall h3,
+.repo-wall p {
+  margin-bottom: 0;
+}
+
+.screenshot-link {
+  position: relative;
+  display: block;
+  color: inherit;
+}
+
+.screenshot-expand {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 7px 10px;
+  border: 1px solid rgba(240, 238, 232, 0.2);
+  border-radius: 6px;
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.72);
+  font-family: var(--mono);
+  font-size: 12px;
+  opacity: 0.84;
+  transform: none;
+  transition: opacity 160ms ease, transform 160ms ease, border-color 160ms ease;
+}
+
+.screenshot-link:hover .screenshot-expand,
+.screenshot-link:focus .screenshot-expand {
+  opacity: 1;
+  border-color: rgba(246, 173, 38, 0.55);
 }
 
 .install-section {
@@ -854,6 +907,22 @@ h1::after {
   .feature-pair,
   .repo-wall {
     grid-template-columns: 1fr;
+  }
+
+  .feature-copy {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .feature-row-large .terminal-frame img,
+  .feature-pair .terminal-frame img,
+  .repo-wall .terminal-frame img {
+    aspect-ratio: 1.28 / 1;
+  }
+
+  .screenshot-expand {
+    opacity: 1;
+    transform: none;
   }
 
   .flow-grid article,
