@@ -585,15 +585,34 @@ h1::after {
 
 .site-footer {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 28px 0 42px;
+  justify-content: center;
+  gap: 10px;
+  padding: 34px 0 46px;
   border-top: 1px solid var(--line);
+  text-align: center;
 }
 
-.brand.small {
-  font-size: 24px;
+.made-with-love {
+  margin-bottom: 0;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.made-with-love span {
+  color: var(--saffron);
+  font-size: 16px;
+  text-shadow: 0 0 18px rgba(246, 173, 38, 0.35);
+}
+
+.made-with-love a {
+  color: var(--cyan);
+  text-decoration-color: rgba(0, 213, 232, 0.35);
+  text-decoration-line: underline;
+  text-underline-offset: 4px;
 }
 
 .site-footer a:last-child {
@@ -759,8 +778,7 @@ h1::after {
   }
 
   .site-footer {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
   }
 }
 
