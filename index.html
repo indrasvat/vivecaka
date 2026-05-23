@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="vivecaka is a terminal-native GitHub PR review TUI for queue triage, review context, comments, diffs, and checkout."
+    />
+    <meta name="theme-color" content="#0b0c0c" />
+    <meta property="og:title" content="vivecaka - terminal-native PR review" />
+    <meta
+      property="og:description"
+      content="A fast GitHub PR review TUI for developers who live in the terminal."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="assets/site/files-review.png" />
+    <title>vivecaka - terminal-native PR review</title>
+    <link rel="icon" href="assets/site/logo.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header" aria-label="Primary navigation">
+      <a class="brand" href="#top" aria-label="vivecaka home">
+        <img src="assets/site/logo.png" alt="" />
+        <span>vivecaka</span>
+        <span class="brand-script">विवेचक</span>
+      </a>
+      <nav class="nav-links" aria-label="Page sections">
+        <a href="#flow">Flow</a>
+        <a href="#screens">Screens</a>
+        <a href="#install">Install</a>
+      </nav>
+      <a class="nav-action" href="https://github.com/indrasvat/vivecaka">GitHub</a>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="command-line">$ vivecaka --repo=openclaw/openclaw</p>
+          <h1 id="hero-title">PR review, back in your terminal.</h1>
+          <p class="hero-lede">
+            Queue, inspect, comment, review, and checkout without turning a code review into tab archaeology.
+          </p>
+          <div class="hero-actions" aria-label="Primary actions">
+            <a class="button button-primary" href="#install">
+              <span class="button-icon" aria-hidden="true">$</span>
+              Install
+            </a>
+            <a class="button button-secondary" href="https://github.com/indrasvat/vivecaka">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path
+                  d="M12 .7a11.3 11.3 0 0 0-3.6 22c.6.1.8-.2.8-.6v-2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.8.1-.7.1-.7 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.3 3.6 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.8 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.3 11.3 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.5-2.8 5.5-5.5 5.8.5.4.9 1.1.9 2.3v3.4c0 .4.2.7.8.6A11.3 11.3 0 0 0 12 .7Z"
+                  fill="currentColor"
+                />
+              </svg>
+              View source
+            </a>
+          </div>
+          <div class="repo-strip" aria-label="Example repositories">
+            <span>try it on</span>
+            <code>openclaw/openclaw</code>
+            <code>cli/cli</code>
+            <code>vercel/next.js</code>
+          </div>
+        </div>
+
+        <div class="hero-stage" aria-label="vivecaka terminal preview">
+          <figure class="terminal-frame hero-terminal">
+            <div class="terminal-bar">
+              <span></span><span></span><span></span>
+              <strong>vivecaka - openclaw/openclaw</strong>
+            </div>
+            <img
+              src="assets/site/openclaw-queue.png"
+              alt="vivecaka showing the openclaw/openclaw pull request queue in a terminal"
+              width="1584"
+              height="836"
+              decoding="async"
+              fetchpriority="high"
+            />
+          </figure>
+          <figure class="terminal-frame floating-shot">
+            <div class="terminal-bar compact">
+              <span></span><span></span><span></span>
+              <strong>Files tab</strong>
+            </div>
+            <img
+              src="assets/site/files-review.png"
+              alt="vivecaka files view showing incremental review state and viewed files"
+              width="2656"
+              height="1896"
+              decoding="async"
+              fetchpriority="high"
+            />
+          </figure>
+        </div>
+      </section>
+
+      <section id="flow" class="flow-section" aria-labelledby="flow-title">
+        <div class="section-kicker">full PR flow</div>
+        <h2 id="flow-title">One focused surface from queue to checkout.</h2>
+        <div class="flow-grid">
+          <article>
+            <span>1</span>
+            <h3>Queue</h3>
+            <p>Open live PR lists from any GitHub repo.</p>
+          </article>
+          <article>
+            <span>2</span>
+            <h3>Inspect</h3>
+            <p>Read status, checks, metadata, and changed files.</p>
+          </article>
+          <article>
+            <span>3</span>
+            <h3>Review</h3>
+            <p>Move through comments, diffs, and incremental state.</p>
+          </article>
+          <article>
+            <span>4</span>
+            <h3>Act</h3>
+            <p>Reply, resolve, submit, copy, open, or checkout.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="screens" class="showcase" aria-labelledby="screens-title">
+        <div class="showcase-heading">
+          <div>
+            <div class="section-kicker">screenshots</div>
+            <h2 id="screens-title">Real terminal states, composed for review work.</h2>
+          </div>
+          <p>
+            The page uses high-resolution captures from live flows, not fake dashboard art.
+          </p>
+        </div>
+
+        <div class="feature-row feature-row-large">
+          <figure class="terminal-frame">
+            <div class="terminal-bar">
+              <span></span><span></span><span></span>
+              <strong>incremental review</strong>
+            </div>
+            <img
+              src="assets/site/files-review.png"
+              alt="Files tab with viewed and unviewed review state"
+              width="2656"
+              height="1896"
+              loading="lazy"
+              decoding="async"
+            />
+          </figure>
+          <div class="feature-copy">
+            <span class="feature-number">01</span>
+            <h3>Review what changed, not what you already saw.</h3>
+            <p>
+              Cycle scopes, jump to the next actionable file, and keep viewed state tied to the PR head.
+            </p>
+          </div>
+        </div>
+
+        <div class="feature-pair">
+          <article>
+            <figure class="terminal-frame">
+              <div class="terminal-bar">
+                <span></span><span></span><span></span>
+                <strong>comments</strong>
+              </div>
+              <img
+                src="assets/site/comments-review.png"
+                alt="Comments tab with discussion threads inside vivecaka"
+                width="2656"
+                height="1896"
+                loading="lazy"
+                decoding="async"
+              />
+            </figure>
+            <h3>Comments stay in context.</h3>
+            <p>Read, reply, resolve, and continue the review without leaving the TUI.</p>
+          </article>
+          <article>
+            <figure class="terminal-frame">
+              <div class="terminal-bar">
+                <span></span><span></span><span></span>
+                <strong>checkout</strong>
+              </div>
+              <img
+                src="assets/site/smart-checkout.png"
+                alt="Smart checkout dialog in vivecaka"
+                width="2656"
+                height="1896"
+                loading="lazy"
+                decoding="async"
+              />
+            </figure>
+            <h3>Checkout is a first-class action.</h3>
+            <p>Reuse a clone, create one, open GitHub, or switch worktrees from the same flow.</p>
+          </article>
+        </div>
+
+        <div class="repo-wall" aria-label="Repository examples">
+          <figure class="terminal-frame">
+            <div class="terminal-bar">
+              <span></span><span></span><span></span>
+              <strong>openclaw/openclaw</strong>
+            </div>
+            <img
+              src="assets/site/openclaw-queue.png"
+              alt="Pull request queue for openclaw/openclaw"
+              width="1584"
+              height="836"
+              loading="lazy"
+              decoding="async"
+            />
+          </figure>
+          <figure class="terminal-frame">
+            <div class="terminal-bar">
+              <span></span><span></span><span></span>
+              <strong>cli/cli</strong>
+            </div>
+            <img
+              src="assets/site/cli-queue.png"
+              alt="Pull request queue for cli/cli"
+              width="1584"
+              height="836"
+              loading="lazy"
+              decoding="async"
+            />
+          </figure>
+        </div>
+      </section>
+
+      <section id="install" class="install-section" aria-labelledby="install-title">
+        <div class="install-mark" aria-hidden="true">$_</div>
+        <div>
+          <div class="section-kicker">install</div>
+          <h2 id="install-title">Drop it into your shell.</h2>
+        </div>
+        <button class="copy-command" data-copy="curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | bash">
+          <code>curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | bash</code>
+          <span>Copy</span>
+        </button>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <a class="brand small" href="#top">
+        <span>vivecaka</span>
+        <span class="brand-script">विवेचक</span>
+      </a>
+      <p>Built with Go, Bubble Tea, Lip Gloss, and GitHub CLI.</p>
+      <a href="https://github.com/indrasvat/vivecaka/blob/main/LICENSE">MIT</a>
+    </footer>
+
+    <script src="site.js"></script>
+  </body>
+</html>
