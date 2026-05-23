@@ -22,4 +22,6 @@ firebase-debug.log
 
 # Local-only
 .claude/
+.antigravitycli/
+.codemap/
 screenshots/
