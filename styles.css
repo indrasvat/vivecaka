@@ -365,11 +365,6 @@ h1::after {
   color: var(--saffron);
 }
 
-.hero-stage {
-  position: relative;
-  min-height: 590px;
-}
-
 .terminal-frame {
   position: relative;
   margin: 0;
@@ -395,22 +390,57 @@ h1::after {
   background: #1e1e2e;
 }
 
-.hero-terminal {
-  width: min(100%, 980px);
-  margin-left: auto;
+.hero-stage {
+  position: relative;
+  --hero-card-width: min(82%, 820px);
+  min-height: 620px;
+  perspective: 1800px;
 }
 
-.floating-shot {
+.hero-card {
   position: absolute;
-  right: 4%;
-  bottom: -34px;
-  width: min(54%, 520px);
-  transform: rotate(-1.4deg);
+  transform-origin: 50% 50%;
+  background: #1e1e2e;
+  width: var(--hero-card-width);
 }
 
-.floating-shot img {
-  aspect-ratio: 1.4 / 1;
+.hero-card img {
+  aspect-ratio: 1.54 / 1;
   object-fit: cover;
+  object-position: left top;
+}
+
+.hero-card-banner {
+  z-index: 4;
+  left: 0;
+  bottom: 18px;
+  transform: translate3d(0, 0, 90px) scale(1);
+}
+
+.hero-card-banner img {
+  aspect-ratio: 1.54 / 1;
+  object-position: center center;
+}
+
+.hero-card-queue {
+  z-index: 3;
+  left: 11%;
+  bottom: 146px;
+  transform: translate3d(0, 0, 0) scale(0.86);
+}
+
+.hero-card-queue img {
+  object-position: left top;
+}
+
+.hero-card-review {
+  z-index: 2;
+  left: 22%;
+  bottom: 264px;
+  transform: translate3d(0, 0, -90px) scale(0.72);
+}
+
+.hero-card-review img {
   object-position: left top;
 }
 
@@ -549,27 +579,29 @@ h1::after {
 
 .install-section {
   display: grid;
-  grid-template-columns: 100px minmax(220px, 0.7fr) minmax(320px, 1.4fr);
-  gap: 32px;
+  grid-template-columns: 82px minmax(220px, 0.62fr) minmax(360px, 1.45fr);
+  gap: 28px;
   align-items: center;
   margin-bottom: 78px;
-  padding: 30px;
+  padding: 28px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
-  background: linear-gradient(135deg, rgba(246, 173, 38, 0.08), rgba(0, 213, 232, 0.045));
+  background:
+    linear-gradient(135deg, rgba(246, 173, 38, 0.075), rgba(0, 213, 232, 0.04)),
+    rgba(0, 0, 0, 0.18);
   box-shadow: var(--shadow);
 }
 
 .install-mark {
   display: grid;
   place-items: center;
-  width: 76px;
-  height: 76px;
+  width: 64px;
+  height: 64px;
   border: 1px solid var(--line-strong);
   border-radius: 7px;
   color: var(--saffron);
   font-family: var(--mono);
-  font-size: 26px;
+  font-size: 22px;
   background: rgba(0, 0, 0, 0.28);
 }
 
@@ -583,11 +615,51 @@ h1::after {
 }
 
 .install-command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 8px;
+  align-items: start;
   width: 100%;
-  min-height: 64px;
+  min-height: 0;
+}
+
+.install-command code {
+  grid-column: 1;
+  overflow-x: auto;
+  width: auto;
+  margin-right: 0;
+  padding: 18px 20px;
+  color: var(--ink);
+  text-overflow: clip;
+  white-space: nowrap;
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+}
+
+.install-command code::-webkit-scrollbar {
+  height: 6px;
+}
+
+.install-command code::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.install-command code:hover,
+.install-command code:focus {
+  scrollbar-color: rgba(246, 173, 38, 0.55) transparent;
+}
+
+.install-command code:hover::-webkit-scrollbar-thumb,
+.install-command code:focus::-webkit-scrollbar-thumb {
+  background: rgba(246, 173, 38, 0.55);
 }
 
 .install-command .copy-control {
+  position: static;
+  grid-column: 2;
+  margin: 9px 9px 0 0;
+  justify-self: end;
   color: var(--saffron);
 }
 
@@ -678,6 +750,8 @@ h1::after {
 
   .site-header {
     position: static;
+    flex-wrap: wrap;
+    gap: 12px;
   }
 
   .brand {
@@ -685,7 +759,13 @@ h1::after {
   }
 
   .nav-links {
-    display: none;
+    order: 3;
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    gap: 10px;
+    padding-top: 2px;
+    font-size: 11px;
   }
 
   .nav-action {
@@ -715,34 +795,51 @@ h1::after {
   }
 
   .hero-stage {
-    margin-top: 22px;
-    min-height: 0;
-    overflow: visible;
-    padding-bottom: 6px;
+    margin-top: 14px;
+    display: block;
+    min-height: 470px;
+    perspective: 1200px;
+    padding-bottom: 0;
   }
 
-  .hero-terminal {
+  .hero-card {
+    position: absolute;
     width: 100%;
     margin-inline: auto;
   }
 
-  .floating-shot {
-    position: relative;
-    right: auto;
-    bottom: auto;
-    width: 88%;
-    margin: -14px 0 0 auto;
-    transform: rotate(-1deg);
+  .hero-card-banner {
+    left: -2%;
+    bottom: 4px;
+    transform: translate3d(0, 0, 70px) scale(1);
   }
 
-  .hero-terminal img {
-    aspect-ratio: 1.1 / 1;
+  .hero-card-queue {
+    left: 12%;
+    bottom: 150px;
+    transform: translate3d(0, 0, 0) scale(0.76);
+  }
+
+  .hero-card-review {
+    left: 24%;
+    bottom: 260px;
+    transform: translate3d(0, 0, -70px) scale(0.58);
+  }
+
+  .hero-card-banner img {
+    aspect-ratio: 1.35 / 1;
+    object-fit: cover;
+    object-position: center center;
+  }
+
+  .hero-card-queue img {
+    aspect-ratio: 1.35 / 1;
     object-fit: cover;
     object-position: left top;
   }
 
-  .floating-shot {
-    display: none;
+  .hero-card-review img {
+    aspect-ratio: 1.35 / 1;
   }
 
   .showcase {
@@ -785,12 +882,47 @@ h1::after {
   }
 
   .install-section {
-    padding: 22px;
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 16px 14px;
+    padding: 18px;
+  }
+
+  .install-mark {
+    width: 48px;
+    height: 48px;
+    font-size: 19px;
+  }
+
+  .install-section h2 {
+    font-size: clamp(30px, 10vw, 40px);
+    line-height: 0.98;
+  }
+
+  .install-section .section-kicker {
+    margin-bottom: 8px;
+  }
+
+  .install-command {
+    grid-column: 1 / -1;
+  }
+
+  .install-command code {
+    margin-right: 0;
+    padding: 16px;
+    font-size: 12.5px;
+    line-height: 1.65;
+    white-space: nowrap;
   }
 
   .command-card code {
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+
+  .install-command code {
+    overflow-x: auto;
+    overflow-wrap: normal;
+    white-space: nowrap;
   }
 
   .hero-command code {
