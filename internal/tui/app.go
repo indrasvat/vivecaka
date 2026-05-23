@@ -590,7 +590,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		}
 		a.banner.Update(msg)
-		if a.prList.HasPRs() {
+		if a.prList.HasPRs() || a.prList.HasLoadError() {
 			a.view = core.ViewPRList
 		} else {
 			a.view = core.ViewLoading
@@ -776,13 +776,13 @@ func (a *App) handlePRsLoaded(msg views.PRsLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
 		cmd := a.toasts.Add(
 			fmt.Sprintf("Error loading PRs: %v", msg.Err),
-			domain.ToastError, 5*time.Second,
+			domain.ToastError, 8*time.Second,
 		)
 		// Only transition to PR list from loading state — don't dismiss modals/dialogs.
 		if a.view == core.ViewLoading {
 			a.view = core.ViewPRList
 		}
-		a.prList.SetPRs(nil)
+		a.prList.SetLoadError(msg.Err)
 		return a, cmd
 	}
 	// Store PRs but don't switch view while the user is in a modal or detail view.
@@ -940,7 +940,7 @@ func (a *App) handleBatchOpenBrowser(msg views.BatchOpenBrowserMsg) tea.Cmd {
 func (a *App) handleBannerDismiss(msg components.BannerDismissMsg) tea.Cmd {
 	a.banner.Update(msg)
 	if a.view == core.ViewBanner {
-		if a.prList.HasPRs() {
+		if a.prList.HasPRs() || a.prList.HasLoadError() {
 			a.view = core.ViewPRList
 		} else {
 			a.view = core.ViewLoading

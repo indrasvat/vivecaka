@@ -35,6 +35,7 @@ type PRListModel struct {
 	username      string
 	quickFilter   quickFilter
 	panelLabel    string
+	loadErr       string
 
 	// Pagination state
 	page        int  // current page (1-based)
@@ -101,6 +102,7 @@ func (m *PRListModel) SetSize(w, h int) {
 func (m *PRListModel) SetPRs(prs []domain.PR) {
 	m.prs = prs
 	m.loading = false
+	m.loadErr = ""
 	m.page = 1
 	// If we got fewer than perPage, there are no more pages
 	m.hasMore = len(prs) >= m.perPage
@@ -111,14 +113,33 @@ func (m *PRListModel) SetPRs(prs []domain.PR) {
 // AppendPRs adds more PRs to the existing list (pagination).
 func (m *PRListModel) AppendPRs(prs []domain.PR, hasMore bool) {
 	m.prs = append(m.prs, prs...)
+	m.loadErr = ""
 	m.hasMore = hasMore
 	m.loadingMore = false
+	m.applyFilter()
+}
+
+// SetLoadError records a failed initial load without discarding existing data.
+func (m *PRListModel) SetLoadError(err error) {
+	m.loading = false
+	m.loadingMore = false
+	m.hasMore = false
+	if err == nil {
+		m.loadErr = "Unknown error"
+	} else {
+		m.loadErr = err.Error()
+	}
 	m.applyFilter()
 }
 
 // IsLoadingMore returns true if more PRs are being loaded.
 func (m *PRListModel) IsLoadingMore() bool {
 	return m.loadingMore
+}
+
+// HasLoadError returns true when the latest initial list load failed.
+func (m *PRListModel) HasLoadError() bool {
+	return m.loadErr != ""
 }
 
 // HasMore returns true if there are more PRs to load.
@@ -515,6 +536,9 @@ func (m *PRListModel) View() string {
 	}
 
 	if len(m.filtered) == 0 {
+		if m.loadErr != "" {
+			return m.viewLoadError()
+		}
 		msg := "No pull requests found"
 		if m.searchQuery != "" {
 			msg = fmt.Sprintf("No PRs matching %q", m.searchQuery)
@@ -561,6 +585,39 @@ func (m *PRListModel) View() string {
 	// Ensure exact height with full-width padding lines
 	// This is critical for overwriting previous screen content (e.g., banner)
 	return ensureExactHeight(content, m.height, m.width)
+}
+
+func (m *PRListModel) viewLoadError() string {
+	t := m.styles.Theme
+
+	icon := lipgloss.NewStyle().
+		Foreground(t.Error).
+		Render("⚠")
+	title := lipgloss.NewStyle().
+		Foreground(t.Error).
+		Bold(true).
+		Render("Pull requests unavailable")
+	body := lipgloss.NewStyle().
+		Foreground(t.Subtext).
+		Width(max(24, min(72, m.width-8))).
+		Align(lipgloss.Center).
+		Render(m.loadErr)
+	hint := lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Render("Press r to retry")
+
+	content := lipgloss.JoinVertical(lipgloss.Center,
+		icon,
+		"",
+		title,
+		"",
+		body,
+		"",
+		hint,
+	)
+
+	centered := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+	return ensureExactHeight(centered, m.height, m.width)
 }
 
 // ensureExactHeight pads or truncates content to exactly the specified height.

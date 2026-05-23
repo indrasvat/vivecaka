@@ -1,6 +1,7 @@
 package views
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -477,6 +478,44 @@ func TestViewEmpty(t *testing.T) {
 
 	view := m.View()
 	assert.NotEmpty(t, view, "empty view should not be empty string")
+}
+
+func TestViewLoadError(t *testing.T) {
+	m := NewPRListModel(testStyles(), testKeys())
+	m.SetSize(100, 24)
+	m.SetLoadError(errors.New("HTTP 504: Gateway Timeout"))
+
+	view := m.View()
+	assert.Contains(t, view, "Pull requests unavailable")
+	assert.Contains(t, view, "HTTP 504")
+	assert.Contains(t, view, "Press r to retry")
+	assert.NotContains(t, view, "No pull requests found")
+}
+
+func TestSetLoadErrorKeepsExistingPRs(t *testing.T) {
+	m := NewPRListModel(testStyles(), testKeys())
+	m.SetSize(120, 30)
+	m.SetPRs(testPRs())
+
+	m.SetLoadError(errors.New("refresh failed"))
+
+	assert.False(t, m.IsLoading())
+	assert.Equal(t, 5, m.TotalPRs())
+	assert.Contains(t, m.View(), "Add plugin architecture")
+	assert.NotContains(t, m.View(), "Pull requests unavailable")
+}
+
+func TestSetPRsClearsLoadError(t *testing.T) {
+	m := NewPRListModel(testStyles(), testKeys())
+	m.SetSize(120, 30)
+	m.SetLoadError(errors.New("API failed"))
+
+	m.SetPRs(testPRs())
+
+	view := m.View()
+	assert.Contains(t, view, "Add plugin architecture")
+	assert.NotContains(t, view, "Pull requests unavailable")
+	assert.NotContains(t, view, "API failed")
 }
 
 func TestViewWithData(t *testing.T) {

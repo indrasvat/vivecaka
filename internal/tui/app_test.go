@@ -13,6 +13,7 @@ import (
 	"github.com/indrasvat/vivecaka/internal/config"
 	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/indrasvat/vivecaka/internal/reviewprogress"
+	"github.com/indrasvat/vivecaka/internal/tui/components"
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 	"github.com/indrasvat/vivecaka/internal/tui/views"
 )
@@ -334,6 +335,27 @@ func TestAppPRsLoadedWhileBannerVisible(t *testing.T) {
 
 	// View should stay as banner while banner is visible
 	assert.Equal(t, core.ViewBanner, a.view, "PRs loaded while banner visible")
+}
+
+func TestAppPRLoadErrorSurvivesBannerDismiss(t *testing.T) {
+	app := newTestApp()
+	app.ready = true
+	app.width = 100
+	app.height = 30
+	app.handleWindowSize(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	updated, cmd := app.Update(views.PRsLoadedMsg{Err: fmt.Errorf("API rate limit exceeded")})
+	a := updated.(*App)
+	require.NotNil(t, cmd)
+	assert.Equal(t, core.ViewBanner, a.view, "error should not tear down visible banner")
+	assert.True(t, a.prList.HasLoadError())
+
+	updated, _ = a.Update(components.BannerDismissMsg{})
+	a = updated.(*App)
+
+	assert.Equal(t, core.ViewPRList, a.view, "banner dismiss should reveal PR list error state")
+	assert.Contains(t, a.View(), "Pull requests unavailable")
+	assert.Contains(t, a.View(), "API rate limit exceeded")
 }
 
 func TestAppOpenPR(t *testing.T) {

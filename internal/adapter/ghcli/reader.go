@@ -11,10 +11,11 @@ import (
 
 // JSON field lists for gh pr list/view --json.
 const (
-	// prListFields is for the initial load (single page). Includes statusCheckRollup for CI status.
+	// prListFields is for small list loads where CI status can be fetched cheaply.
 	prListFields = "number,title,author,state,isDraft,headRefName,baseRefName,headRefOid,baseRefOid,labels,statusCheckRollup,reviewDecision,updatedAt,createdAt,url"
-	// prListFieldsLight is for pagination (loading more PRs). Excludes statusCheckRollup to avoid API timeouts.
-	// CI status will show as "none" for paginated items until detail view is opened.
+	// prListFieldsLight excludes statusCheckRollup. Large repositories can make
+	// GitHub's GraphQL API return 504s when each list row expands full CI rollups.
+	// CI status shows as "none" for light list items until detail view is opened.
 	prListFieldsLight = "number,title,author,state,isDraft,headRefName,baseRefName,headRefOid,baseRefOid,labels,reviewDecision,updatedAt,createdAt,url"
 	prViewFields      = "number,title,author,state,isDraft,headRefName,baseRefName,headRefOid,baseRefOid,labels,statusCheckRollup,reviewDecision,updatedAt,createdAt,url,body,assignees,reviewRequests,latestReviews,files"
 	checkFields       = "name,status,conclusion,startedAt,completedAt,detailsUrl"
@@ -115,14 +116,36 @@ func (a *Adapter) GetPRCount(ctx context.Context, repo domain.RepoRef, state dom
 // ListPRs fetches PRs via gh pr list --json.
 // Supports pagination via opts.Page and opts.PerPage.
 // Page is 1-based. For page > 1, we fetch page*perPage items and return only items for that page.
-// Note: For pagination (page > 1), we use a lighter field list that excludes statusCheckRollup
-// to avoid GitHub API timeouts on large result sets.
+// Note: pagination uses a lighter field list that excludes statusCheckRollup.
+// The initial page preserves CI status when GitHub can serve it, but falls back
+// to the light field set when GraphQL times out on repositories with many active checks.
 func (a *Adapter) ListPRs(ctx context.Context, repo domain.RepoRef, opts domain.ListOpts) ([]domain.PR, error) {
-	// Use light fields for pagination to avoid API timeouts
-	fields := prListFields
-	if opts.Page > 1 {
-		fields = prListFieldsLight
+	// For page N, fetch N*PerPage items total and skip the first (N-1)*PerPage
+	// after client-side draft filtering.
+	page := opts.Page
+	page = max(page, 1)
+	perPage := opts.PerPage
+	if perPage <= 0 {
+		perPage = 50 // default
 	}
+	limit := page * perPage
+
+	var ghPRs []ghPR
+	fields := prListFieldsForPage(page)
+	if err := a.listPRsRaw(ctx, repo, opts, fields, limit, &ghPRs); err != nil {
+		if fields == prListFields && isStatusRollupListRetryable(err) {
+			ghPRs = nil
+			if retryErr := a.listPRsRaw(ctx, repo, opts, prListFieldsLight, limit, &ghPRs); retryErr == nil {
+				return paginatePRs(ghPRs, opts, page, perPage), nil
+			}
+		}
+		return nil, fmt.Errorf("listing PRs: %w", err)
+	}
+
+	return paginatePRs(ghPRs, opts, page, perPage), nil
+}
+
+func (a *Adapter) listPRsRaw(ctx context.Context, repo domain.RepoRef, opts domain.ListOpts, fields string, limit int, dst *[]ghPR) error {
 	args := []string{"pr", "list", "--json", fields}
 	args = append(args, repoArgs(repo)...)
 
@@ -138,23 +161,27 @@ func (a *Adapter) ListPRs(ctx context.Context, repo domain.RepoRef, opts domain.
 	if opts.Search != "" {
 		args = append(args, "--search", opts.Search)
 	}
-
-	// Calculate limit for pagination
-	// For page N, we need to fetch N*PerPage items total and skip the first (N-1)*PerPage
-	page := opts.Page
-	page = max(page, 1)
-	perPage := opts.PerPage
-	if perPage <= 0 {
-		perPage = 50 // default
-	}
-	limit := page * perPage
 	args = append(args, "--limit", fmt.Sprintf("%d", limit))
 
-	var ghPRs []ghPR
-	if err := ghJSON(ctx, &ghPRs, args...); err != nil {
-		return nil, fmt.Errorf("listing PRs: %w", err)
-	}
+	return ghJSON(ctx, dst, args...)
+}
 
+func prListFieldsForPage(page int) string {
+	if page <= 1 {
+		return prListFields
+	}
+	return prListFieldsLight
+}
+
+func isStatusRollupListRetryable(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "504") ||
+		strings.Contains(msg, "timeout") ||
+		strings.Contains(msg, "timed out") ||
+		strings.Contains(msg, "something went wrong while executing your query")
+}
+
+func paginatePRs(ghPRs []ghPR, opts domain.ListOpts, page, perPage int) []domain.PR {
 	// Apply client-side draft filter BEFORE pagination so that excluded
 	// drafts don't reduce the effective page size.
 	filtered := ghPRs[:0:0]
@@ -175,7 +202,7 @@ func (a *Adapter) ListPRs(ctx context.Context, repo domain.RepoRef, opts domain.
 	// Paginate over the filtered set.
 	startIdx := (page - 1) * perPage
 	if startIdx >= len(filtered) {
-		return []domain.PR{}, nil
+		return []domain.PR{}
 	}
 	pageItems := filtered[startIdx:]
 
@@ -184,7 +211,7 @@ func (a *Adapter) ListPRs(ctx context.Context, repo domain.RepoRef, opts domain.
 		prs = append(prs, toDomainPR(g))
 	}
 
-	return prs, nil
+	return prs
 }
 
 // GetPR fetches a single PR with full details via gh pr view --json.

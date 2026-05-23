@@ -70,6 +70,14 @@ JSON
     mkdir -p "$4/.git"
     ;;
   "pr list")
+    case "$*" in
+      *statusCheckRollup*)
+        if [ "$GH_FAIL_STATUS_ROLLUP" = "1" ]; then
+          printf 'HTTP 504: 504 Gateway Timeout (https://api.github.com/graphql)\n' >&2
+          exit 1
+        fi
+        ;;
+    esac
     cat <<'JSON'
 [
   {"number":1,"title":"first","author":{"login":"alice"},"state":"OPEN","headRefName":"feat/one","baseRefName":"main","labels":[{"name":"bug"}],"reviewDecision":"APPROVED","url":"https://example.test/1"},
@@ -177,6 +185,47 @@ func TestAdapterListPRsBuildsFiltersAndPaginatesAfterDraftFiltering(t *testing.T
 	assert.Contains(t, log, "--search status:success")
 	assert.Contains(t, log, "--limit 2")
 	assert.NotContains(t, log, "statusCheckRollup", "paginated list should use the light field set")
+}
+
+func TestAdapterListPRsPreservesStatusRollupOnInitialLoad(t *testing.T) {
+	logPath := installFakeCLIs(t)
+	adapter := New()
+	repo := domain.RepoRef{Owner: "owner", Name: "repo"}
+
+	prs, err := adapter.ListPRs(context.Background(), repo, domain.ListOpts{
+		State:   domain.PRStateOpen,
+		Page:    1,
+		PerPage: 50,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, prs, 3)
+
+	log := readCommandLog(t, logPath)
+	assert.Contains(t, log, "gh pr list --json")
+	assert.Contains(t, log, "--limit 50")
+	assert.Contains(t, log, "statusCheckRollup", "initial list should preserve CI rollups when GitHub serves them")
+}
+
+func TestAdapterListPRsFallsBackWhenStatusRollupTimesOut(t *testing.T) {
+	logPath := installFakeCLIs(t)
+	t.Setenv("GH_FAIL_STATUS_ROLLUP", "1")
+	adapter := New()
+	repo := domain.RepoRef{Owner: "owner", Name: "repo"}
+
+	prs, err := adapter.ListPRs(context.Background(), repo, domain.ListOpts{
+		State:   domain.PRStateOpen,
+		Page:    1,
+		PerPage: 10,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, prs, 3)
+
+	log := readCommandLog(t, logPath)
+	assert.Contains(t, log, "statusCheckRollup", "small list should first try CI rollups")
+	assert.Contains(t, log, "--limit 10")
+	assert.Equal(t, 2, strings.Count(log, "gh pr list --json"), "timeout should be retried with light fields")
 }
 
 func TestAdapterReadCommandsMapGHOutput(t *testing.T) {
