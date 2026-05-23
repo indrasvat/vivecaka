@@ -231,24 +231,44 @@ button {
   transform: translateY(-1px);
 }
 
-.copy-control.copied {
+.copy-control.copied,
+.copy-control.copy-failed {
   color: var(--green);
   border-color: rgba(38, 208, 124, 0.55);
+  background: rgba(38, 208, 124, 0.14);
+  box-shadow: 0 0 22px rgba(38, 208, 124, 0.14);
+  transform: translateY(-1px) scale(0.96);
 }
 
-.copy-control.copied::after {
+.copy-control.copy-failed {
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.55);
+  background: rgba(255, 107, 107, 0.12);
+  box-shadow: 0 0 22px rgba(255, 107, 107, 0.14);
+}
+
+.copy-control.copied::after,
+.copy-control.copy-failed::after {
   position: absolute;
-  top: -28px;
-  right: 0;
-  padding: 4px 7px;
-  border: 1px solid rgba(38, 208, 124, 0.35);
-  border-radius: 5px;
-  color: var(--green);
-  background: rgba(0, 0, 0, 0.78);
+  right: -4px;
+  bottom: calc(100% + 8px);
+  padding: 6px 9px;
+  border: 1px solid rgba(38, 208, 124, 0.38);
+  border-radius: 6px;
+  color: var(--ink);
+  background: rgba(6, 8, 8, 0.92);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34), 0 0 18px rgba(38, 208, 124, 0.12);
   content: "Copied";
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1;
   white-space: nowrap;
+  transform: none;
+}
+
+.copy-control.copy-failed::after {
+  border-color: rgba(255, 107, 107, 0.38);
+  content: "Copy failed";
 }
 
 .copy-control svg {
@@ -452,7 +472,7 @@ h1::after {
 
 .flow-section h2,
 .showcase h2,
-.install-section h2 {
+.install-panel h2 {
   max-width: 780px;
   margin-bottom: 42px;
   font-family: var(--serif);
@@ -543,11 +563,8 @@ h1::after {
 
 .feature-copy {
   display: grid;
-  grid-template-columns: 72px minmax(0, 520px) minmax(0, 1fr);
-  gap: 22px;
+  gap: 12px;
   align-items: start;
-  border-top: 1px solid var(--line);
-  padding-top: 22px;
 }
 
 .feature-copy h3,
@@ -587,8 +604,6 @@ h1::after {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 22px;
-  padding-top: 22px;
-  border-top: 1px solid var(--line);
 }
 
 .repo-wall article {
@@ -605,37 +620,167 @@ h1::after {
 .screenshot-link {
   position: relative;
   display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
   color: inherit;
+  background: transparent;
+  cursor: zoom-in;
+  text-align: inherit;
 }
 
 .screenshot-expand {
   position: absolute;
   right: 12px;
   bottom: 12px;
-  padding: 7px 10px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
   border: 1px solid rgba(240, 238, 232, 0.2);
   border-radius: 6px;
   color: var(--ink);
   background: rgba(0, 0, 0, 0.72);
-  font-family: var(--mono);
-  font-size: 12px;
   opacity: 0.84;
   transform: none;
-  transition: opacity 160ms ease, transform 160ms ease, border-color 160ms ease;
+  transition: opacity 160ms ease, transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.screenshot-expand svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .screenshot-link:hover .screenshot-expand,
 .screenshot-link:focus .screenshot-expand {
   opacity: 1;
   border-color: rgba(246, 173, 38, 0.55);
+  background: rgba(20, 17, 10, 0.86);
+  transform: translateY(-1px);
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: clamp(16px, 3vw, 42px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.lightbox.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(0, 213, 232, 0.1), transparent 38rem),
+    rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(18px);
+  cursor: zoom-out;
+}
+
+.lightbox-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(100%, 1480px);
+  max-height: min(88vh, 980px);
+  overflow: hidden;
+  border: 1px solid rgba(240, 238, 232, 0.2);
+  border-radius: 10px;
+  background: rgba(10, 11, 11, 0.96);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.72);
+}
+
+.lightbox-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px 12px 18px;
+  border-bottom: 1px solid rgba(240, 238, 232, 0.13);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.lightbox-chrome p {
+  min-width: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lightbox-close {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(240, 238, 232, 0.18);
+  border-radius: 7px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.lightbox-close:hover,
+.lightbox-close:focus {
+  color: var(--ink);
+  border-color: rgba(246, 173, 38, 0.55);
+  background: rgba(246, 173, 38, 0.1);
+}
+
+.lightbox-close svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+}
+
+.lightbox-panel img {
+  width: 100%;
+  max-height: calc(min(88vh, 980px) - 59px);
+  object-fit: contain;
+  background: #050606;
+}
+
+body.lightbox-open {
+  overflow: hidden;
 }
 
 .install-section {
+  margin-bottom: 78px;
+}
+
+.install-kicker {
+  margin-bottom: 18px;
+}
+
+.install-panel {
   display: grid;
   grid-template-columns: 82px minmax(220px, 0.62fr) minmax(360px, 1.45fr);
   gap: 28px;
   align-items: center;
-  margin-bottom: 78px;
   padding: 28px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
@@ -658,13 +803,9 @@ h1::after {
   background: rgba(0, 0, 0, 0.28);
 }
 
-.install-section h2 {
+.install-panel h2 {
   margin-bottom: 0;
   font-size: clamp(32px, 4vw, 48px);
-}
-
-.install-section .section-kicker {
-  margin-bottom: 12px;
 }
 
 .install-command {
@@ -782,11 +923,11 @@ h1::after {
 
   .showcase-heading,
   .feature-row,
-  .install-section {
+  .install-panel {
     grid-template-columns: 1fr;
   }
 
-  .install-section {
+  .install-panel {
     gap: 18px;
   }
 }
@@ -925,6 +1066,27 @@ h1::after {
     transform: none;
   }
 
+  .lightbox {
+    padding: 12px;
+  }
+
+  .lightbox-panel {
+    width: calc(100vw - 24px);
+    max-height: 86dvh;
+  }
+
+  .lightbox-chrome {
+    padding: 10px 10px 10px 12px;
+  }
+
+  .lightbox-chrome p {
+    font-size: 12px;
+  }
+
+  .lightbox-panel img {
+    max-height: calc(86dvh - 55px);
+  }
+
   .flow-grid article,
   .flow-grid article + article {
     min-height: 0;
@@ -950,7 +1112,7 @@ h1::after {
     margin-bottom: 56px;
   }
 
-  .install-section {
+  .install-panel {
     grid-template-columns: 54px minmax(0, 1fr);
     gap: 16px 14px;
     padding: 18px;
@@ -962,13 +1124,9 @@ h1::after {
     font-size: 19px;
   }
 
-  .install-section h2 {
+  .install-panel h2 {
     font-size: clamp(30px, 10vw, 40px);
     line-height: 0.98;
-  }
-
-  .install-section .section-kicker {
-    margin-bottom: 8px;
   }
 
   .install-command {
