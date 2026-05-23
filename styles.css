@@ -197,7 +197,7 @@ button {
 .hero-command {
   width: fit-content;
   max-width: 100%;
-  margin-bottom: 22px;
+  margin-bottom: 0;
   border-color: rgba(0, 213, 232, 0.28);
   color: var(--cyan);
   background: rgba(0, 213, 232, 0.035);
@@ -363,34 +363,6 @@ h1::after {
 
 .button-icon {
   color: var(--saffron);
-}
-
-.repo-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  color: var(--dim);
-  font-family: var(--mono);
-  font-size: 13px;
-}
-
-.repo-strip + .repo-strip {
-  margin-top: 12px;
-}
-
-.repo-strip strong {
-  color: var(--saffron);
-  font-weight: 600;
-}
-
-.repo-strip code {
-  padding: 7px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.03);
-  font-size: 12px;
 }
 
 .hero-stage {
@@ -743,9 +715,15 @@ h1::after {
   }
 
   .hero-stage {
+    margin-top: 22px;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
     padding-bottom: 6px;
+  }
+
+  .hero-terminal {
+    width: 100%;
+    margin-inline: auto;
   }
 
   .floating-shot {
@@ -758,7 +736,7 @@ h1::after {
   }
 
   .hero-terminal img {
-    aspect-ratio: 3.2 / 1;
+    aspect-ratio: 1.1 / 1;
     object-fit: cover;
     object-position: left top;
   }
