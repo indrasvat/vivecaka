@@ -37,10 +37,25 @@
     <main id="top">
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="command-line">$ vivecaka --repo=openclaw/openclaw</p>
-          <h1 id="hero-title">PR review, back in your terminal.</h1>
+          <div class="command-card hero-command">
+            <code>$ vivecaka --repo=openclaw/openclaw</code>
+            <button
+              class="copy-control"
+              type="button"
+              data-copy="vivecaka --repo=openclaw/openclaw"
+              aria-label="Copy launch command"
+              title="Copy command"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M8 8V5.6C8 4.7 8.7 4 9.6 4h8.8c.9 0 1.6.7 1.6 1.6v8.8c0 .9-.7 1.6-1.6 1.6H16" />
+                <path d="M4 9.6C4 8.7 4.7 8 5.6 8h8.8c.9 0 1.6.7 1.6 1.6v8.8c0 .9-.7 1.6-1.6 1.6H5.6C4.7 20 4 19.3 4 18.4V9.6Z" />
+              </svg>
+            </button>
+          </div>
+          <h1 id="hero-title">Stay in the terminal. Review the whole PR.</h1>
           <p class="hero-lede">
-            Queue, inspect, comment, review, and checkout without turning a code review into tab archaeology.
+            vivecaka brings PR navigation, comments, review submission, diffs, and checkout into a fast,
+            keyboard-first TUI for agent-era development.
           </p>
           <div class="hero-actions" aria-label="Primary actions">
             <a class="button button-primary" href="#install">
@@ -58,6 +73,10 @@
             </a>
           </div>
           <div class="repo-strip" aria-label="Example repositories">
+            <strong>terminal-native</strong>
+            <span>queue -> comments -> review -> checkout</span>
+          </div>
+          <div class="repo-strip repo-examples" aria-label="Example repositories">
             <span>try it on</span>
             <code>openclaw/openclaw</code>
             <code>cli/cli</code>
@@ -67,10 +86,6 @@
 
         <div class="hero-stage" aria-label="vivecaka terminal preview">
           <figure class="terminal-frame hero-terminal">
-            <div class="terminal-bar">
-              <span></span><span></span><span></span>
-              <strong>vivecaka - openclaw/openclaw</strong>
-            </div>
             <img
               src="assets/site/openclaw-queue.png"
               alt="vivecaka showing the openclaw/openclaw pull request queue in a terminal"
@@ -81,10 +96,6 @@
             />
           </figure>
           <figure class="terminal-frame floating-shot">
-            <div class="terminal-bar compact">
-              <span></span><span></span><span></span>
-              <strong>Files tab</strong>
-            </div>
             <img
               src="assets/site/files-review.png"
               alt="vivecaka files view showing incremental review state and viewed files"
@@ -136,10 +147,6 @@
 
         <div class="feature-row feature-row-large">
           <figure class="terminal-frame">
-            <div class="terminal-bar">
-              <span></span><span></span><span></span>
-              <strong>incremental review</strong>
-            </div>
             <img
               src="assets/site/files-review.png"
               alt="Files tab with viewed and unviewed review state"
@@ -161,10 +168,6 @@
         <div class="feature-pair">
           <article>
             <figure class="terminal-frame">
-              <div class="terminal-bar">
-                <span></span><span></span><span></span>
-                <strong>comments</strong>
-              </div>
               <img
                 src="assets/site/comments-review.png"
                 alt="Comments tab with discussion threads inside vivecaka"
@@ -179,10 +182,6 @@
           </article>
           <article>
             <figure class="terminal-frame">
-              <div class="terminal-bar">
-                <span></span><span></span><span></span>
-                <strong>checkout</strong>
-              </div>
               <img
                 src="assets/site/smart-checkout.png"
                 alt="Smart checkout dialog in vivecaka"
@@ -199,10 +198,6 @@
 
         <div class="repo-wall" aria-label="Repository examples">
           <figure class="terminal-frame">
-            <div class="terminal-bar">
-              <span></span><span></span><span></span>
-              <strong>openclaw/openclaw</strong>
-            </div>
             <img
               src="assets/site/openclaw-queue.png"
               alt="Pull request queue for openclaw/openclaw"
@@ -213,10 +208,6 @@
             />
           </figure>
           <figure class="terminal-frame">
-            <div class="terminal-bar">
-              <span></span><span></span><span></span>
-              <strong>cli/cli</strong>
-            </div>
             <img
               src="assets/site/cli-queue.png"
               alt="Pull request queue for cli/cli"
@@ -235,10 +226,21 @@
           <div class="section-kicker">install</div>
           <h2 id="install-title">Drop it into your shell.</h2>
         </div>
-        <button class="copy-command" data-copy="curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | bash">
+        <div class="command-card install-command">
           <code>curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | bash</code>
-          <span>Copy</span>
-        </button>
+          <button
+            class="copy-control"
+            type="button"
+            data-copy="curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | bash"
+            aria-label="Copy install command"
+            title="Copy command"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M8 8V5.6C8 4.7 8.7 4 9.6 4h8.8c.9 0 1.6.7 1.6 1.6v8.8c0 .9-.7 1.6-1.6 1.6H16" />
+              <path d="M4 9.6C4 8.7 4.7 8 5.6 8h8.8c.9 0 1.6.7 1.6 1.6v8.8c0 .9-.7 1.6-1.6 1.6H5.6C4.7 20 4 19.3 4 18.4V9.6Z" />
+            </svg>
+          </button>
+        </div>
       </section>
     </main>
 

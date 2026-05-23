@@ -159,12 +159,101 @@ button {
   padding: clamp(44px, 6vh, 78px) 0 42px;
 }
 
-.command-line,
 .section-kicker {
   margin: 0 0 28px;
   color: var(--cyan);
   font-family: var(--mono);
   font-size: clamp(13px, 1.2vw, 15px);
+}
+
+.command-card {
+  position: relative;
+  display: block;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.command-card code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  padding: 20px 56px 20px 20px;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-command {
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 28px;
+  border-color: rgba(0, 213, 232, 0.28);
+  color: var(--cyan);
+  background: rgba(0, 213, 232, 0.035);
+}
+
+.hero-command code {
+  color: var(--cyan);
+  font-size: clamp(13px, 1.2vw, 15px);
+}
+
+.copy-control {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(240, 238, 232, 0.18);
+  border-radius: 7px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.copy-control:hover {
+  color: var(--ink);
+  border-color: rgba(246, 173, 38, 0.55);
+  background: rgba(246, 173, 38, 0.1);
+  transform: translateY(-1px);
+}
+
+.copy-control.copied {
+  color: var(--green);
+  border-color: rgba(38, 208, 124, 0.55);
+}
+
+.copy-control.copied::after {
+  position: absolute;
+  top: -28px;
+  right: 0;
+  padding: 4px 7px;
+  border: 1px solid rgba(38, 208, 124, 0.35);
+  border-radius: 5px;
+  color: var(--green);
+  background: rgba(0, 0, 0, 0.78);
+  content: "Copied";
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.copy-control svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 h1,
@@ -250,6 +339,15 @@ h1::after {
   font-size: 13px;
 }
 
+.repo-strip + .repo-strip {
+  margin-top: 12px;
+}
+
+.repo-strip strong {
+  color: var(--saffron);
+  font-weight: 600;
+}
+
 .repo-strip code {
   padding: 7px 10px;
   border: 1px solid var(--line);
@@ -269,8 +367,8 @@ h1::after {
   margin: 0;
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  background: var(--panel-strong);
+  border-radius: 10px;
+  background: transparent;
   box-shadow: var(--shadow);
 }
 
@@ -281,36 +379,6 @@ h1::after {
   content: "";
   border-radius: inherit;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-.terminal-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 38px;
-  padding: 0 14px;
-  border-bottom: 1px solid rgba(240, 238, 232, 0.12);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025));
-  color: var(--dim);
-  font-family: var(--mono);
-  font-size: 12px;
-}
-
-.terminal-bar span {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(240, 238, 232, 0.22);
-}
-
-.terminal-bar strong {
-  margin-left: 8px;
-  font-weight: 500;
-}
-
-.terminal-bar.compact {
-  height: 30px;
-  font-size: 11px;
 }
 
 .terminal-frame img {
@@ -506,36 +574,13 @@ h1::after {
   margin-bottom: 12px;
 }
 
-.copy-command {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
-  align-items: center;
+.install-command {
   width: 100%;
   min-height: 64px;
-  padding: 0 18px 0 22px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  color: var(--ink);
-  background: rgba(0, 0, 0, 0.3);
-  cursor: pointer;
 }
 
-.copy-command code {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--ink);
-  font-family: var(--mono);
-  font-size: 14px;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.copy-command span {
+.install-command .copy-control {
   color: var(--saffron);
-  font-family: var(--mono);
-  font-size: 13px;
 }
 
 .site-footer {
@@ -649,10 +694,6 @@ h1::after {
     transform: rotate(-1deg);
   }
 
-  .terminal-bar {
-    height: 32px;
-  }
-
   .hero-terminal img {
     aspect-ratio: 3.2 / 1;
     object-fit: cover;
@@ -706,16 +747,15 @@ h1::after {
     padding: 22px;
   }
 
-  .copy-command {
-    grid-template-columns: 1fr;
-    justify-items: start;
-    gap: 8px;
-    padding-block: 16px;
-  }
-
-  .copy-command code {
+  .command-card code {
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+
+  .hero-command code {
+    padding-right: 50px;
+    font-size: 13px;
+    white-space: nowrap;
   }
 
   .site-footer {

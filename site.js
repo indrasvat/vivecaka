@@ -3,20 +3,20 @@ const copyButtons = document.querySelectorAll("[data-copy]");
 for (const button of copyButtons) {
   button.addEventListener("click", async () => {
     const text = button.getAttribute("data-copy");
-    const label = button.querySelector("span");
-    if (!text || !label) {
+    if (!text) {
       return;
     }
 
     try {
       await navigator.clipboard.writeText(text);
-      const original = label.textContent;
-      label.textContent = "Copied";
+      button.classList.add("copied");
+      button.setAttribute("title", "Copied");
       window.setTimeout(() => {
-        label.textContent = original;
+        button.classList.remove("copied");
+        button.setAttribute("title", "Copy command");
       }, 1400);
     } catch {
-      label.textContent = "Select";
+      button.setAttribute("title", "Copy failed");
     }
   });
 }
