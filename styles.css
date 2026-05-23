@@ -108,13 +108,6 @@ button {
   filter: drop-shadow(0 8px 20px rgba(139, 77, 255, 0.28));
 }
 
-.brand-script {
-  color: var(--saffron);
-  font-family: var(--sans);
-  font-size: 0.58em;
-  font-weight: 500;
-}
-
 .product-name {
   color: var(--cyan);
   font-family: var(--mono);
@@ -204,7 +197,7 @@ button {
 .hero-command {
   width: fit-content;
   max-width: 100%;
-  margin-bottom: 28px;
+  margin-bottom: 22px;
   border-color: rgba(0, 213, 232, 0.28);
   color: var(--cyan);
   background: rgba(0, 213, 232, 0.035);
@@ -318,8 +311,8 @@ h1::after {
 }
 
 .name-note span:nth-child(2) {
-  color: var(--cyan);
-  font-weight: 700;
+  color: var(--dim);
+  font-weight: 500;
 }
 
 .name-note span + span::before {
@@ -332,7 +325,7 @@ h1::after {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
-  margin-bottom: 28px;
+  margin-bottom: 18px;
 }
 
 .button {
@@ -739,6 +732,14 @@ h1::after {
 
   .hero-lede {
     font-size: 17px;
+  }
+
+  .name-note {
+    margin-bottom: 28px;
+  }
+
+  .hero-actions {
+    margin-bottom: 16px;
   }
 
   .hero-stage {
