@@ -291,10 +291,41 @@ h1::after {
 
 .hero-lede {
   max-width: 560px;
-  margin-bottom: 34px;
+  margin-bottom: 20px;
   color: var(--muted);
   font-size: clamp(18px, 2vw, 22px);
   line-height: 1.55;
+}
+
+.name-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: 560px;
+  margin-bottom: 34px;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.name-note span:first-child {
+  color: var(--saffron);
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.name-note span:nth-child(2) {
+  color: var(--cyan);
+  font-weight: 700;
+}
+
+.name-note span + span::before {
+  margin-right: 10px;
+  color: rgba(240, 238, 232, 0.28);
+  content: "/";
 }
 
 .hero-actions {
