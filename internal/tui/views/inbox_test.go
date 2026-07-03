@@ -161,6 +161,59 @@ func TestInboxTabAssignedOnlyShowsAssignedSource(t *testing.T) {
 	assert.Equal(t, 2, m.filtered[0].Number)
 }
 
+func TestInboxSetResultStabilityUsesFilteredSelection(t *testing.T) {
+	m := NewInboxModel(testStyles(), testKeys())
+	m.SetSize(120, 40)
+	m.SetUsername("indrasvat")
+	m.SetPRs([]InboxPR{
+		{
+			PR:      domain.PR{Number: 1, Title: "review", Author: "alice", Review: domain.ReviewStatus{State: domain.ReviewPending}},
+			Repo:    domain.RepoRef{Owner: "owner", Name: "review"},
+			Sources: []domain.InboxSource{domain.InboxSourceAttention},
+		},
+		{
+			PR:      domain.PR{Number: 2, Title: "assigned", Author: "bob"},
+			Repo:    domain.RepoRef{Owner: "owner", Name: "assigned"},
+			Sources: []domain.InboxSource{domain.InboxSourceAssigned},
+		},
+	})
+	m.tab = InboxAssigned
+	m.applyFilter()
+	require.Equal(t, "owner/assigned#2", m.SelectedKey())
+
+	m.SetResult(domain.InboxResult{Items: []domain.InboxItem{
+		{
+			PR:      domain.PR{Number: 1, Title: "review", Author: "alice", Review: domain.ReviewStatus{State: domain.ReviewPending}},
+			Repo:    domain.RepoRef{Owner: "owner", Name: "review"},
+			Sources: []domain.InboxSource{domain.InboxSourceAttention},
+		},
+		{
+			PR:      domain.PR{Number: 2, Title: "assigned refreshed", Author: "bob"},
+			Repo:    domain.RepoRef{Owner: "owner", Name: "assigned"},
+			Sources: []domain.InboxSource{domain.InboxSourceAssigned},
+		},
+	}}, domain.InboxRankBalanced, true)
+
+	assert.Empty(t, m.staged, "same selected assigned row should apply immediately even when raw ranking has other rows first")
+	assert.Equal(t, "assigned refreshed", m.filtered[0].Title)
+
+	m.SetResult(domain.InboxResult{Items: []domain.InboxItem{
+		{
+			PR:      domain.PR{Number: 1, Title: "review", Author: "alice", Review: domain.ReviewStatus{State: domain.ReviewPending}},
+			Repo:    domain.RepoRef{Owner: "owner", Name: "review"},
+			Sources: []domain.InboxSource{domain.InboxSourceAttention},
+		},
+		{
+			PR:      domain.PR{Number: 3, Title: "new assigned", Author: "bob"},
+			Repo:    domain.RepoRef{Owner: "owner", Name: "assigned"},
+			Sources: []domain.InboxSource{domain.InboxSourceAssigned},
+		},
+	}}, domain.InboxRankBalanced, true)
+
+	require.Len(t, m.staged, 2, "changed selected assigned row should stage instead of moving the cursor")
+	assert.Equal(t, 2, m.filtered[0].Number)
+}
+
 func TestInboxTabEmptyUsername(t *testing.T) {
 	m := NewInboxModel(testStyles(), testKeys())
 	m.SetSize(120, 40)
@@ -416,7 +469,8 @@ func TestInboxFooterSignalsAreGlyphOnlyAndIssueScoped(t *testing.T) {
 	assert.Contains(t, signals, "⚠")
 	assert.Contains(t, signals, "◷")
 	assert.Contains(t, signals, "◌")
-	assert.Contains(t, signals, "◆")
+	assert.Contains(t, signals, "⟳")
+	assert.NotContains(t, signals, "◆")
 	assert.NotContains(t, signals, "partial")
 	assert.NotContains(t, signals, "limited")
 	assert.NotContains(t, signals, "cache")

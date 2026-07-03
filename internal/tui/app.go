@@ -811,8 +811,11 @@ func (a *App) handleRepoDetected(msg views.RepoDetectedMsg) (tea.Model, tea.Cmd)
 			fmt.Sprintf("Could not detect repo: %v", msg.Err),
 			domain.ToastError, 5*time.Second,
 		)
-		if a.startInInbox && !a.isBannerVisible() {
-			return a, tea.Batch(cmd, a.startInboxLoadOnce())
+		if a.startInInbox {
+			if a.isBannerVisible() {
+				return a, cmd
+			}
+			return a, tea.Batch(cmd, a.revealInboxAfterBanner())
 		}
 		a.view = core.ViewPRList
 		return a, cmd

@@ -262,6 +262,44 @@ func TestAppDirectInboxStartsAfterUserDetectionWithoutRepo(t *testing.T) {
 	assert.NotNil(t, cmd)
 }
 
+func TestAppDirectInboxRepoDetectFailureKeepsBannerThenRevealsInbox(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
+	cfg := config.Default()
+	cfg.General.RefreshInterval = 0
+	app := New(
+		cfg,
+		WithVersion("edge"),
+		WithReader(&commandReader{inbox: &domain.InboxResult{}}),
+		WithStartInbox(),
+	)
+
+	_ = app.Init()
+	assert.Equal(t, core.ViewBanner, app.view)
+	assert.True(t, app.banner.Visible())
+
+	updated, cmd := app.handleRepoDetected(views.RepoDetectedMsg{Err: errors.New("not a repo")})
+	app = updated.(*App)
+
+	assert.Equal(t, core.ViewBanner, app.view, "repo detection failure should not drop direct Inbox launch into repo PR list")
+	assert.False(t, app.inboxStarted)
+	assert.NotNil(t, cmd)
+
+	updated, cmd = app.handleUserDetected(views.UserDetectedMsg{Username: "indrasvat"})
+	app = updated.(*App)
+	require.Nil(t, cmd)
+
+	updated, cmd = app.Update(components.BannerDismissMsg{})
+	app = updated.(*App)
+
+	assert.Equal(t, core.ViewInbox, app.view)
+	assert.True(t, app.inboxStarted)
+	assert.NotNil(t, cmd)
+	assert.Contains(t, app.header.View(), "Inbox")
+}
+
 func TestAppActionHandlersUseConfiguredUsecases(t *testing.T) {
 	app := edgeApp(t)
 	app.view = core.ViewDiff

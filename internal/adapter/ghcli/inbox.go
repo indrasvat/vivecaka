@@ -272,7 +272,7 @@ func buildInboxSearchJobs(query domain.InboxQuery, rate domain.InboxRateLimit) [
 	if lowWatermark <= 0 {
 		lowWatermark = 6
 	}
-	lowSearchBudget := rate.SearchRemaining > 0 && rate.SearchRemaining < lowWatermark
+	lowSearchBudget := rate.SearchLimit > 0 && rate.SearchRemaining < lowWatermark
 
 	if query.HomeRepo.Owner != "" && query.HomeRepo.Name != "" {
 		jobs = append(jobs, inboxSearchJob{

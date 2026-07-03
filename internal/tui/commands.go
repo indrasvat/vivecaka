@@ -220,7 +220,7 @@ func loadCachedInboxCmd(username string, profile domain.InboxRankProfile, maxAge
 			return views.InboxItemsLoadedMsg{Profile: profile, Fresh: false, Err: err}
 		}
 		if maxAge > 0 && time.Since(updated) > maxAge {
-			return views.InboxItemsLoadedMsg{Profile: profile, Fresh: false}
+			return nil
 		}
 		return views.InboxItemsLoadedMsg{Result: result, Profile: profile, Fresh: false}
 	}

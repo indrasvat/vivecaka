@@ -96,7 +96,8 @@ func (m *InboxModel) SetResult(result domain.InboxResult, profile domain.InboxRa
 		return
 	}
 
-	if selected != "" && selected != inboxKey(result.Items, m.cursor) {
+	nextFiltered := m.filterItems(result.Items)
+	if selected != "" && selected != inboxKey(nextFiltered, m.cursor) {
 		m.staged = result.Items
 		return
 	}
@@ -232,20 +233,24 @@ func (m *InboxModel) ApplyInsight(msg InboxInsightLoadedMsg) {
 }
 
 func (m *InboxModel) applyFilter() {
-	switch m.tab {
-	case InboxAssigned:
-		m.filtered = filterByAssigned(m.allPRs)
-	case InboxReviewRequested:
-		m.filtered = filterByReviewRequested(m.allPRs, m.username)
-	case InboxMyPRs:
-		m.filtered = filterByAuthor(m.allPRs, m.username)
-	default:
-		m.filtered = m.allPRs
-	}
+	m.filtered = m.filterItems(m.allPRs)
 	if m.cursor >= len(m.filtered) {
 		m.cursor = max(0, len(m.filtered)-1)
 	}
 	m.offset = 0
+}
+
+func (m *InboxModel) filterItems(items []InboxPR) []InboxPR {
+	switch m.tab {
+	case InboxAssigned:
+		return filterByAssigned(items)
+	case InboxReviewRequested:
+		return filterByReviewRequested(items, m.username)
+	case InboxMyPRs:
+		return filterByAuthor(items, m.username)
+	default:
+		return items
+	}
 }
 
 func filterByAssigned(prs []InboxPR) []InboxPR {
@@ -514,7 +519,7 @@ func (m *InboxModel) FooterSignals() string {
 		parts = append(parts, muted.Render("◌"))
 	}
 	if len(m.staged) > 0 {
-		parts = append(parts, warn.Render("◆"))
+		parts = append(parts, warn.Render("⟳"))
 	}
 	if len(parts) == 0 {
 		return ""

@@ -339,13 +339,39 @@ func TestBuildInboxSearchJobsHonorsRateLowWatermark(t *testing.T) {
 		IncludeOwnedRepos: true,
 		Limit:             25,
 		RateLowWatermark:  25,
-	}, domain.InboxRateLimit{SearchRemaining: 24})
+	}, domain.InboxRateLimit{SearchLimit: 30, SearchRemaining: 24})
 
 	var labels []string
 	for _, job := range jobs {
 		labels = append(labels, job.label)
 	}
 	assert.Equal(t, []string{"review", "assigned", "home"}, labels)
+}
+
+func TestBuildInboxSearchJobsTreatsKnownZeroSearchBudgetAsLow(t *testing.T) {
+	query := domain.InboxQuery{
+		HomeRepo:          domain.RepoRef{Owner: "owner", Name: "repo"},
+		Favorites:         []domain.RepoRef{{Owner: "owner", Name: "fav"}},
+		OwnedOwner:        "owner",
+		IncludeOwnedRepos: true,
+		Limit:             25,
+		RateLowWatermark:  6,
+	}
+
+	knownZero := buildInboxSearchJobs(query, domain.InboxRateLimit{SearchLimit: 30, SearchRemaining: 0})
+	var knownLabels []string
+	for _, job := range knownZero {
+		knownLabels = append(knownLabels, job.label)
+	}
+	assert.Equal(t, []string{"review", "assigned", "home"}, knownLabels)
+
+	unknownZero := buildInboxSearchJobs(query, domain.InboxRateLimit{})
+	var unknownLabels []string
+	for _, job := range unknownZero {
+		unknownLabels = append(unknownLabels, job.label)
+	}
+	assert.Contains(t, unknownLabels, "owned")
+	assert.Contains(t, unknownLabels, "favs")
 }
 
 func TestAdapterInboxInsightFetchesSelectedRowDeltas(t *testing.T) {

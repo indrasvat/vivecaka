@@ -247,8 +247,8 @@ func TestAttentionInboxCommandsSkipStaleCacheAndPartialFreshSave(t *testing.T) {
 	}}}
 	require.NoError(t, cache.SaveInbox("octocat", old))
 
-	stale := runCmd(t, loadCachedInboxCmd("octocat", domain.InboxRankBalanced, time.Nanosecond)).(views.InboxItemsLoadedMsg)
-	assert.Empty(t, stale.Result.Items)
+	stale := runCmd(t, loadCachedInboxCmd("octocat", domain.InboxRankBalanced, time.Nanosecond))
+	assert.Nil(t, stale, "stale cache should be a no-op so an already-rendered inbox does not flash empty")
 
 	reader := &commandReader{inbox: &domain.InboxResult{
 		Items: []domain.InboxItem{{
