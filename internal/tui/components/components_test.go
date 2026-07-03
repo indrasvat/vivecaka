@@ -54,6 +54,10 @@ func TestStatusBarRendersHintsMessagesAndClears(t *testing.T) {
 	assert.Contains(t, view, "j/k move")
 	assert.Contains(t, view, "enter open")
 
+	colored := "\x1b[31m⚠\x1b[0m"
+	s.SetHints([]string{"left " + colored + " right"})
+	assert.Contains(t, s.View(), colored)
+
 	s.SetMessage("saved", false)
 	assert.Contains(t, s.View(), "saved")
 	s.SetMessage("failed", true)

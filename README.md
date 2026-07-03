@@ -45,7 +45,15 @@ Most PR tools handle first-pass review well enough. The pain starts when a PR co
 
 ## Feature Spotlights
 
-### 1. Incremental review that remembers where you were
+### 1. Attention Inbox for daily triage
+
+Run `vivecaka inbox` to start directly in a fast, cross-repo review queue, or press `I` from any repo. The Inbox blends your current repo, favorites, review requests, assignments, and your GitHub repos, then ranks PRs by what most likely needs human judgment now.
+
+It opens from cache first, refreshes sources in the background, and keeps row order stable while you are moving. Symbols carry the load: `◆` review requested, `◈` assigned, `★` favorite, `●` owned repo, `⌂` current repo, `✕` failed checks, `✓` ready. The selected row lazily fills in compact review deltas like `3⎇`, `2▤`, and `1◌` for commits, files, and unresolved threads.
+
+GitHub web, mobile, and Desktop still win for notification lifecycle, push, and deep review affordances. `vivecaka` is the fast terminal triage front door: a ranked, keyboard-first queue before you decide whether a PR needs browser, mobile, Desktop, or local checkout time.
+
+### 2. Incremental review that remembers where you were
 
 `vivecaka` persists per-file viewed state and review baselines, so reopening a PR answers the questions reviewers actually care about:
 
@@ -59,7 +67,7 @@ Most PR tools handle first-pass review well enough. The pain starts when a PR co
 
 The review context bar is compact but useful: progress, active scope, next target, and per-file viewed state are all visible. `i` cycles scope, `u` jumps forward, and `V` toggles viewed state at the current head revision.
 
-### 2. Smart cloning and checkout without leaving the TUI
+### 3. Smart cloning and checkout without leaving the TUI
 
 When the PR you are reviewing is not the repo under your current shell, `vivecaka` does not force you into manual `git clone` housekeeping. Smart checkout can reuse the current repo, reuse a known local clone, or guide you through cloning before checking out the PR branch.
 
@@ -69,7 +77,7 @@ When the PR you are reviewing is not the repo under your current shell, `vivecak
 
 This matters because PR review often turns into local validation. The app keeps that transition tight: inspect the PR, decide you need local context, press `c`, and keep moving.
 
-### 3. Rich comments and discussion in the same review surface
+### 4. Rich comments and discussion in the same review surface
 
 The comments view is not an afterthought. Inline threads and timeline discussion stay in the same terminal workflow, so review context, review history, and file state do not get split across browser tabs.
 
@@ -79,11 +87,12 @@ The comments view is not an afterthought. Inline threads and timeline discussion
 
 That makes follow-up review less lossy: you can read prior feedback, inspect the current diff, and continue the review from the same place.
 
-### 4. A terminal-native PR workflow, not just a list view
+### 5. A terminal-native PR workflow, not just a list view
 
 The `anomalyco/opencode` demo above is the core experience:
 
 - open a live queue from any repo with `vivecaka --repo owner/name`
+- start directly in the global triage queue with `vivecaka inbox`
 - inspect PR detail without leaving the keyboard
 - jump into the files tab and diff viewer immediately
 - switch unified and split diff layouts on demand
@@ -137,8 +146,14 @@ make build
 # Launch inside the current GitHub repo
 vivecaka
 
+# Launch directly to the global Inbox
+vivecaka inbox
+
 # Launch against any repo
 vivecaka --repo anomalyco/opencode
+
+# Launch Inbox with the current repo as the home signal
+vivecaka inbox --repo anomalyco/opencode
 
 # Persist a repo override in the shell
 VIVECAKA_REPO=indrasvat/dootsabha vivecaka
@@ -189,6 +204,19 @@ VIVECAKA_DEBUG=1 vivecaka
 
 In selection mode, `Space` toggles a PR, `a` selects all visible PRs, `y` copies selected URLs, and `o` opens selected PRs in the browser.
 
+### Inbox
+
+| Key | Action |
+|-----|--------|
+| `I` | Open Inbox from the PR list |
+| `j` / `k` | Move cursor |
+| `Tab` / `Shift-Tab` | Cycle Inbox tabs |
+| `Enter` | Open selected PR detail |
+| `f` | Focus selected repo as the active repo |
+| `R` | Refresh Inbox sources |
+| `u` | Apply a staged background update |
+| `Esc` | Return to repo PR list, or quit when launched via `vivecaka inbox` |
+
 ### PR detail and diff
 
 | Key | Action |
@@ -236,6 +264,15 @@ line_numbers = true
 context_lines = 3
 markdown_style = "dark"
 
+[inbox]
+default_scope = "my-github"
+rank_profile = "balanced"
+include_owned_repos = true
+stable_rows = true
+source_timeout_ms = 1500
+enrich_visible = 8
+rate_low_watermark_search = 6
+
 [repos]
 favorites = ["indrasvat/dootsabha", "anomalyco/opencode"]
 
@@ -252,6 +289,7 @@ ci_changes = true
 Useful paths:
 
 - PR list cache: `~/.cache/vivecaka/repos/`
+- Inbox cache: `~/.cache/vivecaka/inbox/`
 - Managed smart-checkout clones: `~/.cache/vivecaka/clones/`
 - Per-repo state and review progress: `~/.local/share/vivecaka/state/`
 - Known local repo registry: `~/.local/share/vivecaka/known-repos.json`

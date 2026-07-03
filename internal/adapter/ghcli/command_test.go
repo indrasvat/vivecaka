@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,6 +58,11 @@ JSON
         ;;
     esac
     ;;
+  "api rate_limit")
+    cat <<'JSON'
+{"resources":{"search":{"limit":30,"remaining":24,"reset":1767225600},"graphql":{"limit":5000,"remaining":4990,"reset":1767225600}}}
+JSON
+    ;;
   "api repos/owner/repo/pulls/42/comments")
     printf '{}'
     ;;
@@ -86,9 +92,51 @@ JSON
 ]
 JSON
     ;;
+  "search prs")
+    case "$*" in
+      *"--review-requested @me"*)
+        cat <<'JSON'
+[
+  {"number":11,"title":"needs review","author":{"login":"alice"},"state":"OPEN","repository":{"nameWithOwner":"team/review"},"updatedAt":"2026-07-01T10:00:00Z","createdAt":"2026-07-01T09:00:00Z","url":"https://example.test/team/review/pull/11"}
+]
+JSON
+        ;;
+      *"--assignee @me"*)
+        cat <<'JSON'
+[
+  {"number":12,"title":"assigned fix","author":{"login":"bob"},"state":"OPEN","repository":{"nameWithOwner":"team/assigned"},"updatedAt":"2026-07-01T08:00:00Z","createdAt":"2026-07-01T07:00:00Z","url":"https://example.test/team/assigned/pull/12"}
+]
+JSON
+        ;;
+      *"--checks failure"*)
+        cat <<'JSON'
+[
+  {"number":21,"title":"favorite failing","author":{"login":"dep"},"state":"OPEN","repository":{"nameWithOwner":"owner/fav"},"updatedAt":"2026-07-01T06:00:00Z","createdAt":"2026-07-01T05:00:00Z","url":"https://example.test/owner/fav/pull/21"}
+]
+JSON
+        ;;
+      *"--repo owner/fav"*)
+        cat <<'JSON'
+[
+  {"number":21,"title":"favorite failing","author":{"login":"dep"},"state":"OPEN","repository":{"nameWithOwner":"owner/fav"},"updatedAt":"2026-07-01T06:00:00Z","createdAt":"2026-07-01T05:00:00Z","url":"https://example.test/owner/fav/pull/21"}
+]
+JSON
+        ;;
+      *"--owner owner"*)
+        cat <<'JSON'
+[
+  {"number":31,"title":"owned work","author":{"login":"owner"},"state":"OPEN","repository":{"nameWithOwner":"owner/repo"},"updatedAt":"2026-07-01T04:00:00Z","createdAt":"2026-07-01T03:00:00Z","url":"https://example.test/owner/repo/pull/31"}
+]
+JSON
+        ;;
+      *)
+        printf '[]'
+        ;;
+    esac
+    ;;
   "pr view")
     cat <<'JSON'
-{"number":42,"title":"full detail","author":{"login":"alice"},"state":"OPEN","headRefName":"feat/full","baseRefName":"main","headRefOid":"head-sha","baseRefOid":"base-sha","labels":[{"name":"enhancement"}],"reviewDecision":"REVIEW_REQUIRED","url":"https://example.test/42","body":"body","assignees":[{"login":"alice"}],"reviewRequests":[{"login":"bob"}],"latestReviews":[{"author":{"login":"cora"},"state":"APPROVED"}],"files":[{"path":"a.go","additions":2,"deletions":1,"changeType":"MODIFIED"}],"statusCheckRollup":[{"name":"ci","status":"COMPLETED","conclusion":"SUCCESS"}]}
+{"number":42,"title":"full detail","author":{"login":"alice"},"state":"OPEN","headRefName":"feat/full","baseRefName":"main","headRefOid":"head-sha","baseRefOid":"base-sha","labels":[{"name":"enhancement"}],"reviewDecision":"REVIEW_REQUIRED","url":"https://example.test/42","body":"body","assignees":[{"login":"alice"}],"reviewRequests":[{"login":"bob"}],"latestReviews":[{"author":{"login":"cora"},"state":"APPROVED"}],"commits":[{"oid":"base-sha"},{"oid":"head-sha"}],"files":[{"path":"a.go","additions":2,"deletions":1,"changeType":"MODIFIED"}],"statusCheckRollup":[{"name":"ci","status":"COMPLETED","conclusion":"SUCCESS"}]}
 JSON
     ;;
   "pr diff")
@@ -226,6 +274,104 @@ func TestAdapterListPRsFallsBackWhenStatusRollupTimesOut(t *testing.T) {
 	assert.Contains(t, log, "statusCheckRollup", "small list should first try CI rollups")
 	assert.Contains(t, log, "--limit 10")
 	assert.Equal(t, 2, strings.Count(log, "gh pr list --json"), "timeout should be retried with light fields")
+}
+
+func TestAdapterGetInboxUsesSearchSourcesAndMergesDuplicates(t *testing.T) {
+	logPath := installFakeCLIs(t)
+	adapter := New()
+
+	result, err := adapter.GetInbox(context.Background(), domain.InboxQuery{
+		Username:          "owner",
+		HomeRepo:          domain.RepoRef{Owner: "owner", Name: "repo"},
+		Favorites:         []domain.RepoRef{{Owner: "owner", Name: "fav"}},
+		OwnedOwner:        "owner",
+		IncludeOwnedRepos: true,
+		Limit:             25,
+		SourceTimeout:     time.Second,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 24, result.Rate.SearchRemaining)
+	require.Len(t, result.Items, 4)
+	require.Len(t, result.Sources, 7)
+	assert.Equal(t, []string{"review", "assigned", "home", "favs", "favs ci", "owned", "owned ci"}, []string{
+		result.Sources[0].Label,
+		result.Sources[1].Label,
+		result.Sources[2].Label,
+		result.Sources[3].Label,
+		result.Sources[4].Label,
+		result.Sources[5].Label,
+		result.Sources[6].Label,
+	})
+
+	var favorite *domain.InboxItem
+	var assigned *domain.InboxItem
+	for i := range result.Items {
+		if result.Items[i].Repo == (domain.RepoRef{Owner: "owner", Name: "fav"}) {
+			favorite = &result.Items[i]
+		}
+		if result.Items[i].Repo == (domain.RepoRef{Owner: "team", Name: "assigned"}) {
+			assigned = &result.Items[i]
+		}
+	}
+	require.NotNil(t, favorite)
+	assert.Equal(t, domain.CIFail, favorite.CI)
+	assert.ElementsMatch(t, []domain.InboxSource{domain.InboxSourceFavorite, domain.InboxSourceOwned}, favorite.Sources)
+	require.NotNil(t, assigned)
+	assert.Equal(t, []domain.InboxSource{domain.InboxSourceAssigned}, assigned.Sources)
+	assert.Equal(t, domain.ReviewNone, assigned.Review.State)
+
+	log := readCommandLog(t, logPath)
+	assert.Contains(t, log, "gh api rate_limit")
+	assert.Contains(t, log, "gh search prs --review-requested @me")
+	assert.Contains(t, log, "gh search prs --assignee @me")
+	assert.Contains(t, log, "gh search prs --owner owner")
+	assert.Contains(t, log, "gh search prs --state open --archived=false --limit 25 --repo owner/fav")
+	assert.Contains(t, log, "gh search prs --state open --archived=false --limit 25 --repo owner/repo")
+}
+
+func TestBuildInboxSearchJobsHonorsRateLowWatermark(t *testing.T) {
+	jobs := buildInboxSearchJobs(domain.InboxQuery{
+		HomeRepo:          domain.RepoRef{Owner: "owner", Name: "repo"},
+		Favorites:         []domain.RepoRef{{Owner: "owner", Name: "fav"}},
+		OwnedOwner:        "owner",
+		IncludeOwnedRepos: true,
+		Limit:             25,
+		RateLowWatermark:  25,
+	}, domain.InboxRateLimit{SearchRemaining: 24})
+
+	var labels []string
+	for _, job := range jobs {
+		labels = append(labels, job.label)
+	}
+	assert.Equal(t, []string{"review", "assigned", "home"}, labels)
+}
+
+func TestAdapterInboxInsightFetchesSelectedRowDeltas(t *testing.T) {
+	logPath := installFakeCLIs(t)
+	adapter := New()
+	repo := domain.RepoRef{Owner: "owner", Name: "repo"}
+
+	insight, err := adapter.GetInboxInsight(context.Background(), domain.InboxInsightQuery{
+		Repo:              repo,
+		Number:            42,
+		LastReviewHeadSHA: "base-sha",
+		LastReviewFiles:   map[string]string{"old.go": "digest"},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, repo, insight.Repo)
+	assert.Equal(t, 42, insight.Number)
+	assert.Equal(t, "head-sha", insight.HeadSHA)
+	assert.Equal(t, 1, insight.CommitDelta)
+	assert.Equal(t, 1, insight.FileDelta)
+	assert.Equal(t, 1, insight.UnresolvedThreads)
+	assert.True(t, insight.HasReviewBaseline)
+
+	log := readCommandLog(t, logPath)
+	assert.Contains(t, log, "gh pr view 42 --json headRefOid,files,commits --repo owner/repo")
+	assert.Contains(t, log, "reviewThreads(first: 100")
 }
 
 func TestAdapterReadCommandsMapGHOutput(t *testing.T) {

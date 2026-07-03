@@ -55,6 +55,10 @@ func (sb *StatusBar) View() string {
 		hintStyle := lipgloss.NewStyle().Foreground(t.Muted)
 		parts := make([]string, len(sb.hints))
 		for i, h := range sb.hints {
+			if strings.Contains(h, "\x1b[") {
+				parts[i] = h
+				continue
+			}
 			parts[i] = hintStyle.Render(h)
 		}
 		left = strings.Join(parts, "  ")

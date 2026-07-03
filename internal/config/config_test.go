@@ -20,6 +20,12 @@ func TestDefaultConfig(t *testing.T) {
 	assert.True(t, cfg.General.ShowBanner)
 	assert.Equal(t, 5, cfg.General.CacheTTL)
 	assert.Equal(t, 7, cfg.General.StaleDays)
+	assert.Equal(t, "my-github", cfg.Inbox.DefaultScope)
+	assert.Equal(t, "balanced", cfg.Inbox.RankProfile)
+	assert.True(t, cfg.Inbox.IncludeOwnedRepos)
+	assert.True(t, cfg.Inbox.StableRows)
+	assert.Equal(t, 1500, cfg.Inbox.SourceTimeoutMS)
+	assert.Equal(t, 8, cfg.Inbox.EnrichVisible)
 	assert.Equal(t, "unified", cfg.Diff.Mode)
 	assert.True(t, cfg.Diff.LineNumbers)
 	assert.Equal(t, 3, cfg.Diff.ContextLines)
@@ -61,6 +67,20 @@ func TestValidateInvalidStaleDays(t *testing.T) {
 	cfg.General.StaleDays = -1
 	err := cfg.Validate()
 	assert.Error(t, err, "Validate() with negative stale_days should return error")
+}
+
+func TestValidateInvalidInboxRankProfile(t *testing.T) {
+	cfg := Default()
+	cfg.Inbox.RankProfile = "random"
+	err := cfg.Validate()
+	assert.Error(t, err)
+}
+
+func TestValidateInvalidInboxSourceTimeout(t *testing.T) {
+	cfg := Default()
+	cfg.Inbox.SourceTimeoutMS = -1
+	err := cfg.Validate()
+	assert.Error(t, err)
 }
 
 func TestValidateInvalidSort(t *testing.T) {

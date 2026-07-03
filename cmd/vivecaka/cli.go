@@ -23,6 +23,7 @@ type cliOptions struct {
 	repo        domain.RepoRef
 	repoSource  string
 	showVersion bool
+	startInbox  bool
 }
 
 type cliEnvDefaults struct {
@@ -52,19 +53,7 @@ func newRootCommand(envDefaults cliEnvDefaults, stdout, stderr io.Writer, run fu
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if opts.showVersion {
-				_, err := fmt.Fprint(cmd.OutOrStdout(), formatVersion())
-				return err
-			}
-			if opts.repo.Owner == "" && envDefaults.repoRaw != "" {
-				repo, err := parseRepoRef(envDefaults.repoRaw)
-				if err != nil {
-					return fmt.Errorf("invalid %s: %w", repoEnvVar, err)
-				}
-				opts.repo = repo
-				opts.repoSource = repoEnvVar
-			}
-			return run(opts)
+			return runResolvedOptions(cmd, envDefaults, &opts, run)
 		},
 	}
 
@@ -78,16 +67,48 @@ func newRootCommand(envDefaults cliEnvDefaults, stdout, stderr io.Writer, run fu
 		return err
 	})
 
-	cmd.Flags().BoolVarP(&opts.showVersion, "version", "v", false, "Show version information")
-	cmd.Flags().BoolVarP(&opts.debug, "debug", "d", opts.debug, "Enable debug logging")
+	cmd.PersistentFlags().BoolVarP(&opts.showVersion, "version", "v", false, "Show version information")
+	cmd.PersistentFlags().BoolVarP(&opts.debug, "debug", "d", opts.debug, "Enable debug logging")
 
 	repoValue := newRepoFlagValue(&opts.repo, &opts.repoSource)
 	if opts.repo.Owner != "" {
 		repoValue.set = true
 	}
-	cmd.Flags().Var(&repoValue, "repo", "Start in a specific repository (owner/name)")
+	cmd.PersistentFlags().Var(&repoValue, "repo", "Start in a specific repository (owner/name)")
+
+	cmd.AddCommand(newInboxCommand(envDefaults, &opts, run))
 
 	return cmd
+}
+
+func newInboxCommand(envDefaults cliEnvDefaults, opts *cliOptions, run func(cliOptions) error) *cobra.Command {
+	return &cobra.Command{
+		Use:           "inbox",
+		Short:         "Open directly to the global PR Inbox",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.startInbox = true
+			return runResolvedOptions(cmd, envDefaults, opts, run)
+		},
+	}
+}
+
+func runResolvedOptions(cmd *cobra.Command, envDefaults cliEnvDefaults, opts *cliOptions, run func(cliOptions) error) error {
+	if opts.showVersion {
+		_, err := fmt.Fprint(cmd.OutOrStdout(), formatVersion())
+		return err
+	}
+	if opts.repo.Owner == "" && envDefaults.repoRaw != "" {
+		repo, err := parseRepoRef(envDefaults.repoRaw)
+		if err != nil {
+			return fmt.Errorf("invalid %s: %w", repoEnvVar, err)
+		}
+		opts.repo = repo
+		opts.repoSource = repoEnvVar
+	}
+	return run(*opts)
 }
 
 func formatVersion() string {
@@ -209,12 +230,18 @@ func (r cliHelpRenderer) Render(cmd *cobra.Command) string {
 	usage := []string{
 		sectionStyle.Render("Usage"),
 		textStyle.Render("  vivecaka [flags]"),
+		textStyle.Render("  vivecaka inbox [flags]"),
 		"",
 		sectionStyle.Render("Examples"),
 		textStyle.Render("  vivecaka"),
+		textStyle.Render("  vivecaka inbox"),
 		textStyle.Render("  vivecaka --repo indrasvat/vivecaka"),
+		textStyle.Render("  vivecaka inbox --repo indrasvat/vivecaka"),
 		textStyle.Render("  vivecaka --debug"),
 		textStyle.Render("  vivecaka --help"),
+		"",
+		sectionStyle.Render("Commands"),
+		renderRow("inbox", "Start directly in the global PR Inbox"),
 		"",
 		sectionStyle.Render("Flags"),
 		renderRow("-h, --help", "Show this help"),
@@ -245,7 +272,7 @@ func (r cliHelpRenderer) Render(cmd *cobra.Command) string {
 	}
 
 	body := lipgloss.JoinVertical(lipgloss.Left,
-		titleStyle.Render(cmd.Name()+"  "+mutedStyle.Render(version)),
+		titleStyle.Render(cmd.CommandPath()+"  "+mutedStyle.Render(version)),
 		subtitleStyle.Render("Keyboard-first GitHub PR triage with themed terminal workflows."),
 		divider,
 		"",

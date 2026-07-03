@@ -14,6 +14,7 @@ import (
 type Config struct {
 	General       GeneralConfig       `toml:"general"`
 	Diff          DiffConfig          `toml:"diff"`
+	Inbox         InboxConfig         `toml:"inbox"`
 	Repos         ReposConfig         `toml:"repos"`
 	Keybindings   map[string]string   `toml:"keybindings"`
 	Notifications NotificationsConfig `toml:"notifications"`
@@ -41,6 +42,17 @@ type DiffConfig struct {
 	LineNumbers   bool   `toml:"line_numbers"`
 	ContextLines  int    `toml:"context_lines"`
 	MarkdownStyle string `toml:"markdown_style"`
+}
+
+// InboxConfig holds attention inbox settings.
+type InboxConfig struct {
+	DefaultScope           string `toml:"default_scope"`
+	RankProfile            string `toml:"rank_profile"`
+	IncludeOwnedRepos      bool   `toml:"include_owned_repos"`
+	StableRows             bool   `toml:"stable_rows"`
+	SourceTimeoutMS        int    `toml:"source_timeout_ms"`
+	EnrichVisible          int    `toml:"enrich_visible"`
+	RateLowWatermarkSearch int    `toml:"rate_low_watermark_search"`
 }
 
 // ReposConfig holds repository settings.
@@ -74,6 +86,15 @@ func Default() *Config {
 			ContextLines:  3,
 			MarkdownStyle: "dark",
 		},
+		Inbox: InboxConfig{
+			DefaultScope:           "my-github",
+			RankProfile:            "balanced",
+			IncludeOwnedRepos:      true,
+			StableRows:             true,
+			SourceTimeoutMS:        1500,
+			EnrichVisible:          8,
+			RateLowWatermarkSearch: 6,
+		},
 		Keybindings: make(map[string]string),
 		Notifications: NotificationsConfig{
 			NewPRs:         true,
@@ -84,10 +105,12 @@ func Default() *Config {
 }
 
 var (
-	validSorts   = []string{"updated", "created", "number", "title", "author"}
-	validFilters = []string{"open", "closed", "merged", "all"}
-	validModes   = []string{"unified", "split"}
-	validStyles  = []string{"dark", "light", "notty"}
+	validSorts             = []string{"updated", "created", "number", "title", "author"}
+	validFilters           = []string{"open", "closed", "merged", "all"}
+	validModes             = []string{"unified", "split"}
+	validStyles            = []string{"dark", "light", "notty"}
+	validInboxRankProfiles = []string{"balanced", "favorites", "stale", "merge-ready"}
+	validInboxScopes       = []string{"my-github", "favorites", "home"}
 )
 
 // ShellMetaChars contains characters that have special meaning in POSIX shells.
@@ -125,6 +148,21 @@ func (c *Config) Validate() error {
 	}
 	if c.Diff.ExternalTool != "" && strings.ContainsAny(c.Diff.ExternalTool, ShellMetaChars) {
 		return fmt.Errorf("diff.external_tool contains shell metacharacters: %q", c.Diff.ExternalTool)
+	}
+	if c.Inbox.DefaultScope != "" && !slices.Contains(validInboxScopes, c.Inbox.DefaultScope) {
+		return fmt.Errorf("inbox.default_scope must be one of %v, got %q", validInboxScopes, c.Inbox.DefaultScope)
+	}
+	if c.Inbox.RankProfile != "" && !slices.Contains(validInboxRankProfiles, c.Inbox.RankProfile) {
+		return fmt.Errorf("inbox.rank_profile must be one of %v, got %q", validInboxRankProfiles, c.Inbox.RankProfile)
+	}
+	if c.Inbox.SourceTimeoutMS < 0 {
+		return fmt.Errorf("inbox.source_timeout_ms must be >= 0, got %d", c.Inbox.SourceTimeoutMS)
+	}
+	if c.Inbox.EnrichVisible < 0 {
+		return fmt.Errorf("inbox.enrich_visible must be >= 0, got %d", c.Inbox.EnrichVisible)
+	}
+	if c.Inbox.RateLowWatermarkSearch < 0 {
+		return fmt.Errorf("inbox.rate_low_watermark_search must be >= 0, got %d", c.Inbox.RateLowWatermarkSearch)
 	}
 	return nil
 }

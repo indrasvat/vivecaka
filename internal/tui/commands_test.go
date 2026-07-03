@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
@@ -26,6 +27,9 @@ type commandReader struct {
 	comments   []domain.CommentThread
 	discussion []domain.DiscussionItem
 	count      int
+	inbox      *domain.InboxResult
+	insight    *domain.InboxInsight
+	insightQ   domain.InboxInsightQuery
 	err        error
 	diffErr    error
 }
@@ -50,6 +54,13 @@ func (m *commandReader) GetDiscussion(_ context.Context, _ domain.RepoRef, _ int
 }
 func (m *commandReader) GetPRCount(_ context.Context, _ domain.RepoRef, _ domain.PRState) (int, error) {
 	return m.count, m.err
+}
+func (m *commandReader) GetInbox(_ context.Context, _ domain.InboxQuery) (*domain.InboxResult, error) {
+	return m.inbox, m.err
+}
+func (m *commandReader) GetInboxInsight(_ context.Context, q domain.InboxInsightQuery) (*domain.InboxInsight, error) {
+	m.insightQ = q
+	return m.insight, m.err
 }
 
 type commandReviewer struct{ err error }
@@ -200,6 +211,86 @@ func TestDataLoadingCommandsPreserveSuccessAndErrorPayloads(t *testing.T) {
 	reader.diffErr = errors.New("diff failed")
 	diffErrMsg := runCmd(t, loadDiffCmd(reader, repo, 2)).(views.DiffLoadedMsg)
 	require.Error(t, diffErrMsg.Err)
+}
+
+func TestAttentionInboxCommandsUseCacheAndRankedUsecase(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	item := domain.InboxItem{
+		PR:      domain.PR{Number: 9, Title: "attention", UpdatedAt: time.Now()},
+		Repo:    domain.RepoRef{Owner: "owner", Name: "repo"},
+		Sources: []domain.InboxSource{domain.InboxSourceAttention},
+	}
+	reader := &commandReader{inbox: &domain.InboxResult{Items: []domain.InboxItem{item}}}
+	query := domain.InboxQuery{
+		Username:    "octocat",
+		RankProfile: domain.InboxRankBalanced,
+		Limit:       10,
+	}
+
+	fresh := runCmd(t, loadAttentionInboxCmd(usecase.NewGetAttentionInbox(reader), query)).(views.InboxItemsLoadedMsg)
+	require.NoError(t, fresh.Err)
+	require.Len(t, fresh.Result.Items, 1)
+	assert.True(t, fresh.Fresh)
+
+	cached := runCmd(t, loadCachedInboxCmd("octocat", domain.InboxRankBalanced, time.Hour)).(views.InboxItemsLoadedMsg)
+	require.NoError(t, cached.Err)
+	require.Len(t, cached.Result.Items, 1)
+	assert.False(t, cached.Fresh)
+	assert.True(t, cached.Result.Items[0].Cached)
+}
+
+func TestAttentionInboxCommandsSkipStaleCacheAndPartialFreshSave(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	old := domain.InboxResult{Items: []domain.InboxItem{{
+		PR:   domain.PR{Number: 1, Title: "old"},
+		Repo: domain.RepoRef{Owner: "owner", Name: "repo"},
+	}}}
+	require.NoError(t, cache.SaveInbox("octocat", old))
+
+	stale := runCmd(t, loadCachedInboxCmd("octocat", domain.InboxRankBalanced, time.Nanosecond)).(views.InboxItemsLoadedMsg)
+	assert.Empty(t, stale.Result.Items)
+
+	reader := &commandReader{inbox: &domain.InboxResult{
+		Items: []domain.InboxItem{{
+			PR:   domain.PR{Number: 2, Title: "partial"},
+			Repo: domain.RepoRef{Owner: "owner", Name: "repo"},
+		}},
+		Sources: []domain.InboxSourceStatus{{Source: domain.InboxSourceOwned, Label: "owned", Err: "rate limited"}},
+	}}
+	query := domain.InboxQuery{Username: "octocat", RankProfile: domain.InboxRankBalanced}
+	partial := runCmd(t, loadAttentionInboxCmd(usecase.NewGetAttentionInbox(reader), query)).(views.InboxItemsLoadedMsg)
+	require.NoError(t, partial.Err)
+	require.Len(t, partial.Result.Items, 1)
+
+	loaded, _, err := cache.LoadInbox("octocat")
+	require.NoError(t, err)
+	require.Len(t, loaded.Items, 1)
+	assert.Equal(t, "old", loaded.Items[0].Title, "partial fresh results should not overwrite cache")
+}
+
+func TestInboxInsightCommandUsesReviewBaseline(t *testing.T) {
+	repo := domain.RepoRef{Owner: "owner", Name: "repo"}
+	reader := &commandReader{insight: &domain.InboxInsight{
+		Repo:              repo,
+		Number:            9,
+		CommitDelta:       3,
+		FileDelta:         2,
+		UnresolvedThreads: 1,
+	}}
+	query := domain.InboxInsightQuery{
+		Repo:              repo,
+		Number:            9,
+		LastReviewHeadSHA: "base",
+		LastReviewFiles:   map[string]string{"a.go": "digest"},
+	}
+
+	msg := runCmd(t, loadInboxInsightCmd(usecase.NewGetInboxInsight(reader), query, "owner/repo#9")).(views.InboxInsightLoadedMsg)
+
+	require.NoError(t, msg.Err)
+	assert.Equal(t, "owner/repo#9", msg.Key)
+	assert.Equal(t, 3, msg.Insight.CommitDelta)
+	assert.Equal(t, "base", reader.insightQ.LastReviewHeadSHA)
+	assert.Equal(t, map[string]string{"a.go": "digest"}, reader.insightQ.LastReviewFiles)
 }
 
 func TestActionCommandsMapUsecaseResultsToMessages(t *testing.T) {

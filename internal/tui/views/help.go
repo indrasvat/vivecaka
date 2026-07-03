@@ -272,6 +272,7 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 					{"j/k", "Move up/down"},
 					{"Tab", "Next tab"},
 					{"Shift+Tab", "Previous tab"},
+					{"u", "Apply staged update"},
 				},
 			},
 		}
@@ -280,7 +281,23 @@ func (m *HelpModel) bindings() (left, right []helpSection) {
 				title: "Actions",
 				bindings: []helpBinding{
 					{"Enter", "Open PR"},
+					{"f", "Focus repo"},
 					{"Esc", "Back to list"},
+				},
+			},
+			{
+				title: "Signals",
+				bindings: []helpBinding{
+					{"◆", "Review requested"},
+					{"◈", "Assigned"},
+					{"★", "Favorite repo"},
+					{"●", "Owned repo"},
+					{"⌂", "Current repo"},
+					{"✕", "Checks failing"},
+					{"⎇", "New commits"},
+					{"▤", "Changed files"},
+					{"◌", "Unresolved threads"},
+					{"↵", "Local resume ready"},
 				},
 			},
 			global,
@@ -342,7 +359,7 @@ func StatusHints(view core.ViewState, width int) string {
 	case core.ViewReview:
 		hints = "j/k field  Enter action  Esc back  ? help"
 	case core.ViewInbox:
-		hints = "j/k navigate  Tab tab  Enter open  Esc back  ? help"
+		hints = "j/k navigate  Tab tab  Enter open  f focus  R refresh  ? help  Esc back"
 	case core.ViewRepoSwitch:
 		hints = "j/k navigate  s star  Enter switch  Esc cancel"
 	case core.ViewHelp:
