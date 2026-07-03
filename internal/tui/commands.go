@@ -22,6 +22,9 @@ const ghTimeout = 15 * time.Second
 // diffTimeout is longer than ghTimeout because large PRs legitimately take time.
 const diffTimeout = 60 * time.Second
 
+// inboxInsightTimeout keeps selected-row enrichment from making navigation feel sticky.
+const inboxInsightTimeout = 5 * time.Second
+
 // detectRepoCmd detects the current repo from git remote.
 func detectRepoCmd() tea.Cmd {
 	return func() tea.Msg {
@@ -179,6 +182,57 @@ func loadInboxCmd(uc *usecase.GetInboxPRs, repos []domain.RepoRef) tea.Cmd {
 		}
 		return views.InboxPRsLoadedMsg{PRs: vPRs}
 	}
+}
+
+// loadAttentionInboxCmd fetches the ranked cross-repo inbox.
+func loadAttentionInboxCmd(uc *usecase.GetAttentionInbox, query domain.InboxQuery) tea.Cmd {
+	return func() tea.Msg {
+		result, err := uc.Execute(context.Background(), query)
+		if err != nil {
+			return views.InboxItemsLoadedMsg{Profile: query.RankProfile, Fresh: true, Err: err}
+		}
+		if !hasInboxSourceErrors(*result) {
+			_ = cache.SaveInbox(query.Username, *result)
+		}
+		return views.InboxItemsLoadedMsg{Result: *result, Profile: query.RankProfile, Fresh: true}
+	}
+}
+
+// loadInboxInsightCmd fetches lazy, selected-row delta data for one inbox PR.
+func loadInboxInsightCmd(uc *usecase.GetInboxInsight, query domain.InboxInsightQuery, key string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), inboxInsightTimeout)
+		defer cancel()
+
+		insight, err := uc.Execute(ctx, query)
+		if insight == nil {
+			insight = &domain.InboxInsight{Repo: query.Repo, Number: query.Number, LocalState: query.LocalState}
+		}
+		return views.InboxInsightLoadedMsg{Key: key, Insight: *insight, Err: err}
+	}
+}
+
+// loadCachedInboxCmd loads the last known inbox immediately for a fast cold-start.
+func loadCachedInboxCmd(username string, profile domain.InboxRankProfile, maxAge time.Duration) tea.Cmd {
+	return func() tea.Msg {
+		result, updated, err := cache.LoadInbox(username)
+		if err != nil || len(result.Items) == 0 {
+			return views.InboxItemsLoadedMsg{Profile: profile, Fresh: false, Err: err}
+		}
+		if maxAge > 0 && time.Since(updated) > maxAge {
+			return nil
+		}
+		return views.InboxItemsLoadedMsg{Result: result, Profile: profile, Fresh: false}
+	}
+}
+
+func hasInboxSourceErrors(result domain.InboxResult) bool {
+	for _, source := range result.Sources {
+		if source.Err != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // cachedPRsLoadedMsg is sent when cached PRs are loaded from disk.

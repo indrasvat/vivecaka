@@ -4,7 +4,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
@@ -15,6 +17,7 @@ import (
 	"github.com/indrasvat/vivecaka/internal/domain"
 	"github.com/indrasvat/vivecaka/internal/repolocator"
 	"github.com/indrasvat/vivecaka/internal/reviewprogress"
+	"github.com/indrasvat/vivecaka/internal/tui/components"
 	"github.com/indrasvat/vivecaka/internal/tui/core"
 	"github.com/indrasvat/vivecaka/internal/tui/views"
 	"github.com/indrasvat/vivecaka/internal/usecase"
@@ -99,6 +102,7 @@ func TestAppRepoFavoriteInboxAndValidationHandlers(t *testing.T) {
 	updated, cmd = app.openInbox()
 	app = updated.(*App)
 	assert.Equal(t, core.ViewInbox, app.view)
+	assert.NotContains(t, strings.ReplaceAll(app.header.View(), "\x1b", ""), "owner/repo", "Inbox header should be global, not pinned to cwd repo")
 	assert.NotNil(t, cmd)
 
 	updated, cmd = app.handleOpenInboxPR(views.OpenInboxPRMsg{
@@ -108,6 +112,10 @@ func TestAppRepoFavoriteInboxAndValidationHandlers(t *testing.T) {
 	app = updated.(*App)
 	assert.Equal(t, core.ViewPRDetail, app.view)
 	assert.Equal(t, domain.RepoRef{Owner: "other", Name: "repo"}, app.repo)
+	detailHeader := app.header.View()
+	assert.Contains(t, detailHeader, "#9")
+	assert.Contains(t, detailHeader, "Detail")
+	assert.NotContains(t, detailHeader, "Inbox")
 	assert.NotNil(t, cmd)
 
 	updated, cmd = app.handleRepoValidated(views.RepoValidatedMsg{
@@ -124,6 +132,172 @@ func TestAppRepoFavoriteInboxAndValidationHandlers(t *testing.T) {
 	})
 	require.Same(t, app, updated)
 	assert.NotNil(t, cmd)
+}
+
+func TestAppCanStartDirectlyInInbox(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
+	cfg := config.Default()
+	cfg.General.RefreshInterval = 0
+	reader := &commandReader{inbox: &domain.InboxResult{Items: []domain.InboxItem{{
+		PR:      domain.PR{Number: 7, Title: "ship inbox", Author: "alice"},
+		Repo:    domain.RepoRef{Owner: "owner", Name: "repo"},
+		Sources: []domain.InboxSource{domain.InboxSourceAttention},
+	}}}}
+	app := New(
+		cfg,
+		WithVersion("edge"),
+		WithReader(reader),
+		WithRepo(domain.RepoRef{Owner: "owner", Name: "repo"}),
+		WithStartInbox(),
+	)
+
+	cmd := app.Init()
+
+	assert.Equal(t, core.ViewBanner, app.view)
+	assert.True(t, app.banner.Visible())
+	assert.False(t, app.inboxStarted)
+	assert.NotNil(t, cmd)
+
+	updated, dismissCmd := app.Update(components.BannerDismissMsg{})
+	app = updated.(*App)
+
+	assert.Equal(t, core.ViewInbox, app.view)
+	assert.True(t, app.inboxStarted)
+	assert.NotNil(t, dismissCmd)
+	assert.Contains(t, app.header.View(), "Inbox")
+	assert.NotContains(t, app.header.View(), "owner/repo")
+}
+
+func TestAppDirectInboxKeyDismissesBannerToInbox(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
+	cfg := config.Default()
+	cfg.General.RefreshInterval = 0
+	app := New(
+		cfg,
+		WithVersion("edge"),
+		WithReader(&commandReader{inbox: &domain.InboxResult{}}),
+		WithRepo(domain.RepoRef{Owner: "owner", Name: "repo"}),
+		WithStartInbox(),
+	)
+	_ = app.Init()
+
+	updated, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	app = updated.(*App)
+
+	assert.Equal(t, core.ViewInbox, app.view)
+	assert.True(t, app.inboxStarted)
+	assert.NotNil(t, cmd)
+	assert.Contains(t, app.header.View(), "Inbox")
+}
+
+func TestAppInboxUsesFooterGlyphSignals(t *testing.T) {
+	app := edgeApp(t)
+	app.view = core.ViewInbox
+	app.ready = true
+	app.width = 120
+	app.height = 30
+	app.inbox.SetSize(120, app.contentHeight())
+	app.inbox.Update(views.InboxItemsLoadedMsg{
+		Result: domain.InboxResult{
+			Items: []domain.InboxItem{{
+				PR:      domain.PR{Number: 1, Title: "needs eyes", Author: "alice"},
+				Repo:    domain.RepoRef{Owner: "owner", Name: "repo"},
+				Sources: []domain.InboxSource{domain.InboxSourceAttention},
+			}},
+			Sources:  []domain.InboxSourceStatus{{Source: domain.InboxSourceAssigned, Label: "assigned", Err: "timeout"}},
+			Rate:     domain.InboxRateLimit{SearchRemaining: 3},
+			CachedAt: time.Now(),
+		},
+		Profile: domain.InboxRankBalanced,
+	})
+
+	view := app.View()
+	plain := strings.ReplaceAll(view, "\x1b", "")
+
+	assert.Contains(t, plain, "⚠")
+	assert.Contains(t, plain, "◷")
+	assert.Contains(t, plain, "◌")
+	assert.NotContains(t, plain, "! partial")
+	assert.NotContains(t, plain, "gh 3")
+	assert.NotContains(t, plain, "cache")
+	assert.NotContains(t, plain, "limited")
+	assert.NotContains(t, plain, "signals")
+}
+
+func TestAppDirectInboxStartsAfterUserDetectionWithoutRepo(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
+	cfg := config.Default()
+	cfg.General.RefreshInterval = 0
+	app := New(
+		cfg,
+		WithVersion("edge"),
+		WithReader(&commandReader{inbox: &domain.InboxResult{}}),
+		WithStartInbox(),
+	)
+
+	_ = app.Init()
+	assert.Equal(t, core.ViewBanner, app.view)
+	assert.False(t, app.inboxStarted)
+
+	updated, cmd := app.handleUserDetected(views.UserDetectedMsg{Username: "indrasvat"})
+	app = updated.(*App)
+
+	assert.False(t, app.inboxStarted)
+	assert.Nil(t, cmd)
+
+	updated, cmd = app.Update(components.BannerDismissMsg{})
+	app = updated.(*App)
+
+	assert.Equal(t, core.ViewInbox, app.view)
+	assert.True(t, app.inboxStarted)
+	assert.NotNil(t, cmd)
+}
+
+func TestAppDirectInboxRepoDetectFailureKeepsBannerThenRevealsInbox(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
+	cfg := config.Default()
+	cfg.General.RefreshInterval = 0
+	app := New(
+		cfg,
+		WithVersion("edge"),
+		WithReader(&commandReader{inbox: &domain.InboxResult{}}),
+		WithStartInbox(),
+	)
+
+	_ = app.Init()
+	assert.Equal(t, core.ViewBanner, app.view)
+	assert.True(t, app.banner.Visible())
+
+	updated, cmd := app.handleRepoDetected(views.RepoDetectedMsg{Err: errors.New("not a repo")})
+	app = updated.(*App)
+
+	assert.Equal(t, core.ViewBanner, app.view, "repo detection failure should not drop direct Inbox launch into repo PR list")
+	assert.False(t, app.inboxStarted)
+	assert.NotNil(t, cmd)
+
+	updated, cmd = app.handleUserDetected(views.UserDetectedMsg{Username: "indrasvat"})
+	app = updated.(*App)
+	require.Nil(t, cmd)
+
+	updated, cmd = app.Update(components.BannerDismissMsg{})
+	app = updated.(*App)
+
+	assert.Equal(t, core.ViewInbox, app.view)
+	assert.True(t, app.inboxStarted)
+	assert.NotNil(t, cmd)
+	assert.Contains(t, app.header.View(), "Inbox")
 }
 
 func TestAppActionHandlersUseConfiguredUsecases(t *testing.T) {

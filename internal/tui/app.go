@@ -59,6 +59,11 @@ func WithRepo(r domain.RepoRef) Option {
 	}
 }
 
+// WithStartInbox starts directly in the global Inbox.
+func WithStartInbox() Option {
+	return func(a *App) { a.startInInbox = true }
+}
+
 // App is the root BubbleTea model.
 type App struct {
 	cfg     *config.Config
@@ -73,6 +78,9 @@ type App struct {
 	repo         domain.RepoRef
 	repoExplicit bool
 	username     string
+	branch       string
+	startInInbox bool
+	inboxStarted bool
 	loadingFrame int // animation frame for loading spinner
 
 	// Auto-refresh
@@ -99,14 +107,16 @@ type App struct {
 	smartCheckout *usecase.SmartCheckout
 
 	// Use cases
-	listPRs          *usecase.ListPRs
-	getPRDetail      *usecase.GetPRDetail
-	getReviewContext *usecase.GetReviewContext
-	reviewPR         *usecase.ReviewPR
-	checkoutPR       *usecase.CheckoutPR
-	addComment       *usecase.AddComment
-	resolveThread    *usecase.ResolveThread
-	getInboxPRs      *usecase.GetInboxPRs
+	listPRs           *usecase.ListPRs
+	getPRDetail       *usecase.GetPRDetail
+	getReviewContext  *usecase.GetReviewContext
+	reviewPR          *usecase.ReviewPR
+	checkoutPR        *usecase.CheckoutPR
+	addComment        *usecase.AddComment
+	resolveThread     *usecase.ResolveThread
+	getInboxPRs       *usecase.GetInboxPRs
+	getAttentionInbox *usecase.GetAttentionInbox
+	getInboxInsight   *usecase.GetInboxInsight
 
 	// View models
 	prList       views.PRListModel
@@ -127,10 +137,11 @@ type App struct {
 	filterOpts domain.ListOpts
 
 	// Per-repo state persistence
-	repoState            cache.RepoState
-	currentReviewContext *reviewprogress.Context
-	currentReviewDiff    *domain.Diff
-	currentReviewPR      int
+	repoState             cache.RepoState
+	currentReviewContext  *reviewprogress.Context
+	currentReviewDiff     *domain.Diff
+	currentReviewPR       int
+	repoBeforeInboxDetail domain.RepoRef
 
 	// Components
 	banner *components.Banner
@@ -198,6 +209,12 @@ func New(cfg *config.Config, opts ...Option) *App {
 		a.getPRDetail = usecase.NewGetPRDetail(a.reader)
 		a.getReviewContext = usecase.NewGetReviewContext(a.reader)
 		a.getInboxPRs = usecase.NewGetInboxPRs(a.reader)
+		if inboxReader, ok := a.reader.(domain.InboxReader); ok {
+			a.getAttentionInbox = usecase.NewGetAttentionInbox(inboxReader)
+		}
+		if insightReader, ok := a.reader.(domain.InboxInsightReader); ok {
+			a.getInboxInsight = usecase.NewGetInboxInsight(insightReader)
+		}
 	}
 	if a.reviewer != nil {
 		a.reviewPR = usecase.NewReviewPR(a.reviewer)
@@ -225,6 +242,16 @@ func (a *App) Init() tea.Cmd {
 		detectUserCmd(),
 		a.banner.StartAutoDismiss(2 * time.Second), // Show banner for 2 seconds
 	}
+	if a.startInInbox {
+		a.inbox.SetUsername(a.username)
+		a.inbox.SetLoading()
+		a.configureInboxHeader(domain.InboxRankProfile(a.cfg.Inbox.RankProfile))
+		if !a.repoExplicit {
+			cmds = append(cmds, detectRepoCmd())
+		}
+		return tea.Batch(cmds...)
+	}
+
 	if !a.repoExplicit {
 		cmds = append(cmds, detectBranchCmd())
 	}
@@ -245,6 +272,8 @@ func (a *App) Init() tea.Cmd {
 func (a *App) startRepoLoad(repo domain.RepoRef, includeCache bool) []tea.Cmd {
 	a.repo = repo
 	a.header.SetRepo(a.repo)
+	a.header.SetCountOverride("")
+	a.header.SetCountLabel("open")
 	a.header.SetTotalCount(0)
 	a.loadRepoState()
 	a.repoSwitcher.SetCurrentRepo(a.repo)
@@ -304,6 +333,10 @@ func (a *App) startRefreshTimer() tea.Cmd {
 func (a *App) handleRefreshTick() (tea.Model, tea.Cmd) {
 	if a.refreshInterval <= 0 {
 		return a, nil
+	}
+	if a.view != core.ViewPRList {
+		a.header.SetRefreshCountdown(0, false)
+		return a, a.refreshTick()
 	}
 	if a.refreshPaused {
 		a.header.SetRefreshCountdown(a.refreshCountdown, true)
@@ -367,8 +400,11 @@ func (a *App) handleAppMessage(msg tea.Msg) (bool, tea.Cmd) {
 		return true, nil
 	case views.BranchDetectedMsg:
 		if typedMsg.Err == nil && typedMsg.Branch != "" {
+			a.branch = typedMsg.Branch
 			a.prList.SetCurrentBranch(typedMsg.Branch)
-			a.header.SetBranch(typedMsg.Branch)
+			if a.view != core.ViewInbox {
+				a.header.SetBranch(typedMsg.Branch)
+			}
 		}
 		return true, nil
 	case views.PRsLoadedMsg:
@@ -480,6 +516,17 @@ func (a *App) handleAppMessage(msg tea.Msg) (bool, tea.Cmd) {
 	case views.PRListFilterMsg:
 		a.header.SetFilter(typedMsg.Label)
 		return true, nil
+	case views.InboxItemsLoadedMsg:
+		a.inbox.Update(typedMsg)
+		if typedMsg.Err == nil {
+			a.configureInboxHeader(typedMsg.Profile)
+		}
+		return true, a.loadSelectedInboxInsight()
+	case views.InboxInsightLoadedMsg:
+		if typedMsg.Key == a.inbox.SelectedKey() {
+			a.inbox.Update(typedMsg)
+		}
+		return true, nil
 	case views.SwitchRepoMsg:
 		_, cmd := a.handleSwitchRepo(typedMsg)
 		return true, cmd
@@ -503,7 +550,11 @@ func (a *App) handleAppMessage(msg tea.Msg) (bool, tea.Cmd) {
 	case views.OpenInboxPRMsg:
 		_, cmd := a.handleOpenInboxPR(typedMsg)
 		return true, cmd
+	case views.FocusInboxRepoMsg:
+		_, cmd := a.handleFocusInboxRepo(typedMsg)
+		return true, cmd
 	case views.CloseInboxMsg:
+		a.restorePRListHeader()
 		a.view = core.ViewPRList
 		return true, nil
 	case views.ResolveThreadMsg:
@@ -590,6 +641,10 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		}
 		a.banner.Update(msg)
+		if a.startInInbox {
+			cmd := a.revealInboxAfterBanner()
+			return a, tea.Batch(tea.ClearScreen, cmd)
+		}
 		if a.prList.HasPRs() || a.prList.HasLoadError() {
 			a.view = core.ViewPRList
 		} else {
@@ -681,6 +736,9 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			cmd := a.startRefreshTimer()
 			return a, tea.Batch(cmd, loadPRsCmd(a.listPRs, a.repo, a.filterOpts))
 		}
+		if a.view == core.ViewInbox && a.getAttentionInbox != nil {
+			return a, a.refreshInbox()
+		}
 		return a, nil
 
 	case key.Matches(msg, a.keys.Back):
@@ -705,6 +763,9 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Dispatch to active view.
 	cmd := a.dispatchKeyToView(msg)
+	if a.view == core.ViewInbox {
+		cmd = tea.Batch(cmd, a.loadSelectedInboxInsight())
+	}
 	return a, cmd
 }
 
@@ -716,12 +777,25 @@ func (a *App) handleBack() (tea.Model, tea.Cmd) {
 		a.view = a.prevView
 	case core.ViewPRDetail:
 		a.finalizeCurrentPRVisit()
+		if a.prevView == core.ViewInbox {
+			if a.repoBeforeInboxDetail.Owner != "" {
+				a.repo = a.repoBeforeInboxDetail
+				a.loadRepoState()
+			}
+			a.configureInboxHeader(domain.InboxRankProfile(a.cfg.Inbox.RankProfile))
+			a.view = core.ViewInbox
+			return a, a.loadSelectedInboxInsight()
+		}
 		a.view = core.ViewPRList
 	case core.ViewDiff:
 		a.view = core.ViewPRDetail
 	case core.ViewReview:
 		a.view = core.ViewPRDetail
 	case core.ViewInbox:
+		if a.startInInbox && !a.prList.HasPRs() {
+			return a, tea.Quit
+		}
+		a.restorePRListHeader()
 		a.view = core.ViewPRList
 	case core.ViewFilter:
 		a.view = a.prevView
@@ -737,6 +811,12 @@ func (a *App) handleRepoDetected(msg views.RepoDetectedMsg) (tea.Model, tea.Cmd)
 			fmt.Sprintf("Could not detect repo: %v", msg.Err),
 			domain.ToastError, 5*time.Second,
 		)
+		if a.startInInbox {
+			if a.isBannerVisible() {
+				return a, cmd
+			}
+			return a, tea.Batch(cmd, a.revealInboxAfterBanner())
+		}
 		a.view = core.ViewPRList
 		return a, cmd
 	}
@@ -750,6 +830,10 @@ func (a *App) handleRepoDetected(msg views.RepoDetectedMsg) (tea.Model, tea.Cmd)
 
 	// Prepend CWD repo to favorites if not already there.
 	a.ensureCWDRepoInFavorites()
+
+	if a.startInInbox && !a.isBannerVisible() {
+		return a, a.startInboxLoadOnce()
+	}
 
 	if a.listPRs != nil {
 		return a, tea.Batch(a.startRepoLoad(a.repo, true)...)
@@ -769,6 +853,14 @@ func (a *App) handleUserDetected(msg views.UserDetectedMsg) (tea.Model, tea.Cmd)
 	a.username = msg.Username
 	a.prList.SetUsername(msg.Username)
 	a.inbox.SetUsername(msg.Username)
+	if a.startInInbox && !a.isBannerVisible() {
+		if !a.inboxStarted {
+			return a, a.startInboxLoadOnce()
+		}
+		if a.getAttentionInbox != nil {
+			return a, a.refreshInbox()
+		}
+	}
 	return a, nil
 }
 
@@ -940,6 +1032,10 @@ func (a *App) handleBatchOpenBrowser(msg views.BatchOpenBrowserMsg) tea.Cmd {
 func (a *App) handleBannerDismiss(msg components.BannerDismissMsg) tea.Cmd {
 	a.banner.Update(msg)
 	if a.view == core.ViewBanner {
+		if a.startInInbox {
+			cmd := a.revealInboxAfterBanner()
+			return tea.Batch(tea.ClearScreen, cmd)
+		}
 		if a.prList.HasPRs() || a.prList.HasLoadError() {
 			a.view = core.ViewPRList
 		} else {
@@ -947,6 +1043,17 @@ func (a *App) handleBannerDismiss(msg components.BannerDismissMsg) tea.Cmd {
 		}
 	}
 	return tea.Batch(tea.ClearScreen, a.loadingTick())
+}
+
+func (a *App) revealInboxAfterBanner() tea.Cmd {
+	a.view = core.ViewInbox
+	a.inbox.SetUsername(a.username)
+	a.configureInboxHeader(domain.InboxRankProfile(a.cfg.Inbox.RankProfile))
+	return a.startInboxLoadOnce()
+}
+
+func (a *App) isBannerVisible() bool {
+	return a.view == core.ViewBanner && a.banner.Visible()
 }
 
 func (a *App) handleOpenPR(msg views.OpenPRMsg) (tea.Model, tea.Cmd) {
@@ -1415,6 +1522,27 @@ func (a *App) openInbox() (tea.Model, tea.Cmd) {
 	a.prevView = a.view
 	a.view = core.ViewInbox
 	a.inbox.SetUsername(a.username)
+	a.inbox.SetLoading()
+	a.configureInboxHeader(domain.InboxRankProfile(a.cfg.Inbox.RankProfile))
+	return a, a.loadInboxData()
+}
+
+func (a *App) startInboxLoadOnce() tea.Cmd {
+	if a.inboxStarted || (a.username == "" && a.repo.Owner == "") {
+		return nil
+	}
+	a.inboxStarted = true
+	return a.loadInboxData()
+}
+
+func (a *App) loadInboxData() tea.Cmd {
+	if a.getAttentionInbox != nil {
+		query := a.buildInboxQuery()
+		return tea.Batch(
+			loadCachedInboxCmd(query.Username, query.RankProfile, time.Duration(a.cfg.General.CacheTTL)*time.Minute),
+			loadAttentionInboxCmd(a.getAttentionInbox, query),
+		)
+	}
 
 	// Collect repos from favorites.
 	var repos []domain.RepoRef
@@ -1426,16 +1554,21 @@ func (a *App) openInbox() (tea.Model, tea.Cmd) {
 	}
 
 	if a.getInboxPRs != nil && len(repos) > 0 {
-		return a, loadInboxCmd(a.getInboxPRs, repos)
+		return loadInboxCmd(a.getInboxPRs, repos)
 	}
-	return a, nil
+	return nil
 }
 
 func (a *App) handleOpenInboxPR(msg views.OpenInboxPRMsg) (tea.Model, tea.Cmd) {
-	// Switch repo context to the inbox PR's repo and open detail.
 	a.finalizeCurrentPRVisit()
+	a.repoBeforeInboxDetail = a.repo
+	a.prevView = core.ViewInbox
 	a.repo = msg.Repo
 	a.header.SetRepo(a.repo)
+	a.header.SetCountOverride(fmt.Sprintf("#%d", msg.Number))
+	a.header.SetFilter("Detail")
+	a.header.SetBranch("")
+	a.header.SetRefreshCountdown(0, false)
 	a.loadRepoState()
 	a.view = core.ViewPRDetail
 	a.currentReviewContext = nil
@@ -1447,6 +1580,107 @@ func (a *App) handleOpenInboxPR(msg views.OpenInboxPRMsg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(spinCmd, loadPRDetailCmd(a.getPRDetail, a.repo, msg.Number))
 	}
 	return a, spinCmd
+}
+
+func (a *App) restorePRListHeader() {
+	a.header.SetRepo(a.repo)
+	a.header.SetBranch(a.branch)
+	a.header.SetCountOverride("")
+	a.header.SetCountLabel("open")
+	a.header.SetPRCount(a.prList.TotalPRs())
+	a.header.SetFilter(a.prList.FilterLabel())
+	a.header.SetRefreshCountdown(a.refreshCountdown, a.refreshPaused)
+}
+
+func (a *App) configureInboxHeader(profile domain.InboxRankProfile) {
+	a.header.SetRepo(domain.RepoRef{})
+	a.header.SetBranch("")
+	a.header.SetCountOverride("")
+	a.header.SetCountLabel("PRs")
+	a.header.SetPRCount(a.inbox.TotalPRs())
+	a.header.SetTotalCount(0)
+	a.header.SetFilter(a.inboxHeaderLabel(profile))
+	a.header.SetRefreshCountdown(0, false)
+}
+
+func (a *App) inboxHeaderLabel(profile domain.InboxRankProfile) string {
+	if profile == "" || profile == domain.InboxRankBalanced {
+		return "Inbox"
+	}
+	return "Inbox · " + string(profile)
+}
+
+func (a *App) handleFocusInboxRepo(msg views.FocusInboxRepoMsg) (tea.Model, tea.Cmd) {
+	a.prevView = core.ViewInbox
+	cmds := a.startRepoLoad(msg.Repo, true)
+	a.view = core.ViewPRList
+	return a, tea.Batch(cmds...)
+}
+
+func (a *App) refreshInbox() tea.Cmd {
+	query := a.buildInboxQuery()
+	a.inbox.SetUsername(a.username)
+	return loadAttentionInboxCmd(a.getAttentionInbox, query)
+}
+
+func (a *App) loadSelectedInboxInsight() tea.Cmd {
+	if a.view != core.ViewInbox || a.getInboxInsight == nil {
+		return nil
+	}
+	item, ok := a.inbox.SelectedItem()
+	if !ok {
+		return nil
+	}
+	key := a.inbox.SelectedKey()
+	if key == "" || a.inbox.HasInsight(key) {
+		return nil
+	}
+	state, _ := cache.LoadRepoState(item.Repo)
+	reviewState := state.ReviewState(item.Number)
+	query := domain.InboxInsightQuery{
+		Repo:              item.Repo,
+		Number:            item.Number,
+		LastReviewHeadSHA: reviewState.LastReviewHeadSHA,
+		LastReviewFiles:   reviewState.LastReviewFiles,
+		LocalState:        item.LocalState,
+	}
+	return loadInboxInsightCmd(a.getInboxInsight, query, key)
+}
+
+func (a *App) buildInboxQuery() domain.InboxQuery {
+	username := a.username
+	if username == "" {
+		username = a.repo.Owner
+	}
+	scope := a.cfg.Inbox.DefaultScope
+	if scope == "" {
+		scope = "my-github"
+	}
+
+	favorites := make([]domain.RepoRef, 0, len(a.repoSwitcher.Favorites()))
+	if scope != "home" {
+		for _, entry := range a.repoSwitcher.Favorites() {
+			favorites = append(favorites, entry.Repo)
+		}
+	}
+
+	includeOwned := a.cfg.Inbox.IncludeOwnedRepos && scope == "my-github"
+	homeRepo := a.repo
+	if scope == "favorites" {
+		homeRepo = domain.RepoRef{}
+	}
+	return domain.InboxQuery{
+		Username:          username,
+		HomeRepo:          homeRepo,
+		Favorites:         favorites,
+		OwnedOwner:        username,
+		IncludeOwnedRepos: includeOwned,
+		RankProfile:       domain.InboxRankProfile(a.cfg.Inbox.RankProfile),
+		StaleDays:         a.cfg.General.StaleDays,
+		Limit:             a.cfg.General.PageSize,
+		SourceTimeout:     time.Duration(a.cfg.Inbox.SourceTimeoutMS) * time.Millisecond,
+		RateLowWatermark:  a.cfg.Inbox.RateLowWatermarkSearch,
+	}
 }
 
 func (a *App) handleRepoValidated(msg views.RepoValidatedMsg) (tea.Model, tea.Cmd) {
@@ -1807,6 +2041,8 @@ func (a *App) View() string {
 	case a.view == core.ViewPRList && a.prList.IsSelectionMode():
 		n := a.prList.SelectionCount()
 		a.status.SetHints([]string{fmt.Sprintf("%d selected  Space toggle  a all  y copy  o open  v exit  Esc cancel", n)})
+	case a.view == core.ViewInbox:
+		a.status.SetHints([]string{a.inboxStatusHints()})
 	default:
 		a.status.SetHints([]string{views.StatusHints(a.view, a.width)})
 	}
@@ -1864,6 +2100,19 @@ func (a *App) renderContent(height int) string {
 	default:
 		return ""
 	}
+}
+
+func (a *App) inboxStatusHints() string {
+	signals := a.inbox.FooterSignals()
+	if signals == "" {
+		return views.StatusHints(core.ViewInbox, a.width)
+	}
+	muted := lipgloss.NewStyle().Foreground(a.theme.Muted)
+	return fmt.Sprintf("%s        %s  %s",
+		muted.Render("j/k navigate  Tab tab  Enter open  f focus  R refresh"),
+		signals,
+		muted.Render("? help  Esc back"),
+	)
 }
 
 func (a *App) viewName() string {

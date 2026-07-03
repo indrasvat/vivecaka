@@ -58,6 +58,9 @@ func runApp(opts cliOptions) error {
 	if opts.repo.Owner != "" {
 		appOptions = append(appOptions, tui.WithRepo(opts.repo))
 	}
+	if opts.startInbox {
+		appOptions = append(appOptions, tui.WithStartInbox())
+	}
 
 	app := tui.New(cfg, appOptions...)
 

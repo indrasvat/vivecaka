@@ -51,6 +51,7 @@ func TestRootCommandHelpDoesNotRunApp(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 	assert.False(t, *called)
 	assert.Contains(t, stdout.String(), "Usage")
+	assert.Contains(t, stdout.String(), "vivecaka inbox")
 	assert.Contains(t, stdout.String(), "--repo owner/name")
 	assert.Contains(t, stdout.String(), repoEnvVar)
 }
@@ -78,6 +79,34 @@ func TestRootCommandPassesParsedRepoToRun(t *testing.T) {
 	assert.Equal(t, "indrasvat", received.repo.Owner)
 	assert.Equal(t, "vivecaka", received.repo.Name)
 	assert.Equal(t, "flag", received.repoSource)
+}
+
+func TestInboxCommandPassesStartupIntentToRun(t *testing.T) {
+	t.Parallel()
+
+	cmd, _, _, called, received := newTestRootCommand(cliEnvDefaults{})
+	cmd.SetArgs([]string{"inbox", "--repo", "indrasvat/vivecaka"})
+
+	require.NoError(t, cmd.Execute())
+	assert.True(t, *called)
+	assert.True(t, received.startInbox)
+	assert.Equal(t, "indrasvat/vivecaka", received.repo.String())
+	assert.Equal(t, "flag", received.repoSource)
+}
+
+func TestInboxCommandUsesEnvRepo(t *testing.T) {
+	t.Parallel()
+
+	cmd, _, _, called, received := newTestRootCommand(cliEnvDefaults{
+		repoRaw: "owner/from-env",
+	})
+	cmd.SetArgs([]string{"inbox"})
+
+	require.NoError(t, cmd.Execute())
+	assert.True(t, *called)
+	assert.True(t, received.startInbox)
+	assert.Equal(t, "owner/from-env", received.repo.String())
+	assert.Equal(t, repoEnvVar, received.repoSource)
 }
 
 func TestRootCommandFlagOverridesEnvRepo(t *testing.T) {

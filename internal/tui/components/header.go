@@ -16,6 +16,8 @@ type Header struct {
 	repo          domain.RepoRef
 	prCount       int
 	totalCount    int // total PRs available (0 = unknown)
+	countLabel    string
+	countOverride string
 	filter        string
 	refreshSecs   int
 	refreshPaused bool
@@ -39,6 +41,13 @@ func (h *Header) SetPRCount(n int) { h.prCount = n }
 
 // SetTotalCount updates the displayed total PR count.
 func (h *Header) SetTotalCount(n int) { h.totalCount = n }
+
+// SetCountLabel updates the noun used after the displayed count.
+func (h *Header) SetCountLabel(label string) { h.countLabel = label }
+
+// SetCountOverride replaces the generated count text when a view needs a
+// compact non-count state such as "#17".
+func (h *Header) SetCountOverride(text string) { h.countOverride = text }
 
 // SetFilter updates the displayed filter name.
 func (h *Header) SetFilter(f string) { h.filter = f }
@@ -74,14 +83,27 @@ func (h *Header) View() string {
 	refreshStyle := lipgloss.NewStyle().Foreground(t.Muted)
 
 	brand := brandStyle.Render(" vivecaka")
-	repo := repoStyle.Render(h.repo.String())
+	var left string
+	if h.repo.Owner != "" || h.repo.Name != "" {
+		repo := repoStyle.Render(h.repo.String())
+		left = brand + "      " + repo
+	} else {
+		left = brand
+	}
 
 	// Format count: show "loaded/total" when total is known
+	countLabel := h.countLabel
+	if countLabel == "" {
+		countLabel = "open"
+	}
 	var countText string
-	if h.totalCount > 0 {
-		countText = fmt.Sprintf("%d/%d open", h.prCount, h.totalCount)
-	} else {
-		countText = fmt.Sprintf("%d open", h.prCount)
+	switch {
+	case h.countOverride != "":
+		countText = h.countOverride
+	case h.totalCount > 0:
+		countText = fmt.Sprintf("%d/%d %s", h.prCount, h.totalCount, countLabel)
+	default:
+		countText = fmt.Sprintf("%d %s", h.prCount, countLabel)
 	}
 	count := countStyle.Render(countText)
 
@@ -92,12 +114,8 @@ func (h *Header) View() string {
 	}
 	filter := filterStyle.Render(filterLabel)
 
-	// Build left side: brand      repo      count      filter
-	// Use 6 spaces between each element for visual separation (matches mock's flexbox gaps)
-	left := brand + "      " + repo + "      " + count + "      " + filter
-
-	// Build right side: branch + refresh timer
 	var rightParts []string
+	rightParts = append(rightParts, count, filter)
 	if h.branch != "" {
 		branchStyle := lipgloss.NewStyle().Foreground(t.Info)
 		rightParts = append(rightParts, branchStyle.Render("⎇ "+h.branch))
@@ -114,7 +132,7 @@ func (h *Header) View() string {
 
 	// Use inline to prevent any background styling issues
 	bar := lipgloss.NewStyle().Width(h.width).Render(
-		left + lipgloss.NewStyle().Width(gap).Render("") + right,
+		left + strings.Repeat(" ", gap) + right,
 	)
 	return bar
 }

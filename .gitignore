@@ -25,3 +25,5 @@ firebase-debug.log
 .antigravitycli/
 .codemap/
 screenshots/
+
+.local/
