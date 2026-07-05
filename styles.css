@@ -71,6 +71,7 @@ button {
 
 .site-header,
 .hero,
+.inbox-section,
 .flow-section,
 .showcase,
 .install-section,
@@ -116,6 +117,22 @@ button {
   text-shadow: 0 0 18px rgba(0, 213, 232, 0.16);
 }
 
+.product-mark {
+  display: inline-block;
+  border: 1px solid rgba(240, 238, 232, 0.22);
+  border-radius: 5px;
+  padding: 0.02em 0.28em 0.08em;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.86em;
+  font-weight: 800;
+  line-height: 1.05;
+  background:
+    linear-gradient(90deg, rgba(0, 213, 232, 0.18), rgba(246, 173, 38, 0.18)),
+    rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
 .brand .product-name {
   font-family: var(--serif);
   font-weight: 600;
@@ -157,7 +174,7 @@ button {
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(320px, 0.9fr) minmax(580px, 1.35fr);
+  grid-template-columns: minmax(320px, 0.76fr) minmax(620px, 1.24fr);
   gap: clamp(28px, 5vw, 82px);
   align-items: center;
   min-height: min(760px, calc(100vh - 82px));
@@ -289,12 +306,12 @@ p {
 }
 
 h1 {
-  max-width: 780px;
+  max-width: 720px;
   margin-bottom: 26px;
   font-family: var(--serif);
-  font-size: clamp(58px, 7.4vw, 108px);
+  font-size: clamp(54px, 6.6vw, 92px);
   font-weight: 500;
-  line-height: 0.92;
+  line-height: 1;
 }
 
 h1::after {
@@ -412,56 +429,96 @@ h1::after {
 
 .hero-stage {
   position: relative;
-  --hero-card-width: min(82%, 820px);
-  min-height: 620px;
-  perspective: 1800px;
 }
 
-.hero-card {
-  position: absolute;
-  transform-origin: 50% 50%;
+.hero-terminal {
+  width: min(100%, 920px);
+  margin-left: auto;
   background: #1e1e2e;
-  width: var(--hero-card-width);
 }
 
-.hero-card img {
-  aspect-ratio: 1.54 / 1;
-  object-fit: cover;
-  object-position: left top;
+.terminal-titlebar {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 16px;
+  border-bottom: 1px solid rgba(240, 238, 232, 0.14);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
 }
 
-.hero-card-banner {
-  z-index: 4;
-  left: 0;
-  bottom: 18px;
-  transform: translate3d(0, 0, 90px) scale(1);
+.terminal-brand {
+  color: var(--cyan);
+  font-weight: 800;
 }
 
-.hero-card-banner img {
-  aspect-ratio: 1.54 / 1;
-  object-position: center center;
+.hero-terminal .screenshot-link {
+  display: block;
+  width: 100%;
 }
 
-.hero-card-queue {
-  z-index: 3;
-  left: 11%;
-  bottom: 146px;
-  transform: translate3d(0, 0, 0) scale(0.86);
+.hero-terminal img {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
 }
 
-.hero-card-queue img {
-  object-position: left top;
+.inbox-section {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.7fr) minmax(520px, 1.3fr);
+  gap: clamp(28px, 5vw, 72px);
+  align-items: start;
+  padding: 88px 0;
+  border-top: 1px solid var(--line);
 }
 
-.hero-card-review {
-  z-index: 2;
-  left: 22%;
-  bottom: 264px;
-  transform: translate3d(0, 0, -90px) scale(0.72);
+.inbox-section h2 {
+  max-width: 720px;
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(38px, 5vw, 72px);
+  font-weight: 500;
+  line-height: 1;
 }
 
-.hero-card-review img {
-  object-position: left top;
+.inbox-points {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+
+.inbox-points article {
+  min-height: 220px;
+  padding: 24px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.inbox-points span {
+  display: block;
+  margin-bottom: 28px;
+  color: var(--saffron);
+  font-family: var(--mono);
+}
+
+.inbox-points h3 {
+  margin-bottom: 12px;
+  font-size: 22px;
+}
+
+.inbox-points p {
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.inbox-points code {
+  color: var(--cyan);
+  font-family: var(--mono);
+  font-size: 0.9em;
 }
 
 .flow-section {
@@ -556,9 +613,7 @@ h1::after {
 }
 
 .feature-row-large .terminal-frame img {
-  aspect-ratio: 1.72 / 1;
-  object-fit: cover;
-  object-position: left top;
+  object-fit: contain;
 }
 
 .feature-copy {
@@ -590,9 +645,7 @@ h1::after {
 }
 
 .feature-pair .terminal-frame img {
-  aspect-ratio: 1.45 / 1;
-  object-fit: cover;
-  object-position: left top;
+  object-fit: contain;
 }
 
 .feature-pair h3,
@@ -857,6 +910,12 @@ body.lightbox-open {
   color: var(--saffron);
 }
 
+@media (min-width: 1081px) {
+  .install-command + .install-command {
+    grid-column: 3;
+  }
+}
+
 .site-footer {
   display: flex;
   flex-direction: column;
@@ -876,7 +935,7 @@ body.lightbox-open {
   line-height: 1.6;
 }
 
-.made-with-love span {
+.solid-heart {
   color: var(--saffron);
   font-size: 16px;
   text-shadow: 0 0 18px rgba(246, 173, 38, 0.35);
@@ -889,12 +948,6 @@ body.lightbox-open {
   text-underline-offset: 4px;
 }
 
-.site-footer a:last-child {
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 12px;
-}
-
 @media (max-width: 1080px) {
   .hero {
     grid-template-columns: 1fr;
@@ -902,11 +955,15 @@ body.lightbox-open {
   }
 
   .hero-stage {
-    min-height: clamp(420px, 70vw, 650px);
+    min-height: 0;
   }
 
   .hero-terminal {
     margin-left: 0;
+  }
+
+  .inbox-section {
+    grid-template-columns: 1fr;
   }
 
   .flow-grid {
@@ -935,6 +992,7 @@ body.lightbox-open {
 @media (max-width: 760px) {
   .site-header,
   .hero,
+  .inbox-section,
   .flow-section,
   .showcase,
   .install-section,
@@ -990,50 +1048,28 @@ body.lightbox-open {
 
   .hero-stage {
     margin-top: 14px;
-    display: block;
-    min-height: 470px;
-    perspective: 1200px;
+    min-height: 0;
     padding-bottom: 0;
   }
 
-  .hero-card {
-    position: absolute;
-    width: 100%;
-    margin-inline: auto;
+  .terminal-titlebar {
+    align-items: flex-start;
+    padding: 11px 12px;
+    font-size: 10px;
   }
 
-  .hero-card-banner {
-    left: -2%;
-    bottom: 4px;
-    transform: translate3d(0, 0, 70px) scale(1);
+  .inbox-section {
+    padding: 64px 0;
   }
 
-  .hero-card-queue {
-    left: 12%;
-    bottom: 150px;
-    transform: translate3d(0, 0, 0) scale(0.76);
+  .inbox-points {
+    grid-template-columns: 1fr;
   }
 
-  .hero-card-review {
-    left: 24%;
-    bottom: 260px;
-    transform: translate3d(0, 0, -70px) scale(0.58);
-  }
-
-  .hero-card-banner img {
-    aspect-ratio: 1.35 / 1;
-    object-fit: cover;
-    object-position: center center;
-  }
-
-  .hero-card-queue img {
-    aspect-ratio: 1.35 / 1;
-    object-fit: cover;
-    object-position: left top;
-  }
-
-  .hero-card-review img {
-    aspect-ratio: 1.35 / 1;
+  .inbox-points article {
+    min-height: 0;
+    padding: 22px 0;
+    border-right: 0;
   }
 
   .showcase {
@@ -1053,12 +1089,6 @@ body.lightbox-open {
   .feature-copy {
     grid-template-columns: 1fr;
     gap: 10px;
-  }
-
-  .feature-row-large .terminal-frame img,
-  .feature-pair .terminal-frame img,
-  .repo-wall .terminal-frame img {
-    aspect-ratio: 1.28 / 1;
   }
 
   .screenshot-expand {
