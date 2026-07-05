@@ -5,19 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="vivecaka is a terminal-native GitHub PR review TUI for queue triage, review context, comments, diffs, and checkout."
+      content="vivecaka is a terminal-native GitHub PR review TUI with Inbox triage, review memory, comments, diffs, checks, and checkout."
     />
     <meta name="theme-color" content="#0b0c0c" />
     <meta property="og:title" content="vivecaka - terminal-native PR review" />
     <meta
       property="og:description"
-      content="A fast GitHub PR review TUI for developers who live in the terminal."
+      content="A keyboard-first GitHub PR review TUI for developers who live in the terminal."
     />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://indrasvat.github.io/vivecaka/assets/site/files-review.png" />
     <title>vivecaka - terminal-native PR review</title>
     <link rel="icon" href="assets/site/logo.png" />
-    <link rel="stylesheet" href="styles.css?v=20260523-landing-4" />
+    <link rel="stylesheet" href="styles.css?v=20260704-inbox-site" />
   </head>
   <body>
     <header class="site-header" aria-label="Primary navigation">
@@ -25,6 +25,7 @@
         <span class="product-name">vivecaka</span>
       </a>
       <nav class="nav-links" aria-label="Page sections">
+        <a href="#inbox">Inbox</a>
         <a href="#flow">Flow</a>
         <a href="#screens">Screens</a>
         <a href="#install">Install</a>
@@ -35,10 +36,10 @@
     <main id="top">
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <h1 id="hero-title">Stay in the terminal. Review the whole PR</h1>
+          <h1 id="hero-title">Review PRs without losing the plot</h1>
           <p class="hero-lede">
-            Navigate PRs, comment, submit reviews, inspect diffs, and checkout branches inside a
-            fast, keyboard-first TUI for agent-era development.
+            <span class="product-mark">vivecaka</span> keeps the queue, review context, comments,
+            checks, diffs, and checkout under your fingers.
           </p>
           <p class="name-note">
             <span>विवेचक</span>
@@ -60,11 +61,11 @@
             </a>
           </div>
           <div class="command-card hero-command">
-            <code>$ vivecaka --repo=openclaw/openclaw</code>
+            <code>$ vivecaka inbox</code>
             <button
               class="copy-control"
               type="button"
-              data-copy="vivecaka --repo=openclaw/openclaw"
+              data-copy="vivecaka inbox"
               aria-label="Copy launch command"
               title="Copy command"
             >
@@ -77,46 +78,75 @@
         </div>
 
         <div class="hero-stage" aria-label="vivecaka terminal preview">
-          <figure class="terminal-frame hero-card hero-card-banner">
-            <img
-              src="assets/site/startup-banner.png"
-              alt="vivecaka startup banner in a terminal"
-              width="936"
-              height="608"
-              decoding="async"
-              fetchpriority="high"
-            />
+          <figure class="terminal-frame hero-terminal">
+            <button
+              class="screenshot-link"
+              type="button"
+              data-lightbox-src="assets/site/openclaw-queue.png"
+              data-lightbox-title="Terminal PR queue"
+              aria-label="Expand terminal PR queue screenshot"
+            >
+              <div class="terminal-titlebar" aria-hidden="true">
+                <span class="terminal-brand">vivecaka</span>
+                <span>Inbox · real TUI capture</span>
+              </div>
+              <img
+                src="assets/site/openclaw-queue.png"
+                alt="vivecaka showing a pull request queue in a terminal"
+                width="1584"
+                height="836"
+                decoding="async"
+                fetchpriority="high"
+              />
+              <span class="screenshot-expand" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M8 3H3v5" />
+                  <path d="M3 3l7 7" />
+                  <path d="M16 3h5v5" />
+                  <path d="M21 3l-7 7" />
+                  <path d="M8 21H3v-5" />
+                  <path d="M3 21l7-7" />
+                  <path d="M16 21h5v-5" />
+                  <path d="M21 21l-7-7" />
+                </svg>
+              </span>
+            </button>
           </figure>
-          <figure class="terminal-frame hero-card hero-card-queue">
-            <img
-              src="assets/site/openclaw-queue.png"
-              alt="vivecaka showing the openclaw/openclaw pull request queue in a terminal"
-              width="1584"
-              height="836"
-              decoding="async"
-              fetchpriority="high"
-            />
-          </figure>
-          <figure class="terminal-frame hero-card hero-card-review">
-            <img
-              src="assets/site/files-review.png"
-              alt="vivecaka files view showing incremental review state and viewed files"
-              width="2656"
-              height="1896"
-              decoding="async"
-            />
-          </figure>
+        </div>
+      </section>
+
+      <section id="inbox" class="inbox-section" aria-labelledby="inbox-title">
+        <div>
+          <div class="section-kicker">Inbox mode</div>
+          <h2 id="inbox-title">A calmer queue for everything asking for you.</h2>
+        </div>
+        <div class="inbox-points">
+          <article>
+            <span>◆</span>
+            <h3>Start global</h3>
+            <p>Open <code>vivecaka inbox</code> for review requests, assignments, favorites, and owned work.</p>
+          </article>
+          <article>
+            <span>◈</span>
+            <h3>Stay oriented</h3>
+            <p>Ranked rows surface why a PR needs attention without turning the TUI into a paragraph farm.</p>
+          </article>
+          <article>
+            <span>▤</span>
+            <h3>Resume fast</h3>
+            <p>Review memory keeps seen files, comments, and context from becoming a browser archaeology dig.</p>
+          </article>
         </div>
       </section>
 
       <section id="flow" class="flow-section" aria-labelledby="flow-title">
         <div class="section-kicker">full PR flow</div>
-        <h2 id="flow-title">One focused surface from queue to checkout.</h2>
+        <h2 id="flow-title">One focused surface from Inbox to checkout.</h2>
         <div class="flow-grid">
           <article>
             <span>1</span>
-            <h3>Queue</h3>
-            <p>Open live PR lists from any GitHub repo.</p>
+            <h3>Inbox</h3>
+            <p>Start with the PRs most likely to need human judgment.</p>
           </article>
           <article>
             <span>2</span>
@@ -140,7 +170,7 @@
         <div class="showcase-heading">
           <div>
             <div class="section-kicker">screenshots</div>
-            <h2 id="screens-title">Real terminal states, composed for review work.</h2>
+            <h2 id="screens-title">Real terminal states for review work.</h2>
           </div>
         </div>
 
@@ -260,8 +290,8 @@
         <div class="repo-wall" aria-label="Repository examples">
           <article>
             <span class="feature-number">04</span>
-            <h3>Open any repository queue.</h3>
-            <p>Start from a real GitHub PR list and move without touching the browser.</p>
+            <h3>Repo queues still matter.</h3>
+            <p>Launch from a repository when the work is local and keep the same keyboard rhythm.</p>
             <figure class="terminal-frame">
               <button
                 class="screenshot-link"
@@ -295,8 +325,8 @@
           </article>
           <article>
             <span class="feature-number">05</span>
-            <h3>Fast across busy projects.</h3>
-            <p>Dense queues stay keyboard-first, sortable, and readable under real load.</p>
+            <h3>Dense lists stay usable.</h3>
+            <p>Busy projects stay keyboard-first, sortable, and readable under real load.</p>
             <figure class="terminal-frame">
               <button
                 class="screenshot-link"
@@ -335,7 +365,7 @@
         <div class="section-kicker install-kicker">install</div>
         <div class="install-panel">
           <div class="install-mark" aria-hidden="true">$_</div>
-          <h2 id="install-title">Drop it into your shell.</h2>
+          <h2 id="install-title">Install. Open Inbox. Get back to code.</h2>
           <div class="command-card install-command">
             <code>curl -sSfL https://raw.githubusercontent.com/indrasvat/vivecaka/main/install.sh | bash</code>
             <button
@@ -351,17 +381,30 @@
               </svg>
             </button>
           </div>
+          <div class="command-card install-command">
+            <code>vivecaka inbox</code>
+            <button
+              class="copy-control"
+              type="button"
+              data-copy="vivecaka inbox"
+              aria-label="Copy Inbox command"
+              title="Copy command"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M8 8V5.6C8 4.7 8.7 4 9.6 4h8.8c.9 0 1.6.7 1.6 1.6v8.8c0 .9-.7 1.6-1.6 1.6H16" />
+                <path d="M4 9.6C4 8.7 4.7 8 5.6 8h8.8c.9 0 1.6.7 1.6 1.6v8.8c0 .9-.7 1.6-1.6 1.6H5.6C4.7 20 4 19.3 4 18.4V9.6Z" />
+              </svg>
+            </button>
+          </div>
         </div>
       </section>
     </main>
 
     <footer class="site-footer">
       <p class="made-with-love">
-        Made with <span aria-label="love" role="img">♥</span> by
+        made with <span class="solid-heart" role="img" aria-label="love">♥</span> by
         <a href="https://github.com/indrasvat">indrasvat</a>
       </p>
-      <p>Built with Go, Bubble Tea, Lip Gloss, and GitHub CLI.</p>
-      <a href="https://github.com/indrasvat/vivecaka/blob/main/LICENSE">MIT License</a>
     </footer>
 
     <div class="lightbox" role="dialog" aria-modal="true" aria-labelledby="lightbox-title" aria-hidden="true">
@@ -380,6 +423,6 @@
       </div>
     </div>
 
-    <script src="site.js?v=20260523-landing-4"></script>
+    <script src="site.js?v=20260704-inbox-site"></script>
   </body>
 </html>
